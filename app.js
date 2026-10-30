@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '1.2.0';
+const VERSION = '1.3.0';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -81,7 +81,7 @@ const svgI = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
 const S = {
   data: null, outbox: [],
   cfg: { url: '', token: '', name: '', design: 'a', theme: 'auto', lastSync: 0, needs: NEEDS.slice(), scope: 'Todos', emergencyMonths: 6 },
-  ui: { view: 'inicio', ym: ymOf(today()), q: '', fType: '', fAcc: '', fCat: '', fPeriod: 'mes', stPeriod: 'mes' },
+  ui: { view: 'inicio', ym: ymOf(today()), q: '', fType: '', fAcc: '', fCat: '', fPeriod: 'mes', stPeriod: 'mes', mTab: 'dia', calDay: '' },
   syncing: false, syncErr: '', installEvt: null
 };
 function load() {
@@ -361,7 +361,7 @@ const VIEWS = [
 ];
 const PRIMARY = ['inicio', 'movimientos', 'estados', 'metas'];
 function renderNav() {
-  const html = ['<div class="navbrand"><span class="mark">$</span>Mis Finanzas</div>'];
+  const html = ['<div class="navbrand"><span class="mark">$</span><span>Mis Finanzas</span></div>'];
   VIEWS.forEach(([k, name, grp], i) => {
     if (grp) html.push(`<div class="grp">${grp}</div>`);
     if (k === 'estados') html.push('<span class="slot" aria-hidden="true"></span>');
@@ -476,10 +476,11 @@ function vInicio() {
   <div class="home">
     <div class="home-main">
       <div class="hello"><div><p>${isNow ? `${wd[0].toUpperCase() + wd.slice(1)} ${d} de ${MONTHS[m - 1].toLowerCase()}` : ymLabel(ym)}</p><h1>${isNow ? greet + name : 'Resumen de ' + MONTHS[m - 1].toLowerCase()}</h1></div>${scopeSeg()}</div>
-      <section class="spend">${hero}${meters}</section>
+      ${walletCard(sp, isNow)}
       ${chips.length ? `<div class="chipbar">${chips.join('')}</div>` : ''}
       <section class="feed"><header><h2>Lo que pasó</h2><a href="#movimientos">Ver todo</a></header>
-        ${Object.keys(groups).length ? Object.entries(groups).map(([dt, ms]) => { const out = sum(ms.filter(x => x.type === 'Gasto'), x => x.amount); return `<div class="day-head"><span>${WEEK[(new Date(dt + 'T12:00').getDay() + 6) % 7]} ${dLabel(dt).replace(/ \d{4}$/, '')}</span><span class="num">${out ? '−' + money(out) : ''}</span></div><div class="list">${ms.map(movItem).join('')}</div>`; }).join('') : `<div class="empty"><p>Aún no hay movimientos este mes.</p><button class="btn pri" data-act="newMov">Registrar el primero</button></div>`}
+        ${trio(cur.inc, cur.exp)}
+        ${feed.length ? dayList(feed) : `<div class="empty"><p>Aún no hay movimientos este mes.</p><button class="btn pri" data-act="newMov">Registrar el primero</button></div>`}
       </section>
     </div>
     <aside class="home-side">
@@ -507,6 +508,93 @@ function movItem(m) {
   return `<div class="item click" data-act="editMov" data-id="${esc(m.id)}"><span class="ic ${k}">${ab}</span><div class="t"><b>${esc(m.desc || m.sub || m.type)}</b><small>${esc(sub)}${m.scope && m.scope !== 'Personal' ? ' · ' + esc(m.scope) : ''}</small></div><span class="amt ${sign > 0 ? 'pos' : ''}">${sign > 0 ? '+' : sign < 0 ? '−' : ''}${money(m.amount).replace('−', '')}</span></div>`;
 }
 
+/* ---- Libreta: cuentas, días y pestañas de periodo ---- */
+const ACC_ORDER = ['Efectivo', 'Banco', 'Ahorro', 'Billetera digital', 'Fondo', 'Inversión', 'Tarjeta de crédito'];
+function accGroups() {
+  const W = worth(), groups = {};
+  S.data.accounts.forEach(a => { const t = a.type || 'Otras'; (groups[t] = groups[t] || []).push({ a, v: W.bal[a.name] || 0 }); });
+  const keys = Object.keys(groups).sort((x, y) => (ACC_ORDER.indexOf(x) + 1 || 99) - (ACC_ORDER.indexOf(y) + 1 || 99));
+  const all = Object.values(groups).flat();
+  const assets = sum(all.filter(x => x.v > 0), x => x.v) + W.inGoals;
+  const liab = sum(all.filter(x => x.v < 0), x => -x.v) + W.debts;
+  return { W, groups, keys, assets, liab, total: assets - liab };
+}
+function walletCard(sp, isNow) {
+  const G = accGroups();
+  const accs = Object.values(G.groups).flat().filter(x => Math.abs(x.v) >= .005).sort((a, b) => b.v - a.v);
+  const zero = S.data.accounts.length - accs.length;
+  let spend = '';
+  if (sp.mode !== 'closed') spend = `<div class="w-spend"><div><span>Puedes gastar hoy</span><b class="${sp.rem < 0 ? 'neg' : ''}">${money(sp.perDay)}</b><small>${sp.rem >= 0 ? `Te quedan ${money(sp.rem)} ${sp.mode === 'budget' ? 'del presupuesto' : 'de lo que entró'} para ${sp.left} día${sp.left > 1 ? 's' : ''}` : `Pasaste ${sp.mode === 'budget' ? 'el presupuesto' : 'lo que entró'} por ${money(-sp.rem)}`}</small></div><div class="meter"><div><span>${sp.mode === 'budget' ? 'Presupuesto usado' : 'Gastado'}</span><b>${pct(sp.used)}</b></div><div class="track"><i class="${sp.used > 1 ? 'over' : ''}" style="width:${Math.min(100, (sp.used || 0) * 100)}%"></i></div></div></div>`;
+  return `<section class="wallet">
+    <div class="w-top"><span>Tienes en tus cuentas</span><a href="#cuentas">Ver cuentas</a></div>
+    <div class="w-big ${G.W.inAcc < 0 ? 'neg' : ''}">${money(G.W.inAcc)}</div>
+    <div class="w-sub">${G.W.inGoals ? `En metas ${money(G.W.inGoals)} · ` : ''}Deudas ${money(G.liab)} · Patrimonio ${money(G.total)}</div>
+    <div class="w-accs">${accs.map(x => `<button type="button" class="w-acc ${x.v < 0 ? 'neg' : ''}" data-act="accGo" data-n="${esc(x.a.name)}"><span>${esc(x.a.name)}</span><b>${money(x.v)}</b></button>`).join('')}${zero ? `<a class="w-acc dim" href="#cuentas"><span>${zero} en cero</span></a>` : ''}</div>
+    ${spend}
+  </section>`;
+}
+function dayHead(dt, ms) {
+  const inc = sum(ms.filter(x => x.type === 'Ingreso'), x => x.amount), out = sum(ms.filter(x => x.type === 'Gasto'), x => x.amount);
+  const [y, m, d] = dt.split('-').map(Number);
+  return `<div class="dhead"><b class="dnum">${d}</b><span class="dwk">${WEEK[(new Date(dt + 'T12:00').getDay() + 6) % 7]}</span><span class="dmo">${MSHORT[m - 1].toLowerCase()} ${y}</span><span class="dsum">${inc ? `<span class="pos">+${money(inc)}</span>` : ''}${out ? `<span class="neg">−${money(out)}</span>` : ''}</span></div>`;
+}
+function dayList(list) {
+  const groups = {}; list.forEach(x => (groups[x.date] = groups[x.date] || []).push(x));
+  return Object.entries(groups).map(([dt, ms]) => `<div class="dgroup">${dayHead(dt, ms)}<div class="list">${ms.map(movItem).join('')}</div></div>`).join('');
+}
+function trio(inc, exp) {
+  return `<div class="trio"><div><span>Ingresos</span><b class="pos">${money(inc)}</b></div><div><span>Gastos</span><b class="neg">${money(exp)}</b></div><div><span>Total</span><b class="${inc - exp < 0 ? 'neg' : ''}">${money(inc - exp, true)}</b></div></div>`;
+}
+function vMovs() {
+  const u = S.ui, D = S.data, tab = u.mTab || 'dia';
+  const tabs = `<div class="ptabs">${[['dia', 'Diario'], ['cal', 'Calendario'], ['mes', 'Mensual'], ['total', 'Total']].map(([k, l]) => `<button type="button" data-act="mTab" data-v="${k}" class="${tab === k ? 'on' : ''}">${l}</button>`).join('')}</div>`;
+  const opt = (arr, sel, all) => `<option value="">${all}</option>` + arr.map(x => `<option ${x === sel ? 'selected' : ''}>${esc(x)}</option>`).join('');
+  const cats = [...new Set([...D.lists.expenseCats, ...D.lists.incomeCats, ...D.cats.map(c => c.cat)])];
+  const filters = `<div class="card"><div class="filters">
+    <input class="ctl" id="fq" type="search" placeholder="Buscar descripción, monto, nota…" value="${esc(u.q)}" style="flex:2 1 220px">
+    ${tab === 'dia' ? `<select class="ctl" id="fPeriod"><option value="mes" ${u.fPeriod === 'mes' ? 'selected' : ''}>${ymLabel(u.ym)}</option><option value="año" ${u.fPeriod === 'año' ? 'selected' : ''}>Todo ${u.ym.slice(0, 4)}</option><option value="todo" ${u.fPeriod === 'todo' ? 'selected' : ''}>Todo el historial</option></select>` : ''}
+    <select class="ctl" id="fType">${opt(D.lists.types, u.fType, 'Todos los tipos')}</select>
+    <select class="ctl" id="fAcc">${opt(D.accounts.map(a => a.name), u.fAcc, 'Todas las cuentas')}</select>
+    <select class="ctl" id="fCat">${opt(cats, u.fCat, 'Todas las categorías')}</select>
+  </div></div>`;
+  const head0 = head('Movimientos', u.fAcc ? `Filtrando por ${esc(u.fAcc)} · <button type="button" class="linkbtn" data-act="clearAcc">Quitar filtro</button>` : '', `<button class="btn" data-act="csv">Exportar CSV</button>`);
+  if (tab === 'total') {
+    const G = accGroups();
+    return `${head0}${tabs}${accountsBlock(G)}`;
+  }
+  if (tab === 'mes') {
+    const y = u.ym.slice(0, 4), keep = u.fPeriod; u.fPeriod = 'año'; const L = filteredMovs(); u.fPeriod = keep;
+    const rows = MONTHS.map((n, i) => { const k = `${y}-${pad(i + 1)}`, ms = L.filter(x => ymOf(x.date) === k); return { k, n, inc: sum(ms.filter(x => x.type === 'Ingreso'), x => x.amount), exp: sum(ms.filter(x => x.type === 'Gasto'), x => x.amount), c: ms.length }; });
+    return `${head0}${tabs}${filters}${trio(sum(rows, r => r.inc), sum(rows, r => r.exp))}
+    <div class="card"><div class="list">${rows.map(r => `<button type="button" class="mrow ${r.k === u.ym ? 'on' : ''}" data-act="goMonth" data-v="${r.k}"><span><b>${r.n}</b><small>${r.c ? r.c + ' movimientos' : 'Sin movimientos'}</small></span><span class="pos num">${r.inc ? money(r.inc) : ''}</span><span class="neg num">${r.exp ? money(r.exp) : ''}</span><span class="num ${r.inc - r.exp < 0 ? 'neg' : ''}">${r.c ? money(r.inc - r.exp, true) : '—'}</span></button>`).join('')}</div></div>`;
+  }
+  const keep = u.fPeriod; if (tab === 'cal') u.fPeriod = 'mes';
+  const L = filteredMovs(); u.fPeriod = keep;
+  const inc = sum(L.filter(m => m.type === 'Ingreso'), m => m.amount), exp = sum(L.filter(m => m.type === 'Gasto'), m => m.amount);
+  if (tab === 'cal') {
+    const [y, m] = u.ym.split('-').map(Number), first = (new Date(y, m - 1, 1).getDay() + 6) % 7, dim = daysIn(u.ym);
+    const sel = u.calDay && ymOf(u.calDay) === u.ym ? u.calDay : null;
+    let cells = WEEK.map(w => `<div class="cal-h">${w}</div>`).join('') + '<div class="cal-e"></div>'.repeat(first);
+    for (let d = 1; d <= dim; d++) {
+      const ds = `${u.ym}-${pad(d)}`, ms = L.filter(x => x.date === ds);
+      const di = sum(ms.filter(x => x.type === 'Ingreso'), x => x.amount), de = sum(ms.filter(x => x.type === 'Gasto'), x => x.amount);
+      cells += `<button type="button" class="cal-d ${ds === today() ? 'today' : ''} ${ds === sel ? 'on' : ''}" data-act="calDay" data-v="${ds}"><span>${d}</span>${di ? `<small class="pos">+${Math.round(di)}</small>` : ''}${de ? `<small class="neg">−${Math.round(de)}</small>` : ''}</button>`;
+    }
+    const dayMovs = sel ? L.filter(x => x.date === sel) : [];
+    return `${head0}${tabs}${filters}${trio(inc, exp)}<div class="card"><div class="cal">${cells}</div></div>
+    ${sel ? `<div class="card">${dayMovs.length ? dayList(dayMovs) : `<div class="empty"><p>Sin movimientos el ${dLabel(sel)}.</p><button class="btn pri" data-act="newMovOn" data-v="${sel}">Registrar en ese día</button></div>`}</div>` : '<p class="muted" style="margin:0">Toca un día para ver sus movimientos.</p>'}`;
+  }
+  return `${head0}${tabs}${filters}${trio(inc, exp)}
+  <div class="card">${L.length ? dayList(L) : `<div class="empty"><p>No hay movimientos con estos filtros.</p><button class="btn pri" data-act="newMov">Agregar movimiento</button></div>`}</div>`;
+}
+function accountsBlock(G) {
+  return `<div class="trio"><div><span>Activos</span><b class="pos">${money(G.assets)}</b></div><div><span>Pasivos</span><b class="neg">${money(G.liab)}</b></div><div><span>Total</span><b>${money(G.total)}</b></div></div>
+  <div class="card"><div class="agroups">${G.keys.map(k => { const g = G.groups[k]; return `<div class="agroup"><div class="ahead"><span>${esc(k)}</span><b class="num">${money(sum(g, x => x.v))}</b></div>${g.map(x => `<button type="button" class="arow" data-act="accGo" data-n="${esc(x.a.name)}"><span>${esc(x.a.name)}</span><b class="num ${x.v < 0 ? 'neg' : ''}">${money(x.v)}</b></button>`).join('')}</div>`; }).join('')}
+  ${G.W.inGoals ? `<div class="agroup"><div class="ahead"><span>Metas (fuera de cuentas)</span><b class="num">${money(G.W.inGoals)}</b></div></div>` : ''}
+  ${S.data.debts.length ? `<div class="agroup"><div class="ahead"><span>Deudas</span><b class="num neg">${money(G.W.debts)}</b></div>${S.data.debts.map(d => `<a class="arow" href="#deudas"><span>${esc(d.name)}</span><b class="num neg">${money(debtInfo(d).pending)}</b></a>`).join('')}</div>` : ''}
+  </div></div>`;
+}
+
 /* ---- Movimientos ---- */
 function filteredMovs() {
   const u = S.ui, q = u.q.trim().toLowerCase();
@@ -521,30 +609,14 @@ function filteredMovs() {
     return true;
   }).sort((a, b) => b.date.localeCompare(a.date) || (b.row || 0) - (a.row || 0));
 }
-function vMovs() {
-  const L = filteredMovs(), u = S.ui, D = S.data;
-  const inc = sum(L.filter(m => m.type === 'Ingreso'), m => m.amount), exp = sum(L.filter(m => m.type === 'Gasto'), m => m.amount);
-  const groups = {}; L.forEach(m => (groups[m.date] = groups[m.date] || []).push(m));
-  const opt = (arr, sel, all) => `<option value="">${all}</option>` + arr.map(x => `<option ${x === sel ? 'selected' : ''}>${esc(x)}</option>`).join('');
-  const cats = [...new Set([...D.lists.expenseCats, ...D.lists.incomeCats, ...D.cats.map(c => c.cat)])];
-  return `${head('Movimientos', `${L.length} movimientos · entradas ${money(inc)} · salidas ${money(exp)}`, `<button class="btn" data-act="csv">Exportar CSV</button>`)}
-  <div class="card"><div class="filters">
-    <input class="ctl" id="fq" type="search" placeholder="Buscar descripción, monto, nota…" value="${esc(u.q)}" style="flex:2 1 220px">
-    <select class="ctl" id="fPeriod"><option value="mes" ${u.fPeriod === 'mes' ? 'selected' : ''}>${ymLabel(u.ym)}</option><option value="año" ${u.fPeriod === 'año' ? 'selected' : ''}>Todo ${u.ym.slice(0, 4)}</option><option value="todo" ${u.fPeriod === 'todo' ? 'selected' : ''}>Todo el historial</option></select>
-    <select class="ctl" id="fType">${opt(D.lists.types, u.fType, 'Todos los tipos')}</select>
-    <select class="ctl" id="fAcc">${opt(D.accounts.map(a => a.name), u.fAcc, 'Todas las cuentas')}</select>
-    <select class="ctl" id="fCat">${opt(cats, u.fCat, 'Todas las categorías')}</select>
-  </div></div>
-  <div class="card">${Object.keys(groups).length ? Object.entries(groups).map(([d, ms]) => `<div class="day-head"><span>${dLabel(d)} · ${WEEK[(new Date(d + 'T12:00').getDay() + 6) % 7]}</span><span class="num">${money(sum(ms.filter(m => m.type === 'Gasto'), m => m.amount) ? -sum(ms.filter(m => m.type === 'Gasto'), m => m.amount) : 0)}</span></div><div class="list">${ms.map(movItem).join('')}</div>`).join('') : `<div class="empty"><p>No hay movimientos con estos filtros.</p><button class="btn pri" data-act="newMov">Agregar movimiento</button></div>`}</div>`;
-}
-
 /* ---- Cuentas ---- */
 function vCuentas() {
   const W = worth(), ym = S.ui.ym;
   const net = {}; S.data.movs.filter(m => ymOf(m.date) === ym).forEach(m => { const A = m.amount; const add = (a, v) => net[a] = (net[a] || 0) + v; if (m.type === 'Ingreso' || m.type === 'Retiro de meta') add(m.acc, A); else if (m.type === 'Gasto' || m.type === 'Aporte a meta') add(m.acc, -A); else if (m.type === 'Transferencia') { add(m.acc, -A); if (m.to) add(m.to, A); } });
   const linked = g => S.data.goals.filter(x => x.acc === g).map(x => x.name);
   return `${head('Cuentas', 'Saldo actual = saldo inicial + ingresos − gastos ± transferencias − aportes a metas + retiros. La misma fórmula de tu hoja.', `<button class="btn" data-act="cash">Contar efectivo</button><button class="btn" data-act="newTransfer">Transferir</button><button class="btn pri" data-act="newAcc">Nueva cuenta</button>`)}
-  <div class="kpis"><div class="kpi"><span class="label">En cuentas</span><span class="v">${money(W.inAcc)}</span></div><div class="kpi"><span class="label">En metas</span><span class="v">${money(W.inGoals)}</span></div><div class="kpi"><span class="label">Deudas</span><span class="v">${money(W.debts)}</span></div><div class="kpi"><span class="label">Patrimonio neto</span><span class="v">${money(W.net)}</span></div></div>
+  ${accountsBlock(accGroups())}
+  <h2 style="margin-top:8px">Detalle y edición</h2>
   <div class="card tbl-wrap"><table><thead><tr><th>Cuenta</th><th>Tipo</th><th class="r">Saldo inicial</th><th class="r">Neto ${MSHORT[Number(ym.slice(5)) - 1]}</th><th class="r">Saldo actual</th><th></th></tr></thead><tbody>
   ${S.data.accounts.map(a => { const b = W.bal[a.name] || 0, n = net[a.name] || 0; const l = linked(a.name); return `<tr><td><b>${esc(a.name)}</b>${l.length ? `<br><small class="muted">Meta: ${esc(l.join(', '))}</small>` : ''}</td><td>${esc(a.type)}</td><td class="r">${money(a.initial)}</td><td class="r ${n < 0 ? 'neg' : n > 0 ? 'pos' : 'muted'}">${n ? money(n, true) : '—'}</td><td class="r ${b < 0 ? 'neg' : ''}"><b>${money(b)}</b></td><td><button class="linkbtn" data-act="editAcc" data-n="${esc(a.name)}">Editar</button></td></tr>`; }).join('')}
   </tbody><tfoot><tr><td colspan="4">Total en cuentas</td><td class="r">${money(W.inAcc)}</td><td></td></tr></tfoot></table></div>`;
@@ -1042,6 +1114,12 @@ const ACT = {
   fixToggle: el => { const f = byN(S.data.fixed, el.dataset.n), m = Number(el.dataset.m); op('fixed.mark', { name: f.name, month: m, paid: !(f.paid || [])[m - 1] }); },
   newNote: () => editNote(), editNote: el => editNote(S.data.notes.find(n => n.id === el.dataset.id)),
   budget: el => { const c = el.dataset.c, b = (S.data.budgets.find(x => x.cat === c) || {}).amount || ''; openSheet('Presupuesto de ' + esc(c), `<label class="field"><span>Monto mensual</span><input id="bAmt" type="number" step="0.01" min="0" value="${b}" autofocus></label><button class="btn pri">Guardar</button>`, () => op('budget.set', { cat: c, amount: r2($('#bAmt').value) })); },
+  mTab: el => { S.ui.mTab = el.dataset.v; render(); },
+  calDay: el => { S.ui.calDay = el.dataset.v; render(); },
+  goMonth: el => { S.ui.ym = el.dataset.v; S.ui.mTab = 'dia'; S.ui.fPeriod = 'mes'; render(); },
+  accGo: el => { S.ui.fAcc = el.dataset.n; S.ui.mTab = 'dia'; go('movimientos'); },
+  clearAcc: () => { S.ui.fAcc = ''; render(); },
+  newMovOn: el => editMov(null, { date: el.dataset.v }),
   stPeriod: el => { S.ui.stPeriod = el.dataset.v; render(); },
   cash: cashCounter, scope: el => { S.cfg.scope = el.dataset.v; save(); render(); },
   design: el => { S.cfg.design = el.dataset.v; save(); render(); }, theme: el => { S.cfg.theme = el.dataset.v; save(); render(); },
