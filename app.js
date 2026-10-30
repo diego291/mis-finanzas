@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -88,8 +88,8 @@ function load() {
     const raw = localStorage.getItem(LS);
     if (raw) { const j = JSON.parse(raw); S.data = j.data; S.outbox = j.outbox || []; Object.assign(S.cfg, j.cfg || {}); }
   } catch (e) { /* almacenamiento bloqueado: se trabaja en memoria */ }
-  if (!S.data) S.data = window.__SEED__ ? JSON.parse(JSON.stringify(window.__SEED__)) : null;
-  if (S.data) normalize(S.data);
+  if (!S.data) S.data = window.__SEED__ ? JSON.parse(JSON.stringify(window.__SEED__)) : emptyData();
+  normalize(S.data);
 }
 function save() { try { localStorage.setItem(LS, JSON.stringify({ data: S.data, outbox: S.outbox, cfg: S.cfg })); } catch (e) { } }
 function normalize(d) {
@@ -344,7 +344,7 @@ function renderNav() {
   VIEWS.forEach(([k, name, grp], i) => {
     if (grp) html.push(`<div class="grp">${grp}</div>`);
     if (k === 'metas') html.push('<span class="slot" aria-hidden="true"></span>');
-    const n = k === 'revision' ? checks().filter(c => c.sev !== 'info').length : 0;
+    const n = k === 'revision' && S.data ? checks().filter(c => c.sev !== 'info').length : 0;
     html.push(`<a href="#${k}" data-v="${k}" class="${PRIMARY.includes(k) ? '' : 'sec'} ${S.ui.view === k ? 'on' : ''}">${svgI(k)}<span>${name}${n ? ` <span class="pill bad">${n}</span>` : ''}</span></a>`);
   });
   html.push(`<a href="#" class="more" data-act="more">${svgI('mas')}<span>Más</span></a>`);
@@ -364,7 +364,6 @@ function render() {
   const tc = { a: '#0d6b5b', b: '#2e48d6', c: '#0a0e13' }[S.cfg.design]; document.querySelector('meta[name=theme-color]')?.setAttribute('content', tc);
   $('#mLabel').textContent = ymLabel(S.ui.ym);
   renderNav(); updatePill();
-  if (!S.data) { $('#view').innerHTML = welcome(); return; }
   const fn = { inicio: vInicio, movimientos: vMovs, cuentas: vCuentas, metas: vMetas, presupuesto: vPresupuesto, pagos: vPagos, deudas: vDeudas, estadisticas: vStats, revision: vRevision, notas: vNotas, ajustes: vAjustes }[S.ui.view];
   $('#view').innerHTML = `<div class="wrap">${fn()}</div>`;
   const top = $('#top'); if (top) document.body.style.setProperty('--topH', top.offsetHeight + 'px');
@@ -402,6 +401,7 @@ function vInicio() {
   if (cover != null) insights.push(`Tu dinero disponible cubre <b>${cover.toFixed(1)} meses</b> de gastos promedio (${money(avg)}/mes). Lo recomendable son ${S.cfg.emergencyMonths}.`);
 
   return `
+  ${!S.cfg.url && !window.__SEED__ ? `<div class="alert info"><span></span><div><b>Conecta tu hoja de Google</b><p>Así tus movimientos se guardan en tu hoja y se ven en todos tus equipos.</p></div><div class="acts"><button class="btn sm pri" data-act="go" data-v="ajustes">Conectar</button></div></div>` : ''}
   ${window.__SEED__ && !S.cfg.url ? `<div class="preview-note">Vista previa con los datos de tu archivo. Los cambios aquí no llegan a tu hoja; para eso instala la app desde GitHub y conéctala en Ajustes.</div>` : ''}
   ${S.installEvt ? `<div class="alert info"><span></span><div><b>Instala la app</b><p>Ábrela como aplicación, con ícono y sin barra del navegador.</p></div><div class="acts"><button class="btn sm pri" data-act="install">Instalar</button></div></div>` : ''}
   ${head(ymLabel(ym), isNow ? `Día ${day} de ${daysIn(ym)}` : 'Mes cerrado', scopeSeg())}
@@ -805,7 +805,7 @@ const ACT = {
   install: async () => { const e = S.installEvt; if (!e) return; e.prompt(); await e.userChoice; S.installEvt = null; render(); },
   checkUpdate: async () => { const r = await navigator.serviceWorker?.getRegistration(); if (!r) return toast('La app se actualiza sola al abrirla desde GitHub Pages.'); await r.update(); toast(r.waiting || r.installing ? 'Descargando versión nueva…' : 'Ya tienes la última versión'); },
   resetLocal: () => { $('#resetConfirm').hidden = false; },
-  resetYes: () => { try { localStorage.removeItem(LS); } catch (e) { } S.data = null; S.outbox = []; S.cfg.url = ''; S.cfg.token = ''; render(); }
+  resetYes: () => { try { localStorage.removeItem(LS); } catch (e) { } S.data = normalize(emptyData()); S.outbox = []; S.cfg.url = ''; S.cfg.token = ''; S.cfg.lastSync = 0; render(); }
 };
 function download(name, text, type) {
   try { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; document.body.appendChild(a); a.click(); a.remove(); toast('Descargando ' + name); }
@@ -837,7 +837,7 @@ document.addEventListener('change', e => {
   }
 });
 document.addEventListener('submit', e => {
-  if (e.target.id === 'connForm') { e.preventDefault(); S.cfg.url = $('#cUrl').value.trim(); S.cfg.token = $('#cTok').value.trim(); S.syncErr = ''; if (!S.data) S.data = normalize(emptyData()); save(); sync(true); }
+  if (e.target.id === 'connForm') { e.preventDefault(); S.cfg.url = $('#cUrl').value.trim(); S.cfg.token = $('#cTok').value.trim(); S.syncErr = ''; save(); sync(true); }
   if (e.target.id === 'anaForm') { e.preventDefault(); S.cfg.emergencyMonths = Number($('#aEm').value) || 6; S.cfg.needs = [...e.target.querySelectorAll('input[name=need]:checked')].map(i => i.value); save(); render(); toast('Guardado'); }
   if (e.target.id === 'catForm') { e.preventDefault(); const sub = $('#nSub').value.trim(), cat = $('#nCat').value.trim(); if (!sub || !cat) return; if (catMap()[sub]) return toast('Esa subcategoría ya existe'); op('cat.add', { sub, cat, type: $('#nType').value }); toast('Subcategoría agregada'); }
 });
