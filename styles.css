@@ -486,3 +486,13 @@ body[data-design="c"] .next-step b { color: var(--cta-bg); }
 .feed-card .dhead { padding-top: 6px; } .feed-card .dnum { font-size: 1.3rem; }
 .feed-card .item { grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; } .feed-card .item .ic { width: 34px; height: 34px; border-radius: 10px; }
 @media (max-width: 1099px) { .home-main { display: contents; } .home-side { order: 3; } .home-cards { order: 4; } }
+
+/* ---------- Calculadora en montos ---------- */
+.reg-keys { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+.reg-keys button.op { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.reg-amt { display: grid; justify-items: center; }
+.reg-expr { font-size: .95rem; color: var(--muted); letter-spacing: 0; font-weight: 400; max-width: 100%; overflow-wrap: anywhere; }
+.calc-bar { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+.calc-bar button { min-width: 38px; height: 34px; border: 1px solid var(--line); background: var(--surface-2); color: var(--accent); border-radius: 8px; font-family: var(--f-num); font-size: 1rem; font-weight: 700; }
+.calc-res { font-family: var(--f-num); font-size: .85rem; color: var(--muted); margin-left: 6px; }
+.cash .calc-bar { grid-column: 1 / -1; }

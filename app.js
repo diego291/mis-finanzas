@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '1.5.1';
+const VERSION = '1.6.0';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -51,6 +51,20 @@ function emptyData() {
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const r2 = n => Math.round((Number(n) || 0) * 100) / 100;
+/* Calculadora: acepta 10+5, 20-3.5, 3*2.25, 100/4 y paréntesis en cualquier monto */
+function calc(expr) {
+  if (expr == null) return NaN;
+  const s = String(expr).replace(/\s+/g, '').replace(/,/g, '.').replace(/[×xX]/g, '*').replace(/÷/g, '/').replace(/−/g, '-').replace(/\$/g, '');
+  if (!s || !/^[0-9.+\-*/()]+$/.test(s)) return NaN;
+  let i = 0;
+  const num = () => { const m = s.slice(i).match(/^\d*\.?\d+|^\d+\./); if (!m) throw 0; i += m[0].length; return parseFloat(m[0]); };
+  const factor = () => { if (s[i] === '-') { i++; return -factor(); } if (s[i] === '+') { i++; return factor(); } if (s[i] === '(') { i++; const v = expr2(); if (s[i] === ')') i++; return v; } return num(); };
+  const term = () => { let v = factor(); while (s[i] === '*' || s[i] === '/') { const o = s[i++]; const w = factor(); v = o === '*' ? v * w : v / w; } return v; };
+  const expr2 = () => { let v = term(); while (s[i] === '+' || s[i] === '-') { const o = s[i++]; const w = term(); v = o === '+' ? v + w : v - w; } return v; };
+  try { const v = expr2(); return i === s.length && isFinite(v) ? v : NaN; } catch (e) { return NaN; }
+}
+const isExpr = s => /[+\-*/×÷()]/.test(String(s || '').replace(/^-/, ''));
+const calcVal = sel => { const v = calc($(sel)?.value); return isFinite(v) ? r2(v) : 0; };
 const money = (n, sign) => { n = r2(n); const s = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); return (n < 0 ? '−' : sign && n > 0 ? '+' : '') + '$' + s; };
 const pct = n => (n == null || !isFinite(n)) ? '—' : Math.round(n * 100) + '%';
 const pad = n => String(n).padStart(2, '0');
@@ -877,7 +891,7 @@ function vAjustes() {
     <div class="field"><span>Categorías que cuentan como necesidad (regla 50/30/20)</span><div class="chips" style="flex-wrap:wrap">${S.data.lists.expenseCats.map(k => `<label class="chip" style="border-style:solid;${c.needs.includes(k) ? 'color:var(--accent);border-color:var(--accent)' : ''}"><input type="checkbox" name="need" value="${esc(k)}" ${c.needs.includes(k) ? 'checked' : ''} style="margin-right:5px">${esc(k)}</label>`).join('')}</div></div><div><button class="btn" type="submit">Guardar</button></div></form></section>
   <section class="card"><header><h2>Sobre semanal de efectivo</h2>${c.envelope && c.envelope.on ? '<span class="pill ok">Activo</span>' : ''}</header><form class="form" id="envForm">
     <p class="muted" style="margin:0;font-size:.86rem">Cada semana registras el efectivo para gastos pequeños como un solo gasto. Ya no tienes que anotar cada pupusa ni cada pasaje.</p>
-    <div class="two"><label class="field"><span>Monto por semana</span><input id="eAmt" type="number" step="0.01" min="0" value="${(c.envelope && c.envelope.amount) || ''}" placeholder="${(() => { const L = S.data.movs.filter(m => m.sub === ENV_SUB && m.type === 'Gasto' && m.date >= addM(ymOf(today()), -2) + '-01'); return L.length ? Math.round(sum(L, m => m.amount) / 9) : 0; })() || 25}"></label><label class="field"><span>Sale de</span>${sel('eAcc', S.data.accounts.map(a => a.name), (c.envelope && c.envelope.acc) || (S.data.accounts.find(a => a.type === 'Efectivo') || {}).name)}</label></div>
+    <div class="two"><label class="field"><span>Monto por semana</span><input id="eAmt" class="calc" type="text" inputmode="decimal" autocomplete="off" value="${(c.envelope && c.envelope.amount) || ''}" placeholder="${(() => { const L = S.data.movs.filter(m => m.sub === ENV_SUB && m.type === 'Gasto' && m.date >= addM(ymOf(today()), -2) + '-01'); return L.length ? Math.round(sum(L, m => m.amount) / 9) : 0; })() || 25}"></label><label class="field"><span>Sale de</span>${sel('eAcc', S.data.accounts.map(a => a.name), (c.envelope && c.envelope.acc) || (S.data.accounts.find(a => a.type === 'Efectivo') || {}).name)}</label></div>
     <div class="btns"><button class="btn pri" type="submit">${c.envelope && c.envelope.on ? 'Guardar' : 'Activar sobre semanal'}</button>${c.envelope && c.envelope.on ? '<button class="btn" type="button" data-act="envOff">Desactivar</button>' : ''}</div></form></section>
   <section class="card"><header><h2>Categorías</h2></header><form class="form" id="catForm"><div class="two"><label class="field"><span>Nueva subcategoría</span><input id="nSub" required placeholder="Ej. Repuestos de computadora"></label><label class="field"><span>Tipo</span><select id="nType"><option>Gasto</option><option>Ingreso</option></select></label></div>
     <label class="field"><span>Categoría principal</span><input id="nCat" list="catList" required placeholder="Elige o escribe una nueva"><datalist id="catList">${[...S.data.lists.expenseCats, ...S.data.lists.incomeCats].map(x => `<option value="${esc(x)}">`).join('')}</datalist></label><div><button class="btn" type="submit">Agregar a la hoja</button></div></form></section>
@@ -983,11 +997,12 @@ function editMov(m, preset, opts = {}) {
     if (!b) return `<div class="reg-note">${esc(cat)} no tiene presupuesto.</div>`;
     const ym = ymOf(st.date || today()), spent = month(ym).byCat[cat] || 0;
     const prev = m && m.type === 'Gasto' && catOf(m.sub) === cat && ymOf(m.date) === ym ? m.amount : 0;
-    const left = b - (spent - prev) - (Number(st.amt) || 0);
+    const left = b - (spent - prev) - (calc(st.amt) || 0);
     return left >= 0 ? `<div class="reg-note ok">${esc(cat)}: te quedan <b>${money(left)}</b> este mes</div>` : `<div class="reg-note bad">${esc(cat)}: te pasas por <b>${money(-left)}</b> este mes</div>`;
   };
   const valid = () => {
-    const n = Number(st.amt) || 0;
+    const n = calc(st.amt);
+    if (st.amt && isExpr(st.amt) && !isFinite(n)) return 'Revisa la operación';
     if (!(n > 0)) return 'Escribe el monto';
     if ((st.type === 'Gasto' || st.type === 'Ingreso') && !st.sub) return 'Elige una categoría';
     if (!st.acc) return 'Elige la cuenta';
@@ -997,7 +1012,7 @@ function editMov(m, preset, opts = {}) {
   };
   const chipRow = (list, cur, act) => `<div class="reg-chips">${list.map(n => `<button type="button" class="rchip ${n === cur ? 'on' : ''}" data-r="${act}" data-v="${esc(n)}">${esc(n)}</button>`).join('')}</div>`;
   const paint = () => {
-    const n = Number(st.amt) || 0, k = kind(), err = valid();
+    const n = r2(calc(st.amt) || 0), k = kind(), err = valid(), ex = isExpr(st.amt);
     const sign = st.type === 'Gasto' || st.type === 'Aporte a meta' ? '−' : st.type === 'Ingreso' || st.type === 'Retiro de meta' ? '+' : '';
     const tiles = (st.type === 'Gasto' || st.type === 'Ingreso') ? (() => {
       let subs = topSubs(st.type, 7); if (st.sub && !subs.includes(st.sub)) subs = [st.sub].concat(subs.slice(0, 6));
@@ -1008,7 +1023,7 @@ function editMov(m, preset, opts = {}) {
     body.innerHTML = `
       <div class="seg reg-type">${typeTabs.map(([t, l]) => `<button type="button" data-r="type" data-v="${t}" class="${(l === k) ? 'on' : ''}">${l}</button>`).join('')}</div>
       ${k === 'Meta' ? `<div class="seg reg-type sm">${[['Aporte a meta', 'Aportar'], ['Retiro de meta', 'Retirar']].map(([t, l]) => `<button type="button" data-r="type" data-v="${t}" class="${st.type === t ? 'on' : ''}">${l}</button>`).join('')}</div>` : ''}
-      <div class="reg-amt ${st.type === 'Gasto' ? 'out' : st.type === 'Ingreso' ? 'in' : ''} ${n ? '' : 'zero'}"><span>${sign}$${esc(st.amt || '0')}</span></div>
+      <div class="reg-amt ${st.type === 'Gasto' ? 'out' : st.type === 'Ingreso' ? 'in' : ''} ${n ? '' : 'zero'}">${ex ? `<small class="reg-expr">${esc(st.amt.replace(/\*/g, '×').replace(/\//g, '÷'))}</small>` : ''}<span>${sign}$${ex ? (isFinite(calc(st.amt)) ? n.toFixed(2) : '…') : esc(st.amt || '0')}</span></div>
       ${budgetNote()}
       ${freq.length ? `<div class="reg-chips">${freq.map((f, i) => `<button type="button" class="rchip dash" data-r="freq" data-v="${i}">${esc(f[3] || f[1])}</button>`).join('')}</div>` : ''}
       ${tiles}
@@ -1023,7 +1038,8 @@ function editMov(m, preset, opts = {}) {
         <div class="two"><label class="field"><span>Ámbito</span>${sel('rScope', D.lists.scopes, st.scope || 'Personal')}</label><label class="field"><span>Método de pago</span>${sel('rMethod', D.lists.methods, st.method, '—')}</label></div>
         ${st.type === 'Gasto' && D.debts.length ? `<label class="field"><span>¿Es pago de una deuda?</span>${sel('rDebt', D.debts.map(d => d.name), st.debt, 'No')}</label>` : ''}
         <label class="field"><span>Notas</span><textarea id="rNotes" rows="2">${esc(st.notes)}</textarea></label></div>` : ''}
-      <div class="reg-keys">${['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del'].map(x => `<button type="button" data-r="key" data-v="${x}" aria-label="${x === 'del' ? 'Borrar' : x}">${x === 'del' ? '⌫' : x}</button>`).join('')}</div>
+      <div class="reg-keys">${['7', '8', '9', '/', '4', '5', '6', '*', '1', '2', '3', '-', '.', '0', 'del', '+'].map(x => { const lab = { del: '⌫', '/': '÷', '*': '×', '-': '−', '+': '+' }[x] || x; return `<button type="button" class="${'+-*/'.includes(x) ? 'op' : ''}" data-r="key" data-v="${x}" aria-label="${{ del: 'Borrar', '/': 'Dividir', '*': 'Multiplicar', '-': 'Restar', '+': 'Sumar', '.': 'Punto decimal' }[x] || x}">${lab}</button>`; }).join('')}</div>
+      ${ex && isFinite(calc(st.amt)) ? `<button type="button" class="rchip" data-r="key" data-v="=" style="justify-self:center">= ${money(n)} · usar resultado</button>` : ''}
       <button type="button" class="reg-save ${err ? 'off' : ''}" data-r="save">${err || (isNew ? 'Guardar ' : 'Guardar cambios · ') + sign + money(n).replace('−', '')}</button>
       ${isNew ? '' : `<div class="btns" style="justify-content:center"><button type="button" class="btn sm" data-r="dup">Duplicar</button><button type="button" class="btn sm danger" data-r="del">Eliminar</button></div><div id="delConfirm" hidden class="alert bad"><span></span><div><b>¿Eliminar este movimiento?</b><p>Se borra también de tu hoja.</p></div><div class="acts"><button type="button" class="btn sm danger" data-r="delYes">Eliminar</button></div></div>`}`;
   };
@@ -1031,7 +1047,7 @@ function editMov(m, preset, opts = {}) {
   const save = () => {
     readMore(); if (valid()) return;
     const t = st.type;
-    const rec = { id: st.id, date: st.date || today(), type: t, acc: st.acc, to: t === 'Transferencia' ? st.to : '', sub: t === 'Gasto' || t === 'Ingreso' ? st.sub : '', desc: st.desc || (t === 'Gasto' || t === 'Ingreso' ? st.sub : t === 'Transferencia' ? 'A ' + st.to : st.goal), amount: r2(st.amt), goal: t.includes('meta') ? st.goal : '', debt: t === 'Gasto' ? st.debt : '', scope: st.scope || 'Personal', method: st.method, notes: st.notes };
+    const rec = { id: st.id, date: st.date || today(), type: t, acc: st.acc, to: t === 'Transferencia' ? st.to : '', sub: t === 'Gasto' || t === 'Ingreso' ? st.sub : '', desc: st.desc || (t === 'Gasto' || t === 'Ingreso' ? st.sub : t === 'Transferencia' ? 'A ' + st.to : st.goal), amount: r2(calc(st.amt)), goal: t.includes('meta') ? st.goal : '', debt: t === 'Gasto' ? st.debt : '', scope: st.scope || 'Personal', method: st.method, notes: st.notes };
     op('mov.upsert', rec);
     if (opts.after) opts.after(rec);
     if (!isNew) { closeSheet(); toast('Cambios guardados'); return; }
@@ -1052,7 +1068,15 @@ function editMov(m, preset, opts = {}) {
     else if (r === 'date') st.date = v;
     else if (r === 'more') st.more = !st.more;
     else if (r === 'freq') { const f = frequent().filter(x => x[0] === st.type)[v]; if (f) { st.type = f[0]; st.sub = f[1]; st.acc = f[2]; st.desc = f[3]; const last = S.data.movs.slice().reverse().find(x => x.sub === f[1] && x.desc === f[3]); if (last && !st.amt) st.amt = String(last.amount); } }
-    else if (r === 'key') { let a = st.amt; if (v === 'del') a = a.slice(0, -1); else if (v === '.') { if (!a.includes('.')) a = (a || '0') + '.'; } else if (!(a.includes('.') && a.split('.')[1].length >= 2) && a.replace('.', '').length < 8) a = a === '0' ? v : a + v; st.amt = a; }
+    else if (r === 'key') {
+      let a = st.amt || ''; const seg = a.split(/[+\-*/]/).pop();
+      if (v === 'del') a = a.slice(0, -1);
+      else if (v === '=') { const z = calc(a); if (isFinite(z)) a = String(r2(z)); }
+      else if ('+-*/'.includes(v)) { if (a && '+-*/'.includes(a.slice(-1))) a = a.slice(0, -1) + v; else if (a) a += v; }
+      else if (v === '.') { if (!seg.includes('.')) a += seg ? '.' : '0.'; }
+      else if (!(seg.includes('.') && seg.split('.')[1].length >= 2) && a.length < 28) a = a === '0' ? v : a + v;
+      st.amt = a;
+    }
     else if (r === 'save') return save();
     else if (r === 'again') { Object.assign(st, { id: uid(), amt: '', sub: '', desc: '', notes: '', to: '', goal: '', debt: '', date: today() }); }
     else if (r === 'dup') { closeSheet(); return editMov(null, Object.assign({}, m, { id: uid(), date: today() })); }
@@ -1074,7 +1098,9 @@ function editMov(m, preset, opts = {}) {
   const keyH = e => {
     if ($('#sheetBg').hidden || !document.body.contains(body)) { document.removeEventListener('keydown', keyH); return; }
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
-    if (/^[0-9.]$/.test(e.key)) { body.querySelector(`[data-r="key"][data-v="${e.key}"]`)?.click(); e.preventDefault(); }
+    const kmap = { x: '*', X: '*', ',': '.' }; const kk = kmap[e.key] || e.key;
+    if (/^[0-9.+\-*/]$/.test(kk)) { body.querySelector(`[data-r="key"][data-v="${kk}"]`)?.click(); e.preventDefault(); }
+    else if (kk === '=') { body.querySelector('[data-r="key"][data-v="="]')?.click(); e.preventDefault(); }
     else if (e.key === 'Backspace') { body.querySelector('[data-r="key"][data-v="del"]')?.click(); e.preventDefault(); }
     else if (e.key === 'Enter') { save(); e.preventDefault(); }
   };
@@ -1083,44 +1109,44 @@ function editMov(m, preset, opts = {}) {
 }
 function editAcc(a) {
   const isNew = !a; a = a || { name: '', type: 'Banco', initial: 0 };
-  openSheet(isNew ? 'Nueva cuenta' : 'Editar cuenta', `<label class="field"><span>Nombre</span><input id="aName" value="${esc(a.name)}" required autofocus></label><div class="two"><label class="field"><span>Tipo</span>${sel('aType', S.data.lists.accTypes, a.type)}</label><label class="field"><span>Saldo inicial</span><input id="aIni" type="number" step="0.01" value="${a.initial}"></label></div>
+  openSheet(isNew ? 'Nueva cuenta' : 'Editar cuenta', `<label class="field"><span>Nombre</span><input id="aName" value="${esc(a.name)}" required autofocus></label><div class="two"><label class="field"><span>Tipo</span>${sel('aType', S.data.lists.accTypes, a.type)}</label><label class="field"><span>Saldo inicial</span><input id="aIni" class="calc" type="text" inputmode="decimal" autocomplete="off" value="${a.initial}"></label></div>
   ${isNew ? '' : '<p class="muted" style="margin:0;font-size:.82rem">Si cambias el nombre, también se actualiza en todos tus movimientos de la hoja.</p>'}
   <div class="btns" style="justify-content:space-between">${isNew ? '<span></span>' : '<button type="button" class="btn danger" id="aDel">Eliminar</button>'}<button class="btn pri">Guardar</button></div>`, () => {
     const name = $('#aName').value.trim(); if (!name) return 'Escribe el nombre.';
     if (name !== a.name && S.data.accounts.some(x => x.name === name)) return 'Ya existe una cuenta con ese nombre.';
-    op('acc.upsert', { oldName: isNew ? '' : a.name, name, type: $('#aType').value, initial: r2($('#aIni').value) });
+    op('acc.upsert', { oldName: isNew ? '' : a.name, name, type: $('#aType').value, initial: calcVal('#aIni') });
   }, () => $('#aDel')?.addEventListener('click', () => { if (S.data.movs.some(m => m.acc === a.name || m.to === a.name)) { $('#fErr').textContent = 'Esta cuenta tiene movimientos. Cámbialos de cuenta antes de eliminarla.'; return; } op('acc.delete', { name: a.name }); closeSheet(); }));
 }
 function editGoal(g) {
   const isNew = !g; g = g || { name: '', purpose: '', target: '', initial: 0, due: '', acc: '' };
   openSheet(isNew ? 'Nueva meta' : 'Editar meta', `<label class="field"><span>Nombre</span><input id="gName" value="${esc(g.name)}" required autofocus></label><label class="field"><span>Para qué es</span><input id="gPur" value="${esc(g.purpose)}"></label>
-  <div class="two"><label class="field"><span>Monto objetivo</span><input id="gTar" type="number" step="0.01" value="${g.target || ''}"></label><label class="field"><span>Fecha objetivo</span><input id="gDue" type="date" value="${g.due || ''}"></label></div>
-  <div class="two"><label class="field"><span>Saldo inicial</span><input id="gIni" type="number" step="0.01" value="${g.initial || 0}"></label><label class="field"><span>Se guarda en la cuenta</span>${sel('gAcc', S.data.accounts.map(a => a.name), g.acc, 'No vincular')}</label></div>
+  <div class="two"><label class="field"><span>Monto objetivo</span><input id="gTar" class="calc" type="text" inputmode="decimal" autocomplete="off" value="${g.target || ''}"></label><label class="field"><span>Fecha objetivo</span><input id="gDue" type="date" value="${g.due || ''}"></label></div>
+  <div class="two"><label class="field"><span>Saldo inicial</span><input id="gIni" class="calc" type="text" inputmode="decimal" autocomplete="off" value="${g.initial || 0}"></label><label class="field"><span>Se guarda en la cuenta</span>${sel('gAcc', S.data.accounts.map(a => a.name), g.acc, 'No vincular')}</label></div>
   <p class="muted" style="margin:0;font-size:.82rem">Si la vinculas a una cuenta (por ejemplo “Fondo compartido”), el avance es el saldo de esa cuenta y no hace falta registrar aportes.</p>
   <div class="btns" style="justify-content:space-between">${isNew ? '<span></span>' : '<button type="button" class="btn danger" id="gDel">Eliminar</button>'}<button class="btn pri">Guardar</button></div>`, () => {
     const name = $('#gName').value.trim(); if (!name) return 'Escribe el nombre.';
-    op('goal.upsert', { oldName: isNew ? '' : g.name, name, purpose: $('#gPur').value.trim(), target: r2($('#gTar').value), initial: r2($('#gIni').value), due: $('#gDue').value, acc: $('#gAcc').value });
+    op('goal.upsert', { oldName: isNew ? '' : g.name, name, purpose: $('#gPur').value.trim(), target: calcVal('#gTar'), initial: calcVal('#gIni'), due: $('#gDue').value, acc: $('#gAcc').value });
   }, () => $('#gDel')?.addEventListener('click', () => { op('goal.delete', { name: g.name }); closeSheet(); }));
 }
 function editDebt(d) {
   const isNew = !d; d = d || { name: '', creditor: '', original: '', rate: '', payment: '', day: '' };
   openSheet(isNew ? 'Nueva deuda' : 'Editar deuda', `<div class="two"><label class="field"><span>Nombre</span><input id="dName" value="${esc(d.name)}" required autofocus></label><label class="field"><span>Acreedor</span><input id="dCred" value="${esc(d.creditor)}"></label></div>
-  <div class="two"><label class="field"><span>Monto original</span><input id="dOri" type="number" step="0.01" value="${d.original}"></label><label class="field"><span>Tasa anual (%)</span><input id="dRate" type="number" step="0.01" value="${d.rate}"></label></div>
-  <div class="two"><label class="field"><span>Cuota mensual</span><input id="dPay" type="number" step="0.01" value="${d.payment}"></label><label class="field"><span>Día de pago</span><input id="dDay" type="number" min="1" max="31" value="${d.day}"></label></div>
+  <div class="two"><label class="field"><span>Monto original</span><input id="dOri" class="calc" type="text" inputmode="decimal" autocomplete="off" value="${d.original}"></label><label class="field"><span>Tasa anual (%)</span><input id="dRate" type="number" step="0.01" value="${d.rate}"></label></div>
+  <div class="two"><label class="field"><span>Cuota mensual</span><input id="dPay" class="calc" type="text" inputmode="decimal" autocomplete="off" value="${d.payment}"></label><label class="field"><span>Día de pago</span><input id="dDay" type="number" min="1" max="31" value="${d.day}"></label></div>
   <div class="btns" style="justify-content:space-between">${isNew ? '<span></span>' : '<button type="button" class="btn danger" id="dDel">Eliminar</button>'}<button class="btn pri">Guardar</button></div>`, () => {
     const name = $('#dName').value.trim(); if (!name) return 'Escribe el nombre.';
-    op('debt.upsert', { oldName: isNew ? '' : d.name, name, creditor: $('#dCred').value.trim(), original: r2($('#dOri').value), rate: Number($('#dRate').value) || 0, payment: r2($('#dPay').value), day: Number($('#dDay').value) || '' });
+    op('debt.upsert', { oldName: isNew ? '' : d.name, name, creditor: $('#dCred').value.trim(), original: calcVal('#dOri'), rate: Number($('#dRate').value) || 0, payment: calcVal('#dPay'), day: Number($('#dDay').value) || '' });
   }, () => $('#dDel')?.addEventListener('click', () => { op('debt.delete', { name: d.name }); closeSheet(); }));
 }
 function editFixed(f) {
   const isNew = !f; f = f || { name: '', sub: '', amount: '', day: 1, acc: S.data.accounts[0]?.name, freq: 'Mensual' };
   openSheet(isNew ? 'Nuevo pago fijo' : 'Editar pago fijo', `<label class="field"><span>Concepto</span><input id="xName" value="${esc(f.name)}" required autofocus></label>
-  <div class="two"><label class="field"><span>Monto</span><input id="xAmt" type="number" step="0.01" value="${f.amount}"></label><label class="field"><span>Día de pago</span><input id="xDay" type="number" min="1" max="31" value="${f.day}"></label></div>
+  <div class="two"><label class="field"><span>Monto</span><input id="xAmt" class="calc" type="text" inputmode="decimal" autocomplete="off" value="${f.amount}"></label><label class="field"><span>Día de pago</span><input id="xDay" type="number" min="1" max="31" value="${f.day}"></label></div>
   <div class="two"><label class="field"><span>Subcategoría</span><select id="xSub">${subOptions('Gasto', f.sub)}</select></label><label class="field"><span>Cuenta</span>${sel('xAcc', S.data.accounts.map(a => a.name), f.acc)}</label></div>
   <label class="field"><span>Frecuencia</span>${sel('xFreq', ['Mensual', 'Quincenal', 'Trimestral', 'Anual'], f.freq)}</label>
   <div class="btns" style="justify-content:space-between">${isNew ? '<span></span>' : '<button type="button" class="btn danger" id="xDel">Eliminar</button>'}<button class="btn pri">Guardar</button></div>`, () => {
     const name = $('#xName').value.trim(); if (!name) return 'Escribe el concepto.'; if (!$('#xSub').value) return 'Elige la subcategoría.';
-    op('fixed.upsert', { oldName: isNew ? '' : f.name, name, amount: r2($('#xAmt').value), day: Number($('#xDay').value) || 1, sub: $('#xSub').value, acc: $('#xAcc').value, freq: $('#xFreq').value });
+    op('fixed.upsert', { oldName: isNew ? '' : f.name, name, amount: calcVal('#xAmt'), day: Number($('#xDay').value) || 1, sub: $('#xSub').value, acc: $('#xAcc').value, freq: $('#xFreq').value });
   }, () => $('#xDel')?.addEventListener('click', () => { op('fixed.delete', { name: f.name }); closeSheet(); }));
 }
 function editNote(n) {
@@ -1138,14 +1164,14 @@ function cashCounter() {
   const cashAccs = S.data.accounts.filter(a => a.type === 'Efectivo').map(a => a.name);
   const bal = balances();
   openSheet('Contar efectivo', `<p class="muted" style="margin:0;font-size:.85rem">Cuenta lo que tienes en la mano y compáralo con lo que dice la app.</p>
-  <div class="label">Billetes</div><div class="cash">${bills.map(b => `<label>$${b}<input type="number" min="0" data-v="${b}" inputmode="numeric"></label>`).join('')}</div>
-  <div class="label">Monedas</div><div class="cash">${coins.map(b => `<label>${b < 1 ? Math.round(b * 100) + '¢' : '$1'}<input type="number" min="0" data-v="${b}" inputmode="numeric"></label>`).join('')}</div>
+  <div class="label">Billetes</div><div class="cash">${bills.map(b => `<label>$${b}<input class="calc" type="text" inputmode="decimal" autocomplete="off" data-v="${b}"></label>`).join('')}</div>
+  <div class="label">Monedas</div><div class="cash">${coins.map(b => `<label>${b < 1 ? Math.round(b * 100) + '¢' : '$1'}<input class="calc" type="text" inputmode="decimal" autocomplete="off" data-v="${b}"></label>`).join('')}</div>
   <label class="field"><span>Comparar con la cuenta</span>${sel('cAcc', cashAccs.length ? cashAccs : S.data.accounts.map(a => a.name), cashAccs[0])}</label>
   <div class="kpis"><div class="kpi"><span class="label">Contado</span><span class="v" id="cTot">$0.00</span></div><div class="kpi"><span class="label">Según la app</span><span class="v" id="cApp"></span></div><div class="kpi"><span class="label">Diferencia</span><span class="v" id="cDif"></span></div></div>
   <div class="field" id="cWhy"><span>Si falta dinero, ¿qué pasó?</span><div class="seg"><button type="button" data-w="unk" class="on">No recuerdo en qué lo gasté</button><button type="button" data-w="adj">Error de registro</button></div></div>
   <p class="muted" style="margin:0;font-size:.8rem">"No recuerdo" se guarda como <b>${UNK}</b> y cuenta como gasto real. "Error de registro" va a <b>${ADJ}</b>.</p>
   <div class="btns" style="justify-content:end"><button class="btn pri" id="cAdj">Guardar cuadre</button></div>`, () => {
-    const tot = r2([...document.querySelectorAll('.cash input')].reduce((s, i) => s + (Number(i.value) || 0) * Number(i.dataset.v), 0));
+    const tot = r2([...document.querySelectorAll('.cash input')].reduce((s, i) => s + (calc(i.value) || 0) * Number(i.dataset.v), 0));
     const acc = $('#cAcc').value, dif = r2(tot - (bal[acc] || 0));
     if (!tot && !Number(bal[acc])) return 'Escribe cuántos billetes y monedas tienes.';
     S.cfg.lastCount = Date.now(); save();
@@ -1156,7 +1182,7 @@ function cashCounter() {
     op('mov.upsert', { id: uid(), date: today(), type: dif < 0 ? 'Gasto' : 'Ingreso', acc, sub, desc: sub === UNK ? 'Gasto no registrado (cuadre)' : 'Ajuste por conteo de efectivo', amount: Math.abs(dif), scope: 'Personal', method: 'Efectivo', notes: `Contado ${money(tot)}, la app tenía ${money(bal[acc] || 0)}`, to: '', goal: '', debt: '' });
     toast(sub === UNK ? 'Cuadre guardado como gasto sin identificar' : 'Ajuste registrado');
   }, f => {
-    const upd = () => { const tot = [...f.querySelectorAll('.cash input')].reduce((s, i) => s + (Number(i.value) || 0) * Number(i.dataset.v), 0); const app = bal[$('#cAcc').value] || 0; $('#cTot').textContent = money(tot); $('#cApp').textContent = money(app); const d = tot - app; $('#cDif').textContent = money(d, true); $('#cDif').className = 'v ' + (Math.abs(d) < .005 ? 'pos' : 'neg'); };
+    const upd = () => { const tot = [...f.querySelectorAll('.cash input')].reduce((s, i) => s + (calc(i.value) || 0) * Number(i.dataset.v), 0); const app = bal[$('#cAcc').value] || 0; $('#cTot').textContent = money(tot); $('#cApp').textContent = money(app); const d = tot - app; $('#cDif').textContent = money(d, true); $('#cDif').className = 'v ' + (Math.abs(d) < .005 ? 'pos' : 'neg'); };
     f.addEventListener('input', upd); f.addEventListener('change', upd); upd();
     f.querySelector('#cWhy').onclick = e => { const b = e.target.closest('button'); if (!b) return; f.querySelectorAll('#cWhy button').forEach(x => x.classList.toggle('on', x === b)); };
   });
@@ -1181,7 +1207,7 @@ const ACT = {
   fixMark: el => { op('fixed.mark', { name: el.dataset.n, month: Number(S.ui.ym.slice(5)), paid: true }); toast('Marcado como pagado'); },
   fixToggle: el => { const f = byN(S.data.fixed, el.dataset.n), m = Number(el.dataset.m); op('fixed.mark', { name: f.name, month: m, paid: !(f.paid || [])[m - 1] }); },
   newNote: () => editNote(), editNote: el => editNote(S.data.notes.find(n => n.id === el.dataset.id)),
-  budget: el => { const c = el.dataset.c, b = (S.data.budgets.find(x => x.cat === c) || {}).amount || ''; openSheet('Presupuesto de ' + esc(c), `<label class="field"><span>Monto mensual</span><input id="bAmt" type="number" step="0.01" min="0" value="${b}" autofocus></label><button class="btn pri">Guardar</button>`, () => op('budget.set', { cat: c, amount: r2($('#bAmt').value) })); },
+  budget: el => { const c = el.dataset.c, b = (S.data.budgets.find(x => x.cat === c) || {}).amount || ''; openSheet('Presupuesto de ' + esc(c), `<label class="field"><span>Monto mensual</span><input id="bAmt" class="calc" type="text" inputmode="decimal" autocomplete="off" value="${b}" autofocus></label><button class="btn pri">Guardar</button>`, () => op('budget.set', { cat: c, amount: calcVal('#bAmt') })); },
   mTab: el => { S.ui.mTab = el.dataset.v; render(); },
   calDay: el => { S.ui.calDay = el.dataset.v; render(); },
   goMonth: el => { S.ui.ym = el.dataset.v; S.ui.mTab = 'dia'; S.ui.fPeriod = 'mes'; render(); },
@@ -1225,6 +1251,25 @@ document.addEventListener('click', e => {
   if (el.tagName === 'A' && el.dataset.act !== 'close') e.preventDefault();
   f(el);
 });
+/* Barra de operaciones para cualquier campo de dinero */
+const calcBar = document.createElement('div'); calcBar.className = 'calc-bar'; calcBar.hidden = true;
+calcBar.innerHTML = ['+', '-', '*', '/', '(', ')', '='].map(o => `<button type="button" data-o="${o}" aria-label="${{ '+': 'Sumar', '-': 'Restar', '*': 'Multiplicar', '/': 'Dividir', '(': 'Abrir paréntesis', ')': 'Cerrar paréntesis', '=': 'Calcular' }[o]}">${{ '-': '−', '*': '×', '/': '÷' }[o] || o}</button>`).join('') + '<span class="calc-res"></span>';
+let calcTarget = null;
+const calcPreview = () => { if (!calcTarget) return; const v = calcTarget.value, z = calc(v); calcBar.querySelector('.calc-res').textContent = v && isExpr(v) ? (isFinite(z) ? '= ' + money(z) : 'Revisa la operación') : ''; };
+document.addEventListener('focusin', e => {
+  const t = e.target; if (!t.classList || !t.classList.contains('calc')) return;
+  calcTarget = t; t.insertAdjacentElement('afterend', calcBar); calcBar.hidden = false; calcPreview();
+});
+document.addEventListener('focusout', e => { const t = e.target; if (t === calcTarget) setTimeout(() => { if (document.activeElement !== t) { calcBar.hidden = true; const z = calc(t.value); if (t.value && isExpr(t.value) && isFinite(z)) { t.value = String(r2(z)); t.dispatchEvent(new Event('input', { bubbles: true })); } if (calcTarget === t) calcTarget = null; } }, 150); });
+calcBar.addEventListener('mousedown', e => e.preventDefault());
+calcBar.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b || !calcTarget) return; const o = b.dataset.o, t = calcTarget;
+  if (o === '=') { const z = calc(t.value); if (isFinite(z)) t.value = String(r2(z)); }
+  else { const p = t.selectionStart ?? t.value.length; t.value = t.value.slice(0, p) + o + t.value.slice(t.selectionEnd ?? p); try { t.setSelectionRange(p + 1, p + 1); } catch (er) { } }
+  t.focus(); t.dispatchEvent(new Event('input', { bubbles: true })); calcPreview();
+});
+document.addEventListener('input', e => { if (e.target === calcTarget) calcPreview(); });
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('calc') && isExpr(e.target.value)) { const z = calc(e.target.value); if (isFinite(z)) { e.preventDefault(); e.target.value = String(r2(z)); e.target.dispatchEvent(new Event('input', { bubbles: true })); calcPreview(); } } });
 document.addEventListener('input', e => {
   const id = e.target.id;
   if (id === 'fq') { S.ui.q = e.target.value; clearTimeout(window._qT); window._qT = setTimeout(() => { const pos = e.target.selectionStart; render(); const q = $('#fq'); q.focus(); q.setSelectionRange(pos, pos); }, 250); }
@@ -1239,7 +1284,7 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('submit', e => {
   if (e.target.id === 'connForm') { e.preventDefault(); S.cfg.url = $('#cUrl').value.trim(); S.cfg.token = $('#cTok').value.trim(); S.syncErr = ''; save(); sync(true); }
-  if (e.target.id === 'envForm') { e.preventDefault(); const amt = r2($('#eAmt').value || $('#eAmt').placeholder); if (!(amt > 0)) return toast('Escribe el monto por semana'); S.cfg.envelope = { on: true, amount: amt, acc: $('#eAcc').value }; save(); render(); toast('Sobre semanal activado'); }
+  if (e.target.id === 'envForm') { e.preventDefault(); const amt = $('#eAmt').value.trim() ? calcVal('#eAmt') : r2($('#eAmt').placeholder); if (!(amt > 0)) return toast('Escribe el monto por semana'); S.cfg.envelope = { on: true, amount: amt, acc: $('#eAcc').value }; save(); render(); toast('Sobre semanal activado'); }
   if (e.target.id === 'anaForm') { e.preventDefault(); S.cfg.emergencyMonths = Number($('#aEm').value) || 6; S.cfg.name = $('#aName').value.trim(); S.cfg.needs = [...e.target.querySelectorAll('input[name=need]:checked')].map(i => i.value); save(); render(); toast('Guardado'); }
   if (e.target.id === 'catForm') { e.preventDefault(); const sub = $('#nSub').value.trim(), cat = $('#nCat').value.trim(); if (!sub || !cat) return; if (catMap()[sub]) return toast('Esa subcategoría ya existe'); op('cat.add', { sub, cat, type: $('#nType').value }); toast('Subcategoría agregada'); }
 });
