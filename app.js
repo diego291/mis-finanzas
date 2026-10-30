@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '1.1.1';
+const VERSION = '1.2.0';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -775,50 +775,178 @@ function frequent() {
   const cnt = {}; S.data.movs.slice(-80).forEach(m => { if (m.type !== 'Gasto' && m.type !== 'Ingreso') return; const k = [m.type, m.sub, m.acc, m.desc].join('|'); cnt[k] = (cnt[k] || 0) + 1; });
   return Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k]) => k.split('|'));
 }
-function editMov(m, preset) {
-  const isNew = !m; const D = S.data;
-  m = Object.assign({ id: uid(), date: S.ui.ym === ymOf(today()) ? today() : S.ui.ym + '-01', type: 'Gasto', acc: D.accounts[0]?.name || '', to: '', sub: '', desc: '', amount: '', goal: '', debt: '', scope: 'Personal', method: '', notes: '' }, m || {}, preset || {});
-  if (m.tag && !m.goal && !m.debt) { if (m.type === 'Gasto') m.debt = m.tag; else m.goal = m.tag; }
-  const accs = D.accounts.map(a => a.name);
-  const body = `
-    <div class="seg" id="mType">${D.lists.types.map(t => `<button type="button" data-t="${esc(t)}" class="${m.type === t ? 'on' : ''}">${esc(t)}</button>`).join('')}</div>
-    ${isNew && frequent().length ? `<div class="chips" id="freq">${frequent().map((f, i) => `<button type="button" class="chip" data-i="${i}">${esc(f[3] || f[1])}</button>`).join('')}</div>` : ''}
-    <div class="two"><label class="field"><span>Monto</span><input id="mAmt" class="amount-in" type="number" inputmode="decimal" step="0.01" min="0" value="${m.amount}" autofocus required></label><label class="field"><span>Fecha</span><input id="mDate" type="date" value="${m.date}" required></label></div>
-    <div class="two"><label class="field"><span id="accLab">Cuenta</span>${sel('mAcc', accs, m.acc)}</label><label class="field" data-show="Transferencia"><span>Cuenta destino</span>${sel('mTo', accs, m.to, 'Elige…')}</label>
-      <label class="field" data-show="Gasto,Ingreso"><span>Subcategoría</span><select id="mSub"></select></label>
-      <label class="field" data-show="Aporte a meta,Retiro de meta"><span>Meta</span>${sel('mGoal', D.goals.map(g => g.name), m.goal, 'Elige…')}</label></div>
-    <label class="field"><span>Descripción</span><input id="mDesc" value="${esc(m.desc)}" placeholder="Ej. Gasolina, pago de luz…"></label>
-    <details ${m.notes || m.debt || m.method || m.scope !== 'Personal' ? 'open' : ''}><summary class="muted" style="cursor:pointer;font-size:.85rem">Más detalles</summary><div class="form" style="margin-top:10px">
-      <div class="two"><label class="field"><span>Ámbito</span>${sel('mScope', D.lists.scopes, m.scope || 'Personal')}</label><label class="field"><span>Método de pago</span>${sel('mMethod', D.lists.methods, m.method, '—')}</label></div>
-      <label class="field" data-show="Gasto"><span>¿Es pago de una deuda?</span>${sel('mDebt', D.debts.map(d => d.name), m.debt, 'No')}</label>
-      <label class="field"><span>Notas</span><textarea id="mNotes" rows="2">${esc(m.notes)}</textarea></label></div></details>
-    <div class="btns" style="justify-content:space-between"><div class="btns">${isNew ? '' : '<button type="button" class="btn danger" id="mDel">Eliminar</button><button type="button" class="btn" id="mDup">Duplicar</button>'}</div><button class="btn pri" type="submit">${isNew ? 'Guardar' : 'Guardar cambios'}</button></div>
-    <div id="delConfirm" hidden class="alert bad"><span></span><div><b>¿Eliminar este movimiento?</b><p>Se borra también de tu hoja.</p></div><div class="acts"><button type="button" class="btn sm danger" id="mDelYes">Eliminar</button></div></div>`;
-  openSheet(isNew ? 'Nuevo movimiento' : 'Editar movimiento', body, f => {
-    const t = f.querySelector('#mType .on').dataset.t;
-    const rec = { id: m.id, date: $('#mDate').value, type: t, acc: $('#mAcc').value, to: t === 'Transferencia' ? $('#mTo').value : '', sub: t === 'Gasto' || t === 'Ingreso' ? $('#mSub').value : '', desc: $('#mDesc').value.trim(), amount: r2($('#mAmt').value), goal: t.includes('meta') ? $('#mGoal').value : '', debt: t === 'Gasto' ? $('#mDebt').value : '', scope: $('#mScope').value, method: $('#mMethod').value, notes: $('#mNotes').value.trim() };
-    if (!(rec.amount > 0)) return 'Escribe un monto mayor que cero.';
-    if (!rec.date) return 'Falta la fecha.';
-    if (!rec.acc) return 'Elige la cuenta.';
-    if ((t === 'Gasto' || t === 'Ingreso') && !rec.sub) return 'Elige la subcategoría.';
-    if (t === 'Transferencia' && !rec.to) return 'Elige la cuenta destino.';
-    if (t === 'Transferencia' && rec.to === rec.acc) return 'La cuenta destino debe ser otra.';
-    if (t.includes('meta') && !rec.goal) return 'Elige la meta.';
-    op('mov.upsert', rec); toast(isNew ? 'Movimiento guardado' : 'Cambios guardados');
-  }, f => {
-    const sync = () => {
-      const t = f.querySelector('#mType .on').dataset.t;
-      f.querySelectorAll('[data-show]').forEach(el => el.hidden = !el.dataset.show.split(',').includes(t));
-      $('#accLab').textContent = t === 'Ingreso' ? 'Entra a' : t === 'Transferencia' ? 'Sale de' : t === 'Retiro de meta' ? 'Entra a' : 'Sale de';
-      const cur = $('#mSub').value || m.sub; if (t === 'Gasto' || t === 'Ingreso') $('#mSub').innerHTML = subOptions(t, catMap()[cur]?.type === t || !catMap()[cur] ? cur : '');
-    };
-    f.querySelector('#mType').onclick = e => { const b = e.target.closest('button'); if (!b) return; f.querySelectorAll('#mType button').forEach(x => x.classList.toggle('on', x === b)); sync(); };
-    const fr = frequent(); f.querySelector('#freq')?.addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; const [t, sub, acc, desc] = fr[b.dataset.i]; f.querySelectorAll('#mType button').forEach(x => x.classList.toggle('on', x.dataset.t === t)); $('#mAcc').value = acc; $('#mDesc').value = desc; sync(); $('#mSub').value = sub; $('#mAmt').focus(); });
-    $('#mSub').innerHTML = subOptions(m.type === 'Ingreso' ? 'Ingreso' : 'Gasto', m.sub); sync();
-    $('#mDel')?.addEventListener('click', () => { $('#delConfirm').hidden = false; });
-    $('#mDelYes')?.addEventListener('click', () => { op('mov.delete', { id: m.id }); closeSheet(); toast('Movimiento eliminado'); });
-    $('#mDup')?.addEventListener('click', () => { closeSheet(); editMov(null, Object.assign({}, m, { id: uid(), date: today() })); });
-  });
+/* ---- Registro: teclado completo ---- */
+const GLYPH = {
+  cart: '<path d="M4 5h2l2 10h10l2-7H7"/><circle cx="9" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/>',
+  fuel: '<path d="M5 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16M4 21h12M15 9h2a2 2 0 0 1 2 2v6a1.5 1.5 0 0 0 3 0V8l-3-3M7 8h6"/>',
+  coffee: '<path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5zM17 10h2a2 2 0 0 1 0 4h-2M8 3v3M12 3v3"/>',
+  bolt: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>', pill: '<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/>',
+  school: '<path d="M2 9l10-5 10 5-10 5zM6 11v5c3 2 9 2 12 0v-5"/>', glass: '<path d="M8 3l1 8a3 3 0 0 0 6 0l1-8M12 14v7M8 21h8"/>',
+  phone: '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>', wifi: '<path d="M2 9a15 15 0 0 1 20 0M5 13a10 10 0 0 1 14 0M8.5 16.5a5 5 0 0 1 7 0M12 20h.01"/>',
+  home: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>', bus: '<rect x="4" y="3" width="16" height="15" rx="2"/><path d="M4 11h16M7 21v-3M17 21v-3"/>',
+  heart: '<path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/>', gift: '<rect x="3" y="8" width="18" height="13" rx="1"/><path d="M12 8v13M3 12h18M12 8c-2-4-6-3-5 0M12 8c2-4 6-3 5 0"/>',
+  work: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5h6v2M3 12h18"/>', money: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/>',
+  card: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/>', robot: '<rect x="5" y="8" width="14" height="11" rx="2"/><path d="M12 4v4M9 13h.01M15 13h.01"/>',
+  shirt: '<path d="M8 3l-5 3 2 4 3-1v12h8V9l3 1 2-4-5-3a4 4 0 0 1-8 0z"/>', dots: '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>'
+};
+function glyphFor(sub, cat) {
+  const t = (sub + ' ' + cat).toLowerCase();
+  const rules = [[/combust|gasolin/, 'fuel'], [/super|mercado/, 'cart'], [/caf[eé]|snack|restaur|comida|almuerzo|delivery/, 'coffee'], [/energ|luz/, 'bolt'], [/internet/, 'wifi'], [/tel[eé]f|celular|recarga/, 'phone'],
+    [/salud|medic|dent|consulta|[oó]ptica|laboratorio/, 'pill'], [/universi|educa|curso|libro|útil|matr[ií]cula/, 'school'], [/salida|evento|cine|entreten|hobb|videojuego/, 'glass'],
+    [/vivienda|hogar|alquiler|limpieza/, 'home'], [/bus|uber|taxi|transporte|parqueo|peaje/, 'bus'], [/regalo|celebra/, 'gift'], [/gaby|apoyo|familia|donaci|iglesia/, 'heart'],
+    [/ia\b|suscrip|software|app/, 'robot'], [/ropa|calzado|accesorio/, 'shirt'], [/salario|bono|aguinaldo|horas/, 'money'], [/freelance|servicio|negocio|trabajo|venta|insumo|herramienta/, 'work'], [/pr[eé]stamo|deuda|banc|tarjeta/, 'card']];
+  const hit = rules.find(r => r[0].test(t));
+  return hit ? hit[1] : 'dots';
+}
+const gsvg = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${GLYPH[k] || GLYPH.dots}</svg>`;
+function topSubs(type, n) {
+  const cnt = {}; const since = addM(ymOf(today()), -3) + '-01';
+  S.data.movs.forEach(m => { if (m.type === type && m.sub && m.date >= since) cnt[m.sub] = (cnt[m.sub] || 0) + 1; });
+  const used = Object.entries(cnt).sort((a, b) => b[1] - a[1]).map(e => e[0]).filter(s => catMap()[s]);
+  const rest = S.data.cats.filter(c => c.type === type && !used.includes(c.sub) && c.sub !== ADJ).map(c => c.sub);
+  return used.concat(rest).slice(0, n);
+}
+function accOrder() {
+  const cnt = {}; S.data.movs.slice(-120).forEach(m => { cnt[m.acc] = (cnt[m.acc] || 0) + 1; });
+  return S.data.accounts.map(a => a.name).sort((a, b) => (cnt[b] || 0) - (cnt[a] || 0));
+}
+function parseQuick(t) {
+  t = (t || '').toLowerCase();
+  const out = {};
+  const num = t.match(/\d+(?:[.,]\d{1,2})?/); if (num) out.amt = num[0].replace(',', '.');
+  if (/\bayer\b/.test(t)) out.date = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; })();
+  if (/\+|me pagaron|cobr[eé]|ingreso|entr[oó]/.test(t)) out.type = 'Ingreso';
+  const words = t.replace(/[\d.,+$]/g, ' ').split(/\s+/).filter(w => w.length > 2);
+  const accHit = S.data.accounts.find(a => { const n = a.name.toLowerCase(); return words.some(w => n.includes(w)) || (/efectivo|cash/.test(t) && a.type === 'Efectivo') || (/banco|tarjeta|cuenta/.test(t) && n.includes('principal')); });
+  if (accHit) out.acc = accHit.name;
+  const acW = accHit ? accHit.name.toLowerCase() : '';
+  const cand = words.filter(w => !acW.includes(w) && !['ayer', 'hoy', 'efectivo', 'banco', 'cuenta', 'pague', 'pagué', 'compre', 'compré', 'para', 'por', 'con', 'del', 'los', 'las'].includes(w));
+  if (cand.length) {
+    const recent = S.data.movs.slice().reverse().find(m => (m.type === 'Gasto' || m.type === 'Ingreso') && cand.some(w => (m.desc || '').toLowerCase().includes(w)));
+    const glyphWord = { gasolina: 'Combustible', comida: 'Supermercado', super: 'Supermercado', luz: 'Energía eléctrica', recarga: 'Teléfono / celular', uber: 'Trabajo de Uber' };
+    const bySub = S.data.cats.find(c => cand.some(w => c.sub.toLowerCase().includes(w) || (glyphWord[w] && c.sub === glyphWord[w])));
+    if (recent) { out.sub = recent.sub; out.desc = recent.desc; if (!out.type) out.type = recent.type; if (!out.acc) out.acc = recent.acc; }
+    else if (bySub) { out.sub = bySub.sub; if (!out.type) out.type = bySub.type; }
+    if (!out.desc) out.desc = cand.join(' ').replace(/^./, c => c.toUpperCase());
+  }
+  return out;
+}
+function editMov(m, preset, opts = {}) {
+  const isNew = !m, D = S.data;
+  const st = Object.assign({ id: uid(), date: S.ui.ym === ymOf(today()) ? today() : S.ui.ym + '-01', type: 'Gasto', acc: accOrder()[0] || '', to: '', sub: '', desc: '', amt: '', goal: '', debt: '', scope: 'Personal', method: '', notes: '', more: false, allCats: false }, m ? Object.assign({}, m, { amt: String(m.amount || '') }) : {}, preset ? Object.assign({}, preset, preset.amount != null ? { amt: String(preset.amount) } : {}) : {});
+  if (st.tag && !st.goal && !st.debt) { if (st.type === 'Gasto') st.debt = st.tag; else st.goal = st.tag; }
+  const kind = () => st.type.includes('meta') ? 'Meta' : st.type === 'Transferencia' ? 'Mover' : st.type;
+  const typeTabs = [['Gasto', 'Gasto'], ['Ingreso', 'Ingreso'], ['Transferencia', 'Mover'], ['Aporte a meta', 'Meta']];
+  $('#sheet').innerHTML = `<header><h2>${isNew ? 'Registrar' : 'Editar movimiento'}</h2><button type="button" class="x" data-act="close" aria-label="Cerrar">×</button></header>
+    <div class="reg">
+      <label class="reg-text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4"/></svg><input id="rText" type="text" autocomplete="off" placeholder="Escríbelo: 10 gasolina efectivo"></label>
+      <div id="regBody"></div>
+    </div>`;
+  $('#sheetBg').hidden = false;
+  const body = $('#regBody');
+  const budgetNote = () => {
+    if (st.type !== 'Gasto' || !st.sub) return '';
+    const cat = catOf(st.sub), b = (D.budgets.find(x => x.cat === cat) || {}).amount || 0;
+    if (!b) return `<div class="reg-note">${esc(cat)} no tiene presupuesto.</div>`;
+    const ym = ymOf(st.date || today()), spent = month(ym).byCat[cat] || 0;
+    const prev = m && m.type === 'Gasto' && catOf(m.sub) === cat && ymOf(m.date) === ym ? m.amount : 0;
+    const left = b - (spent - prev) - (Number(st.amt) || 0);
+    return left >= 0 ? `<div class="reg-note ok">${esc(cat)}: te quedan <b>${money(left)}</b> este mes</div>` : `<div class="reg-note bad">${esc(cat)}: te pasas por <b>${money(-left)}</b> este mes</div>`;
+  };
+  const valid = () => {
+    const n = Number(st.amt) || 0;
+    if (!(n > 0)) return 'Escribe el monto';
+    if ((st.type === 'Gasto' || st.type === 'Ingreso') && !st.sub) return 'Elige una categoría';
+    if (!st.acc) return 'Elige la cuenta';
+    if (st.type === 'Transferencia' && (!st.to || st.to === st.acc)) return 'Elige a qué cuenta va';
+    if (st.type.includes('meta') && !st.goal) return 'Elige la meta';
+    return '';
+  };
+  const chipRow = (list, cur, act) => `<div class="reg-chips">${list.map(n => `<button type="button" class="rchip ${n === cur ? 'on' : ''}" data-r="${act}" data-v="${esc(n)}">${esc(n)}</button>`).join('')}</div>`;
+  const paint = () => {
+    const n = Number(st.amt) || 0, k = kind(), err = valid();
+    const sign = st.type === 'Gasto' || st.type === 'Aporte a meta' ? '−' : st.type === 'Ingreso' || st.type === 'Retiro de meta' ? '+' : '';
+    const tiles = (st.type === 'Gasto' || st.type === 'Ingreso') ? (() => {
+      let subs = topSubs(st.type, 7); if (st.sub && !subs.includes(st.sub)) subs = [st.sub].concat(subs.slice(0, 6));
+      return `<div class="reg-tiles">${subs.map(s => `<button type="button" class="rtile ${s === st.sub ? 'on' : ''}" data-r="sub" data-v="${esc(s)}" title="${esc(s)}">${gsvg(glyphFor(s, catOf(s)))}<span>${esc(s.replace(/\s*\(.*\)/, ''))}</span></button>`).join('')}<button type="button" class="rtile" data-r="allCats">${gsvg('dots')}<span>Más</span></button></div>
+      ${st.allCats ? `<label class="field"><span>Todas las subcategorías</span><select id="rSub">${subOptions(st.type, st.sub)}</select></label>` : ''}`;
+    })() : '';
+    const freq = isNew && (st.type === 'Gasto' || st.type === 'Ingreso') ? frequent().filter(f => f[0] === st.type).slice(0, 5) : [];
+    body.innerHTML = `
+      <div class="seg reg-type">${typeTabs.map(([t, l]) => `<button type="button" data-r="type" data-v="${t}" class="${(l === k) ? 'on' : ''}">${l}</button>`).join('')}</div>
+      ${k === 'Meta' ? `<div class="seg reg-type sm">${[['Aporte a meta', 'Aportar'], ['Retiro de meta', 'Retirar']].map(([t, l]) => `<button type="button" data-r="type" data-v="${t}" class="${st.type === t ? 'on' : ''}">${l}</button>`).join('')}</div>` : ''}
+      <div class="reg-amt ${st.type === 'Gasto' ? 'out' : st.type === 'Ingreso' ? 'in' : ''} ${n ? '' : 'zero'}"><span>${sign}$${esc(st.amt || '0')}</span></div>
+      ${budgetNote()}
+      ${freq.length ? `<div class="reg-chips">${freq.map((f, i) => `<button type="button" class="rchip dash" data-r="freq" data-v="${i}">${esc(f[3] || f[1])}</button>`).join('')}</div>` : ''}
+      ${tiles}
+      ${st.type === 'Transferencia' || st.type.includes('meta') ? `<div class="reg-lab">${st.type === 'Retiro de meta' ? 'Entra a' : 'Sale de'}</div>` : ''}
+      ${chipRow(accOrder(), st.acc, 'acc')}
+      ${st.type === 'Transferencia' ? `<div class="reg-lab">Va a</div>${chipRow(accOrder().filter(a => a !== st.acc), st.to, 'to')}` : ''}
+      ${st.type.includes('meta') ? `<div class="reg-lab">Meta</div>${chipRow(D.goals.map(g => g.name), st.goal, 'goal')}` : ''}
+      <div class="reg-chips">${[['Hoy', today()], ['Ayer', (() => { const d = new Date(); d.setDate(d.getDate() - 1); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; })()]].map(([l, v]) => `<button type="button" class="rchip ${st.date === v ? 'on' : ''}" data-r="date" data-v="${v}">${l}</button>`).join('')}<label class="rchip date ${st.date !== today() ? 'on' : ''}"><input type="date" id="rDate" value="${st.date}" aria-label="Fecha"></label></div>
+      <button type="button" class="reg-more" data-r="more">${st.more ? 'Menos detalles' : 'Descripción, notas y más'}</button>
+      ${st.more ? `<div class="form">
+        <label class="field"><span>Descripción</span><input id="rDesc" value="${esc(st.desc)}" placeholder="Gasolina para la semana"></label>
+        <div class="two"><label class="field"><span>Ámbito</span>${sel('rScope', D.lists.scopes, st.scope || 'Personal')}</label><label class="field"><span>Método de pago</span>${sel('rMethod', D.lists.methods, st.method, '—')}</label></div>
+        ${st.type === 'Gasto' && D.debts.length ? `<label class="field"><span>¿Es pago de una deuda?</span>${sel('rDebt', D.debts.map(d => d.name), st.debt, 'No')}</label>` : ''}
+        <label class="field"><span>Notas</span><textarea id="rNotes" rows="2">${esc(st.notes)}</textarea></label></div>` : ''}
+      <div class="reg-keys">${['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del'].map(x => `<button type="button" data-r="key" data-v="${x}" aria-label="${x === 'del' ? 'Borrar' : x}">${x === 'del' ? '⌫' : x}</button>`).join('')}</div>
+      <button type="button" class="reg-save ${err ? 'off' : ''}" data-r="save">${err || (isNew ? 'Guardar ' : 'Guardar cambios · ') + sign + money(n).replace('−', '')}</button>
+      ${isNew ? '' : `<div class="btns" style="justify-content:center"><button type="button" class="btn sm" data-r="dup">Duplicar</button><button type="button" class="btn sm danger" data-r="del">Eliminar</button></div><div id="delConfirm" hidden class="alert bad"><span></span><div><b>¿Eliminar este movimiento?</b><p>Se borra también de tu hoja.</p></div><div class="acts"><button type="button" class="btn sm danger" data-r="delYes">Eliminar</button></div></div>`}`;
+  };
+  const readMore = () => { if (!st.more) return; st.desc = $('#rDesc')?.value.trim() ?? st.desc; st.scope = $('#rScope')?.value || st.scope; st.method = $('#rMethod')?.value ?? st.method; st.debt = $('#rDebt')?.value ?? st.debt; st.notes = $('#rNotes')?.value.trim() ?? st.notes; };
+  const save = () => {
+    readMore(); if (valid()) return;
+    const t = st.type;
+    const rec = { id: st.id, date: st.date || today(), type: t, acc: st.acc, to: t === 'Transferencia' ? st.to : '', sub: t === 'Gasto' || t === 'Ingreso' ? st.sub : '', desc: st.desc || (t === 'Gasto' || t === 'Ingreso' ? st.sub : t === 'Transferencia' ? 'A ' + st.to : st.goal), amount: r2(st.amt), goal: t.includes('meta') ? st.goal : '', debt: t === 'Gasto' ? st.debt : '', scope: st.scope || 'Personal', method: st.method, notes: st.notes };
+    op('mov.upsert', rec);
+    if (opts.after) opts.after(rec);
+    if (!isNew) { closeSheet(); toast('Cambios guardados'); return; }
+    const sp = spendToday(ymOf(today()));
+    body.innerHTML = `<div class="reg-done"><span class="ok-dot">${gsvg('dots').replace(GLYPH.dots, '<path d="M5 12l5 5 9-10"/>')}</span><h2>Guardado</h2><p>${esc(rec.desc)} · ${money(rec.amount)} · ${esc(rec.acc)}</p>${sp.mode !== 'closed' ? `<p class="reg-left">Hoy puedes gastar <b>${money(sp.perDay)}</b></p>` : ''}<div class="btns"><button type="button" class="btn pri" data-r="again">Registrar otro</button><button type="button" class="btn" data-act="close">Listo</button></div></div>`;
+    $('#rText').value = '';
+  };
+  body.onclick = e => {
+    const b = e.target.closest('[data-r]'); if (!b) return;
+    const r = b.dataset.r, v = b.dataset.v;
+    if (r !== 'key') readMore();
+    if (r === 'type') { st.type = v; if (v !== 'Gasto' && v !== 'Ingreso') st.sub = ''; else if (st.sub && catMap()[st.sub]?.type !== v) st.sub = ''; st.allCats = false; }
+    else if (r === 'sub') st.sub = v;
+    else if (r === 'allCats') st.allCats = !st.allCats;
+    else if (r === 'acc') { st.acc = v; if (st.to === v) st.to = ''; }
+    else if (r === 'to') st.to = v;
+    else if (r === 'goal') st.goal = v;
+    else if (r === 'date') st.date = v;
+    else if (r === 'more') st.more = !st.more;
+    else if (r === 'freq') { const f = frequent().filter(x => x[0] === st.type)[v]; if (f) { st.type = f[0]; st.sub = f[1]; st.acc = f[2]; st.desc = f[3]; const last = S.data.movs.slice().reverse().find(x => x.sub === f[1] && x.desc === f[3]); if (last && !st.amt) st.amt = String(last.amount); } }
+    else if (r === 'key') { let a = st.amt; if (v === 'del') a = a.slice(0, -1); else if (v === '.') { if (!a.includes('.')) a = (a || '0') + '.'; } else if (!(a.includes('.') && a.split('.')[1].length >= 2) && a.replace('.', '').length < 8) a = a === '0' ? v : a + v; st.amt = a; }
+    else if (r === 'save') return save();
+    else if (r === 'again') { Object.assign(st, { id: uid(), amt: '', sub: '', desc: '', notes: '', to: '', goal: '', debt: '', date: today() }); }
+    else if (r === 'dup') { closeSheet(); return editMov(null, Object.assign({}, m, { id: uid(), date: today() })); }
+    else if (r === 'del') { $('#delConfirm').hidden = false; return; }
+    else if (r === 'delYes') { op('mov.delete', { id: st.id }); closeSheet(); toast('Movimiento eliminado'); return; }
+    paint();
+  };
+  body.onchange = e => {
+    if (e.target.id === 'rSub') { st.sub = e.target.value; st.allCats = false; readMore(); paint(); }
+    if (e.target.id === 'rDate' && e.target.value) { st.date = e.target.value; readMore(); paint(); }
+  };
+  $('#rText').oninput = e => {
+    const p = parseQuick(e.target.value);
+    if (p.type) st.type = p.type; else if (st.type !== 'Gasto' && st.type !== 'Ingreso') st.type = 'Gasto';
+    if (p.amt) st.amt = p.amt; if (p.sub) st.sub = p.sub; if (p.acc) st.acc = p.acc; if (p.date) st.date = p.date; if (p.desc) st.desc = p.desc;
+    paint();
+  };
+  $('#rText').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); save(); } };
+  const keyH = e => {
+    if ($('#sheetBg').hidden || !document.body.contains(body)) { document.removeEventListener('keydown', keyH); return; }
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+    if (/^[0-9.]$/.test(e.key)) { body.querySelector(`[data-r="key"][data-v="${e.key}"]`)?.click(); e.preventDefault(); }
+    else if (e.key === 'Backspace') { body.querySelector('[data-r="key"][data-v="del"]')?.click(); e.preventDefault(); }
+    else if (e.key === 'Enter') { save(); e.preventDefault(); }
+  };
+  document.addEventListener('keydown', keyH);
+  paint();
 }
 function editAcc(a) {
   const isNew = !a; a = a || { name: '', type: 'Banco', initial: 0 };
@@ -895,9 +1023,7 @@ function cashCounter() {
 }
 function payFixed(f) {
   const ym = S.ui.ym, date = ym === ymOf(today()) ? today() : `${ym}-${pad(Math.min(f.day, daysIn(ym)))}`;
-  editMov(null, { type: 'Gasto', sub: f.sub, acc: f.acc || S.data.accounts[0]?.name, desc: f.name, amount: f.amount, date });
-  const form = $('#sheetForm'); const orig = form.onsubmit;
-  form.onsubmit = e => { orig(e); if ($('#sheetBg').hidden) op('fixed.mark', { name: f.name, month: Number(ym.slice(5)), paid: true }); };
+  editMov(null, { type: 'Gasto', sub: f.sub, acc: f.acc || S.data.accounts[0]?.name, desc: f.name, amount: f.amount, date }, { after: () => op('fixed.mark', { name: f.name, month: Number(ym.slice(5)), paid: true }) });
 }
 
 /* ---------------- Eventos ---------------- */
