@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '1.3.0';
+const VERSION = '1.4.0';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -81,7 +81,7 @@ const svgI = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
 const S = {
   data: null, outbox: [],
   cfg: { url: '', token: '', name: '', design: 'a', theme: 'auto', lastSync: 0, needs: NEEDS.slice(), scope: 'Todos', emergencyMonths: 6 },
-  ui: { view: 'inicio', ym: ymOf(today()), q: '', fType: '', fAcc: '', fCat: '', fPeriod: 'mes', stPeriod: 'mes', mTab: 'dia', calDay: '' },
+  ui: { view: 'inicio', ym: ymOf(today()), q: '', fType: '', fAcc: '', fCat: '', fPeriod: 'mes', stPeriod: 'mes', mTab: 'dia', calDay: '', homeDay: '' },
   syncing: false, syncErr: '', installEvt: null
 };
 function load() {
@@ -384,7 +384,7 @@ function render() {
   if (S.cfg.theme === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = S.cfg.theme;
   const tc = { a: '#14171a', b: '#0b2239', c: '#0f141b' }[S.cfg.design]; document.querySelector('meta[name=theme-color]')?.setAttribute('content', tc);
   $('#mLabel').textContent = ymLabel(S.ui.ym);
-  renderNav(); updatePill();
+  renderNav(); updatePill(); try { renderBell(); } catch (e) { console.error(e); }
   const fn = { inicio: vInicio, estados: vEstados, movimientos: vMovs, cuentas: vCuentas, metas: vMetas, presupuesto: vPresupuesto, pagos: vPagos, deudas: vDeudas, estadisticas: vStats, revision: vRevision, notas: vNotas, ajustes: vAjustes }[S.ui.view];
   try { $('#view').innerHTML = `<div class="wrap">${fn()}</div>`; S.lastError = ''; }
   catch (e) {
@@ -471,31 +471,32 @@ function vInicio() {
   else hero = `<div class="lead"><span>Puedes gastar hoy</span><span class="big ${sp.rem < 0 ? 'neg' : ''}">${money(sp.perDay)}</span><span>${sp.rem >= 0 ? `Te quedan <b>${money(sp.rem)}</b> ${sp.mode === 'budget' ? 'del presupuesto' : 'de lo que entró'} para ${sp.left} día${sp.left > 1 ? 's' : ''}.` : `Ya pasaste ${sp.mode === 'budget' ? 'el presupuesto' : 'lo que entró'} por <b>${money(-sp.rem)}</b>.`}</span></div>`;
   const meters = `<div class="meters"><div class="meter"><div><span>${sp.mode === 'budget' ? 'Presupuesto usado' : 'Gastado de lo que entró'}</span><b>${pct(sp.used)}</b></div><div class="track"><i class="${sp.used > 1 ? 'over' : ''}" style="width:${Math.min(100, (sp.used || 0) * 100)}%"></i></div></div><div class="meter"><div><span>Días del mes</span><b>${isNow ? d : daysIn(ym)} / ${daysIn(ym)}</b></div><div class="track"><i class="dim" style="width:${sp.dayPct * 100}%"></i></div></div></div>`;
 
+  const hd = S.ui.homeDay && ymOf(S.ui.homeDay) === ym ? S.ui.homeDay : '';
+  const dayMovs = hd ? S.data.movs.filter(x => scopeOk(x) && x.date === hd) : feed;
   return `
   ${window.__SEED__ && !S.cfg.url ? `<div class="preview-note">Vista previa con los datos de tu archivo. Los cambios aquí no llegan a tu hoja.</div>` : ''}
   <div class="home">
     <div class="home-main">
       <div class="hello"><div><p>${isNow ? `${wd[0].toUpperCase() + wd.slice(1)} ${d} de ${MONTHS[m - 1].toLowerCase()}` : ymLabel(ym)}</p><h1>${isNow ? greet + name : 'Resumen de ' + MONTHS[m - 1].toLowerCase()}</h1></div>${scopeSeg()}</div>
       ${walletCard(sp, isNow)}
-      ${chips.length ? `<div class="chipbar">${chips.join('')}</div>` : ''}
-      <section class="feed"><header><h2>Lo que pasó</h2><a href="#movimientos">Ver todo</a></header>
-        ${trio(cur.inc, cur.exp)}
-        ${feed.length ? dayList(feed) : `<div class="empty"><p>Aún no hay movimientos este mes.</p><button class="btn pri" data-act="newMov">Registrar el primero</button></div>`}
-      </section>
+      <div class="home-cards">
+        ${stagesCard(false)}
+        <section class="card side-card"><header style="margin:0"><h2>Presupuesto</h2><a href="#presupuesto">Detalle</a></header>
+          ${buds.slice(0, 5).map(({ b, sp: s }) => { const p = s / b.amount; return `<div class="mini"><div class="row2"><span>${esc(b.cat)}</span><span class="num ${p > 1 ? 'neg' : ''}">${money(s).replace('.00', '')} / ${money(b.amount).replace('.00', '')}</span></div><div class="bar ${p > 1 ? 'over' : p >= .85 ? 'near' : 'good'}"><i style="width:${Math.min(100, p * 100)}%"></i></div></div>`; }).join('') || '<p class="note">Define montos en Presupuesto para saber cuánto puedes gastar cada día.</p>'}
+        </section>
+        ${goals.map(g => { const s = goalSaved(g, null, bal), p = s / g.target; let ml = null; if (g.due) { const [gy, gm] = g.due.split('-').map(Number); ml = Math.max((gy - y) * 12 + gm - m, 0); } return `<section class="card side-card"><header style="margin:0"><h2>${esc(g.name)}</h2><span class="pill ${p >= 1 ? 'ok' : 'acc'}">${pct(p)}</span></header><div class="row2"><span class="num" style="font-size:1.35rem">${money(s)}</span><span class="muted" style="font-size:.84rem">de ${money(g.target)}${g.due ? ' · ' + dLabel(g.due).replace(/ \d{4}$/, '') : ''}</span></div><div class="bar ${p >= 1 ? 'good' : ''}"><i style="width:${Math.min(100, Math.max(p, 0) * 100)}%"></i></div>${ml != null && p < 1 ? `<p class="note">Aparta ${money((g.target - s) / Math.max(ml, 1))} al mes para llegar a tiempo.</p>` : ''}</section>`; }).join('')}
+        ${pend.length ? `<section class="card side-card"><header style="margin:0"><h2>Por pagar</h2><a href="#pagos">Pagos fijos</a></header>${pend.slice(0, 4).map(({ f, s }) => `<div class="row2"><span>${esc(f.name)} <small class="${s.late ? 'neg' : 'muted'}">${s.late ? 'vencido' : 'día ' + f.day}</small></span><span class="btns"><span class="num">${money(f.amount)}</span>${s.found.length ? `<button class="btn sm" data-act="fixMark" data-n="${esc(f.name)}">Marcar</button>` : `<button class="btn sm" data-act="fixPay" data-n="${esc(f.name)}">Pagar</button>`}</span></div>`).join('')}</section>` : ''}
+      </div>
     </div>
     <aside class="home-side">
       <section class="card side-card"><header style="margin:0"><h2>${MONTHS[m - 1]}</h2><a href="#estados">Estados</a></header>
-        <div class="row2"><span class="muted">Entró</span><span class="num">${money(cur.inc)}</span></div>
-        <div class="row2"><span class="muted">Salió</span><span class="num">${money(cur.exp)}</span></div>
-        <div class="row2 total"><span>Balance</span><span class="num ${cur.bal < 0 ? 'neg' : 'pos'}">${money(cur.bal, true)}</span></div>
-        ${big && cur.exp && big.amount / cur.exp > .35 ? `<p class="note">${esc(big.desc || big.sub)} (${money(big.amount)}) es el ${pct(big.amount / cur.exp)} del mes. Sin ese gasto saliste con ${money(cur.exp - big.amount)}.</p>` : cur.inc ? `<p class="note">Tasa de ahorro: ${pct(cur.rate)}. Lo sano es 20% o más.</p>` : ''}
+        ${miniCal(ym, hd)}
+        <div class="row2 small3"><span>Entró <b class="num pos">${money(cur.inc)}</b></span><span>Salió <b class="num neg">${money(cur.exp)}</b></span><span>Balance <b class="num ${cur.bal < 0 ? 'neg' : 'pos'}">${money(cur.bal, true)}</b></span></div>
+        ${big && cur.exp && big.amount / cur.exp > .35 ? `<p class="note">${esc(big.desc || big.sub)} (${money(big.amount)}) es el ${pct(big.amount / cur.exp)} del mes. Sin ese gasto saliste con ${money(cur.exp - big.amount)}.</p>` : ''}
       </section>
-      ${stagesCard(false)}
-      <section class="card side-card"><header style="margin:0"><h2>Presupuesto</h2><a href="#presupuesto">Detalle</a></header>
-        ${buds.slice(0, 4).map(({ b, sp: s }) => { const p = s / b.amount; return `<div class="mini"><div class="row2"><span>${esc(b.cat)}</span><span class="num ${p > 1 ? 'neg' : ''}">${money(s).replace('.00', '')} / ${money(b.amount).replace('.00', '')}</span></div><div class="bar ${p > 1 ? 'over' : p >= .85 ? 'near' : 'good'}"><i style="width:${Math.min(100, p * 100)}%"></i></div></div>`; }).join('') || '<p class="note">Define montos en Presupuesto para saber cuánto puedes gastar cada día.</p>'}
+      <section class="card side-card feed-card"><header style="margin:0"><h2>${hd ? dLabel(hd) : 'Movimientos'}</h2>${hd ? `<button type="button" class="linkbtn" data-act="homeDay" data-v="">Ver los últimos</button>` : `<a href="#movimientos">Ver todo</a>`}</header>
+        ${dayMovs.length ? dayList(dayMovs) : `<div class="empty"><p>${hd ? 'Sin movimientos ese día.' : 'Aún no hay movimientos este mes.'}</p><button class="btn pri" ${hd ? `data-act="newMovOn" data-v="${hd}"` : 'data-act="newMov"'}>Registrar</button></div>`}
       </section>
-      ${goals.map(g => { const s = goalSaved(g, null, bal), p = s / g.target; let ml = null; if (g.due) { const [gy, gm] = g.due.split('-').map(Number); ml = Math.max((gy - y) * 12 + gm - m, 0); } return `<section class="card side-card"><header style="margin:0"><h2>${esc(g.name)}</h2><span class="pill ${p >= 1 ? 'ok' : 'acc'}">${pct(p)}</span></header><div class="row2"><span class="num" style="font-size:1.35rem">${money(s)}</span><span class="muted" style="font-size:.84rem">de ${money(g.target)}${g.due ? ' · ' + dLabel(g.due).replace(/ \d{4}$/, '') : ''}</span></div><div class="bar ${p >= 1 ? 'good' : ''}"><i style="width:${Math.min(100, Math.max(p, 0) * 100)}%"></i></div>${ml != null && p < 1 ? `<p class="note">Aparta ${money((g.target - s) / Math.max(ml, 1))} al mes para llegar a tiempo.</p>` : ''}</section>`; }).join('')}
-      ${pend.length ? `<section class="card side-card"><header style="margin:0"><h2>Por pagar</h2><a href="#pagos">Pagos fijos</a></header>${pend.slice(0, 4).map(({ f, s }) => `<div class="row2"><span>${esc(f.name)} <small class="${s.late ? 'neg' : 'muted'}">${s.late ? 'vencido' : 'día ' + f.day}</small></span><span class="btns"><span class="num">${money(f.amount)}</span>${s.found.length ? `<button class="btn sm" data-act="fixMark" data-n="${esc(f.name)}">Marcar</button>` : `<button class="btn sm" data-act="fixPay" data-n="${esc(f.name)}">Pagar</button>`}</span></div>`).join('')}</section>` : ''}
     </aside>
   </div>`;
 }
@@ -532,6 +533,33 @@ function walletCard(sp, isNow) {
     <div class="w-accs">${accs.map(x => `<button type="button" class="w-acc ${x.v < 0 ? 'neg' : ''}" data-act="accGo" data-n="${esc(x.a.name)}"><span>${esc(x.a.name)}</span><b>${money(x.v)}</b></button>`).join('')}${zero ? `<a class="w-acc dim" href="#cuentas"><span>${zero} en cero</span></a>` : ''}</div>
     ${spend}
   </section>`;
+}
+function miniCal(ym, sel) {
+  const [y, m] = ym.split('-').map(Number), first = (new Date(y, m - 1, 1).getDay() + 6) % 7, dim = daysIn(ym);
+  const ms = S.data.movs.filter(x => scopeOk(x) && ymOf(x.date) === ym);
+  let h = WEEK.map(w => `<span class="mc-h">${w[0]}</span>`).join('') + '<span></span>'.repeat(first);
+  for (let d = 1; d <= dim; d++) {
+    const ds = `${ym}-${pad(d)}`, dm = ms.filter(x => x.date === ds);
+    const out = sum(dm.filter(x => x.type === 'Gasto'), x => x.amount), inc = sum(dm.filter(x => x.type === 'Ingreso'), x => x.amount);
+    h += `<button type="button" class="mc-d ${ds === today() ? 'today' : ''} ${ds === sel ? 'on' : ''} ${dm.length ? 'has' : ''}" data-act="homeDay" data-v="${ds === sel ? '' : ds}" aria-label="${dLabel(ds)}"><span>${d}</span>${out ? `<small class="neg">${out >= 100 ? Math.round(out) : out.toFixed(0)}</small>` : inc ? `<small class="pos">+${Math.round(inc)}</small>` : ''}</button>`;
+  }
+  return `<div class="mcal">${h}</div>`;
+}
+function notifications() {
+  if (!S.data) return [];
+  const ym = ymOf(today()), cur = month(ym), out = [];
+  S.data.fixed.filter(f => f.freq === 'Mensual').forEach(f => { const s = fixedStatus(f, ym); if (!s.marked && (s.late || s.due === today())) out.push({ sev: 'bad', text: `${esc(f.name)} ${s.late ? 'vencido' : 'vence hoy'} · <b class="num">${money(f.amount)}</b>`, href: '#pagos' }); });
+  S.data.budgets.filter(b => b.amount > 0 && (cur.byCat[b.cat] || 0) > b.amount).forEach(b => out.push({ sev: 'bad', text: `${esc(b.cat)} pasó el límite (${money(cur.byCat[b.cat])} de ${money(b.amount)})`, href: '#presupuesto' }));
+  const n = checks().filter(c => c.sev !== 'info').length; if (n) out.push({ sev: 'mid', text: `${n} dato${n > 1 ? 's' : ''} por revisar`, href: '#revision' });
+  if (!S.cfg.url && !window.__SEED__) out.unshift({ sev: 'info', text: 'Conecta tu hoja de Google', href: '#ajustes' });
+  if (S.installEvt) out.push({ sev: 'info', text: 'Instala la app en este equipo', act: 'install' });
+  return out;
+}
+function renderBell() {
+  const b = $('#bell'); if (!b) return;
+  const L = notifications(), urgent = L.filter(x => x.sev === 'bad').length;
+  const badge = b.querySelector('.badge'); badge.hidden = !L.length; badge.textContent = L.length; badge.classList.toggle('bad', !!urgent);
+  $('#notifs').innerHTML = `<div class="nf-head">Avisos</div>${L.length ? L.map(x => x.act ? `<button type="button" class="nf ${x.sev}" data-act="${x.act}"><i></i><span>${x.text}</span></button>` : `<a class="nf ${x.sev}" href="${x.href}"><i></i><span>${x.text}</span></a>`).join('') : '<p class="nf-empty">Todo en orden. No tienes avisos.</p>'}`;
 }
 function dayHead(dt, ms) {
   const inc = sum(ms.filter(x => x.type === 'Ingreso'), x => x.amount), out = sum(ms.filter(x => x.type === 'Gasto'), x => x.amount);
@@ -1119,6 +1147,7 @@ const ACT = {
   goMonth: el => { S.ui.ym = el.dataset.v; S.ui.mTab = 'dia'; S.ui.fPeriod = 'mes'; render(); },
   accGo: el => { S.ui.fAcc = el.dataset.n; S.ui.mTab = 'dia'; go('movimientos'); },
   clearAcc: () => { S.ui.fAcc = ''; render(); },
+  homeDay: el => { S.ui.homeDay = el.dataset.v; render(); },
   newMovOn: el => editMov(null, { date: el.dataset.v }),
   stPeriod: el => { S.ui.stPeriod = el.dataset.v; render(); },
   cash: cashCounter, scope: el => { S.cfg.scope = el.dataset.v; save(); render(); },
@@ -1177,6 +1206,8 @@ $('#fab').onclick = () => editMov();
 $('#addBtn').onclick = () => editMov();
 $('#mPrev').onclick = () => { S.ui.ym = addM(S.ui.ym, -1); render(); };
 $('#mNext').onclick = () => { S.ui.ym = addM(S.ui.ym, 1); render(); };
+$('#bell').onclick = e => { e.stopPropagation(); $('#notifs').hidden = !$('#notifs').hidden; };
+document.addEventListener('click', e => { const p = $('#notifs'); if (p && !p.hidden && (!e.target.closest('#notifs') || e.target.closest('.nf'))) p.hidden = true; });
 $('#syncPill').onclick = () => S.cfg.url ? sync(true) : go('ajustes');
 window.addEventListener('hashchange', route);
 window.addEventListener('online', () => { updatePill(); sync(); });
