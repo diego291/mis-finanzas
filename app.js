@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '1.5.0';
+const VERSION = '1.5.1';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -204,7 +204,7 @@ const ago = t => { const s = (Date.now() - t) / 1000; return s < 60 ? 'ahora' : 
 /* ---------------- Cálculos (mismas reglas que tu hoja) ---------------- */
 let CM = null;
 function catOf(sub) { if (!sub) return ''; return (catMap()[sub] || {}).cat || 'Sin categoría'; }
-function catMap() { if (CM && CM.src === S.data.cats) return CM.map; const map = {}; S.data.cats.forEach(c => map[c.sub] = c); CM = { src: S.data.cats, map }; return map; }
+function catMap() { if (CM && CM.src === S.data.cats && CM.n === S.data.cats.length) return CM.map; const map = {}; S.data.cats.forEach(c => map[c.sub] = c); CM = { src: S.data.cats, n: S.data.cats.length, map }; return map; }
 const scopeOk = m => S.cfg.scope === 'Todos' || (m.scope || 'Personal') === S.cfg.scope;
 const mcat = m => m.cat || catOf(m.sub);
 
