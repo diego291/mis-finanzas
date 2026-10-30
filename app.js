@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '1.1.0';
+const VERSION = '1.1.1';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -98,7 +98,18 @@ function normalize(d) {
   d.lists = Object.assign(emptyData().lists, d.lists || {});
   if (!d.lists.scopes.includes('Negocio')) d.lists.scopes.push('Negocio');
   if (!d.lists.accTypes.includes('Inversión')) d.lists.accTypes.push('Inversión');
-  d.movs.forEach(m => { m.amount = Number(m.amount) || 0; if (!m.id) m.id = uid(); });
+  const str = v => v == null ? '' : String(v);
+  d.movs = d.movs.filter(m => m && (m.date || m.amount));
+  d.movs.forEach(m => { m.amount = Number(m.amount) || 0; if (!m.id) m.id = uid(); ['date', 'type', 'acc', 'sub', 'cat', 'desc', 'to', 'goal', 'debt', 'tag', 'scope', 'method', 'notes'].forEach(k => m[k] = str(m[k])); m.date = /^\d{4}-\d{2}-\d{2}/.test(m.date) ? m.date.slice(0, 10) : ''; });
+  d.movs = d.movs.filter(m => m.date);
+  d.accounts.forEach(x => { x.name = str(x.name); x.type = str(x.type); x.initial = Number(x.initial) || 0; });
+  d.goals.forEach(x => { x.name = str(x.name); x.purpose = str(x.purpose); x.acc = str(x.acc); x.due = /^\d{4}-\d{2}-\d{2}/.test(str(x.due)) ? str(x.due).slice(0, 10) : ''; x.target = Number(x.target) || 0; x.initial = Number(x.initial) || 0; });
+  d.debts.forEach(x => { x.name = str(x.name); x.creditor = str(x.creditor); });
+  d.fixed.forEach(x => { x.name = str(x.name); x.sub = str(x.sub); x.acc = str(x.acc); x.freq = str(x.freq) || 'Mensual'; x.amount = Number(x.amount) || 0; x.day = Number(x.day) || 1; if (!Array.isArray(x.paid)) x.paid = Array(12).fill(false); });
+  d.budgets.forEach(x => { x.cat = str(x.cat); x.amount = Number(x.amount) || 0; });
+  d.cats.forEach(x => { x.sub = str(x.sub); x.cat = str(x.cat); x.type = str(x.type); });
+  d.notes.forEach(x => { ['date', 'tag', 'text', 'action', 'due', 'status'].forEach(k => x[k] = str(x[k])); });
+  Object.keys(d.lists).forEach(k => { d.lists[k] = (d.lists[k] || []).map(str).filter(Boolean); });
   return d;
 }
 
@@ -148,9 +159,16 @@ async function sync(manual) {
   S.syncing = true; updatePill();
   const sent = S.outbox.slice();
   try {
-    const res = await fetch(S.cfg.url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ token: S.cfg.token, ops: sent.map(({ opId, type, data }) => ({ opId, type, data })) }) });
-    const j = await res.json();
+    const ctrl = new AbortController(), tm = setTimeout(() => ctrl.abort(), 45000);
+    let j;
+    try {
+      const res = await fetch(S.cfg.url, { method: 'POST', signal: ctrl.signal, headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ token: S.cfg.token, ops: sent.map(({ opId, type, data }) => ({ opId, type, data })) }) });
+      const txt = await res.text();
+      try { j = JSON.parse(txt); } catch (e) { throw new Error('La hoja respondió algo que no es la app (¿la URL termina en /exec?)'); }
+    } catch (e) { if (e.name === 'AbortError') throw new Error('La hoja tardó demasiado en responder'); throw e; }
+    finally { clearTimeout(tm); }
     if (!j.ok) throw new Error(j.error || 'La hoja no respondió');
+    if (!j.data || !Array.isArray(j.data.movs)) throw new Error('La hoja respondió sin datos');
     S.outbox = S.outbox.slice(sent.length);
     S.data = normalize(j.data);
     S.outbox.forEach(applyLocal);
@@ -160,7 +178,7 @@ async function sync(manual) {
     else if (manual === true) toast('Hoja sincronizada');
     save(); render();
   } catch (e) {
-    S.syncErr = e.message === 'Failed to fetch' ? 'Sin conexión con la hoja' : e.message;
+    S.syncErr = e.message === 'Failed to fetch' ? 'Sin conexión con la hoja' : e.message; console.error('sync', e);
     if (manual === true) toast(S.syncErr);
   } finally {
     S.syncing = false; updatePill();
@@ -368,7 +386,11 @@ function render() {
   $('#mLabel').textContent = ymLabel(S.ui.ym);
   renderNav(); updatePill();
   const fn = { inicio: vInicio, estados: vEstados, movimientos: vMovs, cuentas: vCuentas, metas: vMetas, presupuesto: vPresupuesto, pagos: vPagos, deudas: vDeudas, estadisticas: vStats, revision: vRevision, notas: vNotas, ajustes: vAjustes }[S.ui.view];
-  $('#view').innerHTML = `<div class="wrap">${fn()}</div>`;
+  try { $('#view').innerHTML = `<div class="wrap">${fn()}</div>`; S.lastError = ''; }
+  catch (e) {
+    console.error(e); S.lastError = (e && e.message) || String(e);
+    $('#view').innerHTML = `<div class="wrap"><div class="card" style="display:grid;gap:12px;max-width:620px"><h2>No pude mostrar esta sección</h2><p class="muted" style="margin:0">Algún dato de tu hoja tiene un formato que la app no esperaba. Mándale una captura de este mensaje a quien te ayuda con la app.</p><code style="font-family:var(--f-num);font-size:.8rem;background:var(--surface-2);padding:10px;border-radius:8px;white-space:pre-wrap;word-break:break-word">v${VERSION} · ${esc(S.ui.view)} · ${esc(S.lastError)}\n${esc(((e && e.stack) || '').split('\n').slice(1, 3).join('\n'))}</code><div class="btns"><button class="btn pri" data-act="reloadSheet">Volver a cargar desde mi hoja</button><button class="btn" data-act="go" data-v="movimientos">Ir a Movimientos</button></div></div></div>`;
+  }
   const top = $('#top'); if (top) document.body.style.setProperty('--topH', top.offsetHeight + 'px');
 }
 function head(title, sub, actions = '') { return `<div class="page-head"><div><h1>${title}</h1>${sub ? `<p>${sub}</p>` : ''}</div>${actions ? `<div class="btns">${actions}</div>` : ''}</div>`; }
@@ -907,6 +929,7 @@ const ACT = {
   copyJson: () => { const t = JSON.stringify({ data: S.data }); navigator.clipboard?.writeText(t).then(() => toast('Copia en el portapapeles'), () => toast('No se pudo copiar en este navegador')); },
   install: async () => { const e = S.installEvt; if (!e) return; e.prompt(); await e.userChoice; S.installEvt = null; render(); },
   checkUpdate: async () => { const r = await navigator.serviceWorker?.getRegistration(); if (!r) return toast('La app se actualiza sola al abrirla desde GitHub Pages.'); await r.update(); toast(r.waiting || r.installing ? 'Descargando versión nueva…' : 'Ya tienes la última versión'); },
+  reloadSheet: () => { if (!S.cfg.url) { toast('Primero conecta tu hoja en Ajustes'); return go('ajustes'); } S.data = normalize(emptyData()); save(); S.ui.view = 'inicio'; sync(true); },
   resetLocal: () => { $('#resetConfirm').hidden = false; },
   resetYes: () => { try { localStorage.removeItem(LS); } catch (e) { } S.data = normalize(emptyData()); S.outbox = []; S.cfg.url = ''; S.cfg.token = ''; S.cfg.lastSync = 0; render(); }
 };
@@ -975,6 +998,7 @@ function registerSW() {
 /* ---------------- Arranque ---------------- */
 load();
 if (S.data && !S.data.movs.some(m => ymOf(m.date) === S.ui.ym)) { const last = S.data.movs.map(m => ymOf(m.date)).filter(x => x <= ymOf(today())).sort().pop(); if (last) S.ui.ym = last; }
-route();
-registerSW();
+try { route(); } catch (e) { console.error(e); }
+try { registerSW(); } catch (e) { }
 sync();
+window.addEventListener('error', e => { if (e && e.message) toast('Error: ' + e.message); });
