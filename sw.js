@@ -1,7 +1,7 @@
 /* Service worker: la app abre sin internet y se actualiza sola cuando subes cambios a GitHub.
    Al publicar una versión nueva, sube el número de CACHE (y VERSION en app.js). */
-const CACHE = 'mis-finanzas-v1.4.1';
-const ASSETS = ['./', 'index.html', 'styles.css?v=1.4.1', 'app.js?v=1.4.1', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png'];
+const CACHE = 'mis-finanzas-v1.5.0';
+const ASSETS = ['./', 'index.html', 'styles.css?v=1.5.0', 'app.js?v=1.5.0', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png'];
 
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS))); });
 self.addEventListener('activate', e => {
