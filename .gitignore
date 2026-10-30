@@ -1,0 +1,5 @@
+# Nunca subas tus datos personales al repositorio
+*.json.bak
+mis-finanzas-*.json
+*.xlsx
+.DS_Store
