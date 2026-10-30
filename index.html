@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mis Finanzas</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Gastos, ingresos, metas y pagos fijos conectados a tu hoja de Google. Funciona sin internet.">
+<meta name="theme-color" content="#0d6b5b">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Finanzas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-design="a">
+<div class="app">
+  <header class="top" id="top">
+    <div class="brand"><span class="mark">$</span><span>Mis Finanzas</span></div>
+    <div class="month" id="monthPick">
+      <button type="button" id="mPrev" aria-label="Mes anterior">‹</button>
+      <span id="mLabel"></span>
+      <button type="button" id="mNext" aria-label="Mes siguiente">›</button>
+    </div>
+    <button type="button" class="sync" id="syncPill"><i></i><span>Local</span></button>
+  </header>
+  <nav class="nav" id="nav" aria-label="Secciones"></nav>
+  <main id="view"></main>
+</div>
+<button type="button" class="fab" id="fab" aria-label="Agregar movimiento">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+</button>
+<div class="sheet-bg" id="sheetBg" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+<div class="toast" id="toast" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>
