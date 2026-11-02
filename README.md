@@ -94,3 +94,10 @@ El conector v3 es universal: guarda en la hoja **AppData** cualquier dato nuevo 
 1. Abre tu hoja → **Extensiones → Apps Script**.
 2. Reemplaza todo `Código.gs` con `apps-script/Code.gs` de este repositorio y guarda.
 3. **Implementar → Administrar implementaciones → lápiz → Versión: Nueva versión → Implementar.** La URL no cambia.
+
+## Bloc de notas y agenda
+
+- **Agenda** (actividades, pendientes y notas cortas): hoja **Notas**.
+- **Bloc de notas** (cuadernos, secciones, páginas, fotos y dibujos): hoja **AppData**, que crea sola el conector v3. Las fotos se comprimen (≈1100 px) y se guardan en trozos; en cada equipo quedan en caché para abrir rápido.
+- **PDF**: botón PDF → elige página, sección, cuaderno o agenda → en la ventana de impresión, **Guardar como PDF**.
+- No edites a mano la hoja AppData.

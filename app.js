@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '1.9.0';
+const VERSION = '2.0.0';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -85,6 +85,7 @@ const ICON = {
   pagos: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18M8 15l2 2 4-4"/>',
   deudas: '<path d="M4 20V10l8-6 8 6v10M9 20v-6h6v6"/>',
   estadisticas: '<path d="M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-7"/>',
+  bloc: '<path d="M5 4h12a2 2 0 0 1 2 2v14H7a2 2 0 0 1-2-2zM5 18a2 2 0 0 1 2-2h12M9 8h6M9 11h4"/>',
   agenda: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18M7 14h4M7 17h7"/>',
   notas: '<path d="M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5"/>',
   revision: '<path d="M12 3l9 16H3zM12 10v4M12 17v.5"/>',
@@ -109,7 +110,7 @@ function load() {
   if (!S.data) S.data = window.__SEED__ ? JSON.parse(JSON.stringify(window.__SEED__)) : emptyData();
   normalize(S.data);
 }
-function save() { try { localStorage.setItem(LS, JSON.stringify({ data: S.data, outbox: S.outbox, cfg: S.cfg, noteMeta: S.noteMeta || {} })); } catch (e) { } }
+function save() { try { const st = Object.assign({}, (S.data && S.data.store) || {}); delete st.img; localStorage.setItem(LS, JSON.stringify({ data: S.data ? Object.assign({}, S.data, { store: st }) : S.data, outbox: S.outbox, cfg: S.cfg, noteMeta: S.noteMeta || {} })); } catch (e) { console.warn('No se pudo guardar en el equipo', e); } }
 function normalize(d) {
   ['accounts', 'goals', 'debts', 'fixed', 'budgets', 'cats', 'notes', 'movs'].forEach(k => d[k] = d[k] || []);
   if (!d.store || typeof d.store !== 'object') d.store = {};
@@ -209,6 +210,7 @@ async function sync(manual) {
     S.cfg.serverV = j.v || 1;
     S.data = normalize(j.data);
     pullSettings();
+    try { absorbImages(); } catch (e) { }
     S.outbox.forEach(applyLocal);
     S.cfg.lastSync = Date.now(); S.syncErr = '';
     if (S.cfg.serverV >= 3 && !((S.data.store || {}).settings || {}).app && S.cfg.name !== undefined) pushSettings();
@@ -395,7 +397,7 @@ function hbars(entries, total, ref) {
 
 /* ---------------- Navegación ---------------- */
 const VIEWS = [
-  ['inicio', 'Inicio', 'Día a día'], ['movimientos', 'Movimientos'], ['agenda', 'Agenda'], ['estados', 'Estados'], ['cuentas', 'Cuentas'], ['metas', 'Metas'],
+  ['inicio', 'Inicio', 'Día a día'], ['movimientos', 'Movimientos'], ['agenda', 'Agenda'], ['bloc', 'Bloc de notas'], ['estados', 'Estados'], ['cuentas', 'Cuentas'], ['metas', 'Metas'],
   ['presupuesto', 'Presupuesto', 'Planear'], ['pagos', 'Pagos fijos'], ['deudas', 'Deudas'],
   ['estadisticas', 'Estadísticas', 'Analizar'], ['revision', 'Revisión'], ['ajustes', 'Ajustes', 'App']
 ];
@@ -413,6 +415,7 @@ function renderNav() {
 }
 function go(v) { if (location.hash !== '#' + v) location.hash = v; else route(); }
 function route() {
+  if (typeof edTimer !== 'undefined' && edTimer) pgSaveNow();
   const v = (location.hash || '#inicio').slice(1);
   S.ui.view = v === 'notas' ? 'agenda' : VIEWS.some(x => x[0] === v) ? v : 'inicio';
   render(); window.scrollTo(0, 0);
@@ -424,9 +427,12 @@ function render() {
   if (S.cfg.theme === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = S.cfg.theme;
   const tc = { a: '#14171a', b: '#0b2239', c: '#0f141b' }[S.cfg.design]; document.querySelector('meta[name=theme-color]')?.setAttribute('content', tc);
   { const [yy, mm] = S.ui.ym.split('-').map(Number); $('#mLabel').textContent = window.innerWidth < 600 ? `${MSHORT[mm - 1]} ${yy}` : ymLabel(S.ui.ym); }
-  renderNav(); updatePill(); try { renderBell(); } catch (e) { console.error(e); }
-  const fn = { inicio: vInicio, estados: vEstados, movimientos: vMovs, cuentas: vCuentas, metas: vMetas, presupuesto: vPresupuesto, pagos: vPagos, deudas: vDeudas, estadisticas: vStats, revision: vRevision, notas: vAgenda, agenda: vAgenda, ajustes: vAjustes }[S.ui.view];
-  try { $('#view').innerHTML = `<div class="wrap">${fn()}</div>`; S.lastError = ''; }
+  renderNav(); updatePill(); try { renderBell(); renderAgBtn(); } catch (e) { console.error(e); }
+  const ae = document.activeElement;
+  if (S.ui.view === 'bloc' && $('#pgEditor') && ae && ($('#pgEditor').contains(ae) || ae.id === 'pgTitle' || ae.closest('#edBar')) && $('#pgEditor').dataset.pg === S.ui.pg) return;
+  if (typeof edTimer !== 'undefined' && edTimer) pgSaveNow();
+  const fn = { inicio: vInicio, estados: vEstados, movimientos: vMovs, cuentas: vCuentas, metas: vMetas, presupuesto: vPresupuesto, pagos: vPagos, deudas: vDeudas, estadisticas: vStats, revision: vRevision, notas: vAgenda, agenda: vAgenda, bloc: vBloc, ajustes: vAjustes }[S.ui.view];
+  try { $('#view').innerHTML = `<div class="wrap">${fn()}</div>`; S.lastError = ''; if (S.ui.view === 'bloc') { const ed = $('#pgEditor'); if (ed) { ed.dataset.pg = S.ui.pg; edBind(); } } }
   catch (e) {
     console.error(e); S.lastError = (e && e.message) || String(e);
     $('#view').innerHTML = `<div class="wrap"><div class="card" style="display:grid;gap:12px;max-width:620px"><h2>No pude mostrar esta sección</h2><p class="muted" style="margin:0">Algún dato de tu hoja tiene un formato que la app no esperaba. Mándale una captura de este mensaje a quien te ayuda con la app.</p><code style="font-family:var(--f-num);font-size:.8rem;background:var(--surface-2);padding:10px;border-radius:8px;white-space:pre-wrap;word-break:break-word">v${VERSION} · ${esc(S.ui.view)} · ${esc(S.lastError)}\n${esc(((e && e.stack) || '').split('\n').slice(1, 3).join('\n'))}</code><div class="btns"><button class="btn pri" data-act="reloadSheet">Volver a cargar desde mi hoja</button><button class="btn" data-act="go" data-v="movimientos">Ir a Movimientos</button></div></div></div>`;
@@ -521,6 +527,7 @@ function vInicio() {
       ${walletCard(sp, isNow)}
       <div class="home-cards">
         ${todayCard()}
+        ${pinnedPagesCard()}
         ${envelopeCard()}
         ${stagesCard(false)}
         <section class="card side-card"><header style="margin:0"><h2>Presupuesto</h2><a href="#presupuesto">Detalle</a></header>
@@ -1053,6 +1060,390 @@ function agBackup() {
   setTimeout(() => download(`agenda-${today()}.json`, JSON.stringify({ app: 'Mis Finanzas', tipo: 'agenda', exportado: new Date().toISOString(), notas: notes }, null, 1), 'application/json'), 400);
 }
 
+/* =====================================================================
+   Bloc de notas (tipo OneNote): cuadernos › secciones › páginas
+   Se respalda en la hoja AppData (conector v3):
+     nb  = cuadernos, sec = secciones, pg = páginas (datos),
+     pgx = contenido de cada página en trozos, img = imágenes en trozos
+   ===================================================================== */
+const CHUNK = 45000;
+const NB_COLORS = ['#d9a23b', '#4b8fd6', '#3fae7f', '#8b7fd6', '#d9624f', '#3fa7b5', '#8c958f'];
+const IMG = new Map();
+const store = c => ((S.data.store = S.data.store || {})[c] = S.data.store[c] || {});
+/* operación sin redibujar (para escribir sin perder el cursor) */
+function opq(type, data) {
+  if (!S.syncing && type === 'rec.upsert') S.outbox = S.outbox.filter(o => !(o.type === 'rec.upsert' && o.data.coll === data.coll && o.data.id === data.id));
+  const o = { opId: uid(), type, data, t: Date.now() };
+  applyLocal(o); S.outbox.push(o); save(); scheduleSync(2500);
+}
+function blobPut(coll, id, str) {
+  const n = Math.max(1, Math.ceil(str.length / CHUNK)), prev = blobCount(coll, id);
+  for (let i = 0; i < n; i++) opq('rec.upsert', { coll, id: `${id}:${i}`, data: i === 0 ? { n, d: str.slice(0, CHUNK) } : str.slice(i * CHUNK, (i + 1) * CHUNK) });
+  for (let i = n; i < prev; i++) opq('rec.delete', { coll, id: `${id}:${i}` });
+  return n;
+}
+function blobCount(coll, id) { const c = store(coll)[`${id}:0`]; return c && c.n ? c.n : 0; }
+function blobGet(coll, id) {
+  const s = store(coll), c0 = s[`${id}:0`]; if (!c0) return null;
+  let out = c0.d || ''; for (let i = 1; i < (c0.n || 1); i++) { const c = s[`${id}:${i}`]; if (c == null) return null; out += c; }
+  return out;
+}
+function blobDel(coll, id, n) { for (let i = 0; i < (n || blobCount(coll, id) || 1); i++) opq('rec.delete', { coll, id: `${id}:${i}` }); }
+
+/* ---- imágenes: caché en IndexedDB para que el teléfono no se llene ---- */
+const IDB = (() => {
+  let dbp = null;
+  const db = () => dbp || (dbp = new Promise((res, rej) => { try { const r = indexedDB.open('misfinanzas-img', 1); r.onupgradeneeded = () => r.result.createObjectStore('img'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); } catch (e) { rej(e); } }));
+  const tx = (mode, fn) => db().then(d => new Promise((res, rej) => { const t = d.transaction('img', mode), s = t.objectStore('img'); const q = fn(s); t.oncomplete = () => res(q && q.result); t.onerror = () => rej(t.error); }));
+  return { get: k => tx('readonly', s => s.get(k)).catch(() => null), put: (k, v) => tx('readwrite', s => s.put(v, k)).catch(() => null), del: k => tx('readwrite', s => s.delete(k)).catch(() => null) };
+})();
+async function imgSrc(id) {
+  if (IMG.has(id)) return IMG.get(id);
+  let v = await IDB.get(id);
+  if (!v) { v = blobGet('img', id); if (v) IDB.put(id, v); }
+  if (v) IMG.set(id, v);
+  return v || '';
+}
+function hydrateImgs(root) { (root || document).querySelectorAll('img[data-img]').forEach(async im => { if (!im.getAttribute('src')) { const s = await imgSrc(im.dataset.img); if (s) im.src = s; else im.alt = 'Imagen pendiente de sincronizar'; } }); }
+/* al llegar datos de la hoja: pasa las imágenes a la caché y no las guarda en localStorage */
+function absorbImages() {
+  const s = (S.data.store || {}).img; if (!s) return;
+  Object.keys(s).filter(k => k.endsWith(':0')).forEach(k => { const id = k.slice(0, -2); if (!IMG.has(id)) { const v = blobGet('img', id); if (v) { IMG.set(id, v); IDB.put(id, v); } } });
+}
+function compressImage(file, max = 1100, q = 0.66) {
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload = () => { const im = new Image(); im.onload = () => { const k = Math.min(1, max / Math.max(im.width, im.height)); const c = document.createElement('canvas'); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k); const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(im, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', q)); }; im.onerror = rej; im.src = fr.result; };
+    fr.onerror = rej; fr.readAsDataURL(file);
+  });
+}
+function storeImage(dataUrl) {
+  const id = 'i' + uid(); IMG.set(id, dataUrl); IDB.put(id, dataUrl);
+  const n = blobPut('img', id, dataUrl);
+  return { id, n };
+}
+
+/* ---- modelo ---- */
+const NBS = () => Object.entries(store('nb')).map(([id, v]) => Object.assign({ id }, v)).filter(x => !x.del).sort((a, b) => (a.order || 0) - (b.order || 0) || (a.name || '').localeCompare(b.name || ''));
+const SECS = nb => Object.entries(store('sec')).map(([id, v]) => Object.assign({ id }, v)).filter(x => x.nb === nb).sort((a, b) => (a.order || 0) - (b.order || 0));
+const PGS = sec => Object.entries(store('pg')).map(([id, v]) => Object.assign({ id }, v)).filter(x => !sec || x.sec === sec).sort((a, b) => (b.updated || 0) - (a.updated || 0));
+const pgGet = id => { const v = store('pg')[id]; return v ? Object.assign({ id }, v) : null; };
+const pgHtml = id => blobGet('pgx', id) || '';
+const plain = html => { const d = document.createElement('div'); d.innerHTML = html; return (d.textContent || '').replace(/\s+/g, ' ').trim(); };
+function recPut(coll, id, data) { opq('rec.upsert', { coll, id, data }); }
+function ensureBloc() {
+  if (NBS().length) return;
+  if (!S.cfg.url || S.cfg.serverV >= 3 || window.__SEED__) {
+    const nb = 'n' + uid(), sec = 's' + uid();
+    recPut('nb', nb, { name: 'Mi cuaderno', color: NB_COLORS[0], order: 1 });
+    recPut('sec', sec, { nb, name: 'Notas rápidas', color: NB_COLORS[0], order: 1 });
+    S.ui.nb = nb; S.ui.sec = sec;
+  }
+}
+function curNb() { const L = NBS(); if (!L.find(x => x.id === S.ui.nb)) S.ui.nb = L[0] && L[0].id; return S.ui.nb; }
+function curSec() { const L = SECS(curNb()); if (!L.find(x => x.id === S.ui.sec)) S.ui.sec = L[0] && L[0].id; return S.ui.sec; }
+
+/* ---- plantillas ---- */
+const TEMPLATES = {
+  blanco: ['Página en blanco', ''],
+  orden: ['Orden de servicio', `<h2>Cliente</h2><p><b>Nombre:</b>&nbsp;</p><p><b>Teléfono:</b>&nbsp;</p><h2>Equipo</h2><p><b>Tipo / marca / modelo:</b>&nbsp;</p><p><b>Problema reportado:</b>&nbsp;</p><h2>Diagnóstico y trabajo</h2><ul class="chk"><li>Revisar encendido</li><li>Respaldo de información</li><li><br></li></ul><h2>Costos</h2><table><tbody><tr><th>Concepto</th><th>Monto</th></tr><tr><td>Repuestos</td><td>$</td></tr><tr><td>Mano de obra</td><td>$</td></tr><tr><td><b>Total</b></td><td><b>$</b></td></tr></tbody></table><p><b>Fecha de entrega:</b>&nbsp;</p>`],
+  cotizacion: ['Cotización', `<h2>Cotización para</h2><p><br></p><table><tbody><tr><th>Producto / servicio</th><th>Cant.</th><th>Precio</th><th>Subtotal</th></tr><tr><td><br></td><td>1</td><td>$</td><td>$</td></tr><tr><td><br></td><td>1</td><td>$</td><td>$</td></tr><tr><td colspan="3"><b>Total</b></td><td><b>$</b></td></tr></tbody></table><p><b>Validez:</b> 15 días</p><p><b>Forma de pago:</b>&nbsp;</p>`],
+  clase: ['Apuntes de clase', `<p><b>Materia:</b>&nbsp;</p><p><b>Tema:</b>&nbsp;</p><h2>Ideas principales</h2><ul><li><br></li></ul><h2>Tareas</h2><ul class="chk"><li><br></li></ul><h2>Dudas para el docente</h2><ul><li><br></li></ul>`],
+  compras: ['Lista de compras', `<ul class="chk"><li><br></li><li><br></li><li><br></li></ul><p><b>Presupuesto:</b> $</p>`],
+  reunion: ['Reunión', `<p><b>Fecha y hora:</b>&nbsp;</p><p><b>Participantes:</b>&nbsp;</p><h2>Temas</h2><ul><li><br></li></ul><h2>Acuerdos</h2><ul class="chk"><li><br></li></ul>`]
+};
+function newPage(tplKey) {
+  const sec = curSec(); if (!sec) return toast('Crea primero una sección');
+  const [t, html] = TEMPLATES[tplKey] || TEMPLATES.blanco, id = 'p' + uid(), now = Date.now();
+  recPut('pg', id, { sec, title: tplKey === 'blanco' ? '' : t, created: now, updated: now, bg: 'lineas', size: 15, pinned: false, imgs: [], snip: '' });
+  blobPut('pgx', id, html);
+  S.ui.pg = id; S.ui.blocPane = 'editor'; render();
+  setTimeout(() => { const el = $('#pgTitle'); if (el && !el.value) el.focus(); else $('#pgEditor')?.focus(); }, 60);
+}
+
+/* ---- vista ---- */
+function vBloc() {
+  if (S.cfg.url && S.cfg.serverV && S.cfg.serverV < 3 && !NBS().length) return `${head('Bloc de notas')}<div class="alert"><span></span><div><b>Actualiza el conector de tu hoja para usar el bloc</b><p>El bloc guarda páginas e imágenes en la hoja AppData, que necesita el conector v3. Pégalo una vez en Apps Script (Ajustes te dice cómo) y vuelve aquí.</p></div><div class="acts"><a class="btn sm" href="#ajustes">Ir a Ajustes</a></div></div>`;
+  ensureBloc();
+  const nb = curNb(), sec = curSec(), q = (S.ui.blocQ || '').toLowerCase();
+  if (!S.ui.pg && window.innerWidth >= 900) { const f = PGS(sec)[0]; if (f) S.ui.pg = f.id; }
+  if (S.ui.pg && !pgGet(S.ui.pg)) S.ui.pg = '';
+  const pane = S.ui.blocPane || 'pages';
+  const nbs = NBS();
+  const tree = `<div class="bl-tree"><div class="bl-h">Cuadernos</div>${nbs.map(n => `<div class="bl-nb ${n.id === nb ? 'on' : ''}"><button type="button" class="bl-nbb" data-act="blNb" data-v="${n.id}"><svg viewBox="0 0 24 24" fill="none" stroke="${n.color}" stroke-width="2" aria-hidden="true"><path d="M5 4h12a2 2 0 0 1 2 2v14H7a2 2 0 0 1-2-2zM5 18a2 2 0 0 1 2-2h12M9 8h6"/></svg><span>${esc(n.name)}</span></button><button type="button" class="bl-more" data-act="blNbMenu" data-v="${n.id}" aria-label="Opciones del cuaderno">⋯</button></div>
+      ${n.id === nb ? `<div class="bl-secs">${SECS(n.id).map(s => `<div class="bl-sec ${s.id === sec ? 'on' : ''}"><button type="button" data-act="blSec" data-v="${s.id}"><i style="background:${s.color || n.color}"></i><span>${esc(s.name)}</span><small>${PGS(s.id).length}</small></button><button type="button" class="bl-more" data-act="blSecMenu" data-v="${s.id}" aria-label="Opciones de la sección">⋯</button></div>`).join('')}<button type="button" class="bl-add" data-act="blNewSec">+ Sección</button></div>` : ''}`).join('')}
+      <button type="button" class="bl-add" data-act="blNewNb">+ Nuevo cuaderno</button></div>`;
+  const all = q ? PGS().filter(p => `${p.title} ${p.snip}`.toLowerCase().includes(q) || pgHtml(p.id).toLowerCase().includes(q)) : PGS(sec);
+  const secObj = SECS(nb).find(s => s.id === sec);
+  const pages = `<div class="bl-pages"><input class="ctl" id="blSearch" type="search" placeholder="Buscar en todo el bloc" value="${esc(S.ui.blocQ || '')}">
+      <div class="bl-h">${q ? `Resultados (${all.length})` : esc(secObj ? secObj.name : '')}</div>
+      ${all.map(p => `<button type="button" class="bl-pg ${p.id === S.ui.pg ? 'on' : ''}" data-act="blPg" data-v="${p.id}" style="--c:${(SECS(nb).find(s => s.id === p.sec) || {}).color || '#8c958f'}"><b>${p.pinned ? '📌 ' : ''}${esc(p.title || 'Sin título')}</b><small>${new Date(p.updated || p.created).toLocaleDateString('es', { day: 'numeric', month: 'short' })}${p.imgs && p.imgs.length ? ` · ${p.imgs.length} foto${p.imgs.length > 1 ? 's' : ''}` : ''}${p.snip ? ' · ' + esc(p.snip.slice(0, 40)) : ''}</small></button>`).join('') || `<p class="note">${q ? 'Nada coincide.' : 'Sección vacía.'}</p>`}
+      ${q ? '' : `<div class="bl-newpg"><button type="button" class="btn sm pri" data-act="blNewPg" data-v="blanco">+ Página</button><select class="ctl" id="blTpl" aria-label="Nueva página desde plantilla"><option value="">Plantilla…</option>${Object.entries(TEMPLATES).filter(([k]) => k !== 'blanco').map(([k, [t]]) => `<option value="${k}">${t}</option>`).join('')}</select></div>`}</div>`;
+  const p = S.ui.pg && pgGet(S.ui.pg);
+  const ed = p ? editorHTML(p) : `<div class="bl-empty"><p>Elige una página o crea una nueva.</p><div class="btns">${Object.entries(TEMPLATES).map(([k, [t]]) => `<button type="button" class="btn sm ${k === 'blanco' ? 'pri' : ''}" data-act="blNewPg" data-v="${k}">${t}</button>`).join('')}</div></div>`;
+  return `<div class="bloc pane-${pane}">
+    <div class="bl-mhead"><button type="button" class="linkbtn" data-act="blPane" data-v="${pane === 'editor' ? 'pages' : 'tree'}">${pane === 'editor' ? '‹ ' + esc(secObj ? secObj.name : 'Páginas') : pane === 'pages' ? '‹ Cuadernos' : ''}</button><b>${pane === 'tree' ? 'Bloc de notas' : ''}</b><button type="button" class="btn sm" data-act="blExport">PDF</button></div>
+    ${tree}${pages}<div class="bl-ed">${ed}</div></div>`;
+}
+function editorHTML(p) {
+  const tb = (a, label, title, extra = '') => `<button type="button" class="tb" data-cmd="${a}" title="${title}" aria-label="${title}" ${extra}>${label}</button>`;
+  const ic = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  const nb = NBS().find(n => n.id === S.ui.nb) || {}, sec = SECS(S.ui.nb).find(s => s.id === p.sec) || {};
+  return `<div class="ed-bar" id="edBar">
+      <select class="ed-sel" id="edBlock" aria-label="Estilo de párrafo"><option value="p">Texto</option><option value="h1">Título</option><option value="h2">Subtítulo</option><option value="h3">Encabezado</option><option value="blockquote">Cita</option></select>
+      <span class="ed-sep"></span>
+      ${tb('bold', '<b>B</b>', 'Negrita')}${tb('italic', '<i>I</i>', 'Cursiva')}${tb('underline', '<u>U</u>', 'Subrayado')}${tb('strikeThrough', '<s>S</s>', 'Tachado')}
+      <label class="tb hl" title="Resaltar"><span>A</span><select id="edHl" aria-label="Resaltado"><option value="">Resaltar</option><option value="#ffe066">Amarillo</option><option value="#b7f0c8">Verde</option><option value="#bcdcff">Azul</option><option value="#ffc6c0">Rojo</option><option value="transparent">Quitar</option></select></label>
+      <label class="tb fc" title="Color de letra"><span>A</span><select id="edFc" aria-label="Color de letra"><option value="">Color</option><option value="#d9624f">Rojo</option><option value="#2e7d5b">Verde</option><option value="#2c6fb7">Azul</option><option value="#b07a12">Ámbar</option><option value="#6b5bd6">Morado</option><option value="inherit">Normal</option></select></label>
+      <span class="ed-sep"></span>
+      ${tb('insertUnorderedList', ic('<path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/>'), 'Viñetas')}${tb('insertOrderedList', ic('<path d="M10 6h10M10 12h10M10 18h10M4 4v4M3 18h3l-3 2h3M3 11c1-1 3-1 3 1l-3 2h3"/>'), 'Numeración')}${tb('check', ic('<rect x="3" y="4" width="7" height="7" rx="1.5"/><path d="M4.5 7.5l1.5 1.5 3-3M13 7h8M13 17h8"/><rect x="3" y="13" width="7" height="7" rx="1.5"/>'), 'Lista de tareas')}
+      <span class="ed-sep"></span>
+      <label class="tb" title="Insertar imagen">${ic('<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>')}<input type="file" id="edImg" accept="image/*" multiple hidden></label>
+      ${tb('draw', ic('<path d="M4 20c4 0 4-6 8-6s4 4 8 4M15 4l5 5-7 7H8v-5z"/>'), 'Dibujar a mano')}${tb('table', ic('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16M15 4v16"/>'), 'Insertar tabla')}${tb('link', ic('<path d="M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1"/>'), 'Enlace')}
+      <span class="ed-sep"></span>
+      ${tb('justifyLeft', ic('<path d="M4 6h16M4 12h10M4 18h14"/>'), 'Alinear a la izquierda')}${tb('justifyCenter', ic('<path d="M4 6h16M7 12h10M5 18h14"/>'), 'Centrar')}${tb('removeFormat', ic('<path d="M6 4h12M10 4l-4 16M14 20H6M17 14l4 4M21 14l-4 4"/>'), 'Quitar formato')}${tb('undo', ic('<path d="M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3"/>'), 'Deshacer')}${tb('redo', ic('<path d="M15 14l5-5-5-5M20 9H9a5 5 0 0 0 0 10h3"/>'), 'Rehacer')}
+      <span class="ed-sep"></span>
+      ${tb('todo', ic('<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>') + '<span class="tb-t">Pendiente</span>', 'Convertir texto seleccionado en pendiente de la agenda', 'style="width:auto;padding:0 8px"')}
+      <span class="ed-tblops" id="edTblOps" hidden>${tb('rowAdd', '+ fila', 'Agregar fila', 'style="width:auto;padding:0 6px"')}${tb('colAdd', '+ col', 'Agregar columna', 'style="width:auto;padding:0 6px"')}${tb('rowDel', '− fila', 'Quitar fila', 'style="width:auto;padding:0 6px"')}</span>
+      <span class="ed-right"><button type="button" class="btn sm" data-act="blPageMenu">Página</button><button type="button" class="btn sm pri" data-act="blExport">PDF</button></span>
+    </div>
+    <div class="ed-scroll"><div class="ed-paper bg-${p.bg || 'lineas'}" style="--fs:${p.size || 15}px">
+      <input id="pgTitle" class="ed-title" value="${esc(p.title || '')}" placeholder="Título de la página" autocomplete="off">
+      <div class="ed-meta">${new Date(p.created || Date.now()).toLocaleString('es', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit' })} · ${esc(nb.name || '')} › ${esc(sec.name || '')}<span id="edSaved"></span></div>
+      <div id="pgEditor" class="ed-body" contenteditable="true" spellcheck="true" data-placeholder="Escribe aquí. Pega o arrastra imágenes, usa las herramientas de arriba.">${pgHtml(p.id)}</div>
+    </div></div>`;
+}
+
+/* ---- guardar ---- */
+let edTimer = null;
+function pgSaveNow() {
+  clearTimeout(edTimer); edTimer = null;
+  const ed = $('#pgEditor'), p = S.ui.pg && pgGet(S.ui.pg); if (!ed || !p) return;
+  const c = ed.cloneNode(true);
+  c.querySelectorAll('img[data-img]').forEach(im => im.removeAttribute('src'));
+  const html = c.innerHTML, title = ($('#pgTitle')?.value || '').trim();
+  const imgs = [...c.querySelectorAll('img[data-img]')].map(im => ({ id: im.dataset.img, n: Number(im.dataset.n) || 1 }));
+  const gone = (p.imgs || []).filter(x => !imgs.some(y => y.id === x.id));
+  if (html !== pgHtml(p.id)) blobPut('pgx', p.id, html);
+  gone.forEach(x => { blobDel('img', x.id, x.n); IDB.del(x.id); IMG.delete(x.id); });
+  const meta = Object.assign({}, store('pg')[p.id], { title, updated: Date.now(), imgs, snip: plain(html).slice(0, 120) });
+  recPut('pg', p.id, meta);
+  const s = $('#edSaved'); if (s) s.textContent = ' · Guardado';
+}
+function pgSaveSoon() { const s = $('#edSaved'); if (s) s.textContent = ' · Guardando…'; clearTimeout(edTimer); edTimer = setTimeout(pgSaveNow, 900); }
+
+/* ---- herramientas del editor ---- */
+function edFocus() { const ed = $('#pgEditor'); if (ed && !ed.contains(document.activeElement)) ed.focus(); }
+function insertHTML(html) { edFocus(); document.execCommand('insertHTML', false, html); pgSaveSoon(); }
+async function insertImageFiles(files) {
+  for (const f of files) {
+    if (!f.type.startsWith('image/')) continue;
+    try { const url = await compressImage(f); const { id, n } = storeImage(url); insertHTML(`<p><img data-img="${id}" data-n="${n}" src="${url}" alt=""></p>`); }
+    catch (e) { toast('No pude leer esa imagen'); }
+  }
+  hydrateImgs($('#pgEditor')); pgSaveNow();
+}
+function tableHTML(r = 3, c = 3) { return `<table><tbody>${Array.from({ length: r }, (_, i) => `<tr>${Array.from({ length: c }, () => i ? '<td><br></td>' : '<th><br></th>').join('')}</tr>`).join('')}</tbody></table><p><br></p>`; }
+function selCell() { const s = window.getSelection(); let n = s && s.anchorNode; while (n && n !== document.body) { if (n.nodeName === 'TD' || n.nodeName === 'TH') return n; n = n.parentNode; } return null; }
+function edCmd(cmd) {
+  const ed = $('#pgEditor'); if (!ed) return;
+  if (cmd === 'check') { edFocus(); document.execCommand('insertUnorderedList'); const s = window.getSelection(); let n = s.anchorNode; while (n && n !== ed && n.nodeName !== 'UL') n = n.parentNode; if (n && n.nodeName === 'UL') n.classList.toggle('chk'); pgSaveSoon(); return; }
+  if (cmd === 'table') {
+    edFocus(); document.execCommand('insertHTML', false, tableHTML().replace('<table>', '<table data-new="1">'));
+    const t = ed.querySelector('table[data-new]'); if (t) { t.removeAttribute('data-new'); const c = t.querySelector('th,td'); const r = document.createRange(); r.selectNodeContents(c); r.collapse(true); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); }
+    document.dispatchEvent(new Event('selectionchange')); return pgSaveSoon();
+  }
+  if (cmd === 'draw') return openDraw();
+  if (cmd === 'link') { const s = window.getSelection(), txt = s ? String(s) : ''; const range = s && s.rangeCount ? s.getRangeAt(0).cloneRange() : null; openSheet('Insertar enlace', `<label class="field"><span>Dirección</span><input id="lnkUrl" type="url" placeholder="https://" autofocus></label><label class="field"><span>Texto</span><input id="lnkTxt" value="${esc(txt)}"></label><button class="btn pri">Insertar</button>`, () => { let u = $('#lnkUrl').value.trim(); if (!u) return 'Escribe la dirección.'; if (!/^https?:\/\//.test(u)) u = 'https://' + u; const t = $('#lnkTxt').value.trim() || u; setTimeout(() => { const ed2 = $('#pgEditor'); ed2.focus(); if (range) { const s2 = window.getSelection(); s2.removeAllRanges(); s2.addRange(range); } document.execCommand('insertHTML', false, `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(t)}</a>&nbsp;`); pgSaveSoon(); }, 30); }); return; }
+  if (cmd === 'todo') {
+    const s = window.getSelection(); let txt = s ? String(s).trim() : '';
+    if (!txt && s && s.anchorNode) { let n = s.anchorNode; while (n && n !== ed && !/^(P|LI|DIV|H1|H2|H3)$/.test(n.nodeName)) n = n.parentNode; txt = n && n !== ed ? n.textContent.trim() : ''; }
+    if (!txt) return toast('Selecciona el texto o pon el cursor en la línea');
+    const p = parseTodo(txt.slice(0, 200)), pg = pgGet(S.ui.pg);
+    noteSave({ id: uid(), date: today(), tag: 'Bloc', text: p.text, action: pg ? 'De la página: ' + (pg.title || 'Sin título') : '', due: p.due, status: 'Pendiente', kind: 'pendiente', time: p.time, color: 'azul', pinned: false });
+    return toast(`Pendiente creado${p.due ? ' para ' + agDueLabel(p.due).toLowerCase() : ''}`);
+  }
+  if (cmd === 'rowAdd' || cmd === 'colAdd' || cmd === 'rowDel') {
+    const cell = selCell(); if (!cell) return; const tr = cell.parentNode, tbl = tr.closest('table'), idx = [...tr.children].indexOf(cell);
+    if (cmd === 'rowAdd') { const n = tr.cloneNode(true); n.querySelectorAll('td,th').forEach(c => { const td = document.createElement('td'); td.innerHTML = '<br>'; c.replaceWith(td); }); tr.after(n); }
+    if (cmd === 'colAdd') tbl.querySelectorAll('tr').forEach((r, i) => { const c = document.createElement(i ? 'td' : 'th'); c.innerHTML = '<br>'; const ref = r.children[idx]; ref ? ref.after(c) : r.appendChild(c); });
+    if (cmd === 'rowDel') { if (tbl.querySelectorAll('tr').length > 1) tr.remove(); else tbl.remove(); }
+    return pgSaveSoon();
+  }
+  edFocus(); document.execCommand(cmd, false, null); pgSaveSoon();
+}
+function edBind() {
+  const ed = $('#pgEditor'); if (!ed || ed.dataset.b) return; ed.dataset.b = 1;
+  try { document.execCommand('styleWithCSS', false, false); document.execCommand('defaultParagraphSeparator', false, 'p'); } catch (e) { }
+  hydrateImgs(ed);
+  ed.addEventListener('input', pgSaveSoon);
+  ed.addEventListener('blur', () => edTimer && pgSaveNow());
+  $('#pgTitle').addEventListener('input', pgSaveSoon);
+  $('#pgTitle').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); ed.focus(); } });
+  ed.addEventListener('click', e => {
+    const li = e.target.closest('ul.chk > li'); if (li && e.offsetX < 26) { li.classList.toggle('done'); pgSaveSoon(); }
+    const a = e.target.closest('a[href]'); if (a && (e.ctrlKey || e.metaKey)) window.open(a.href, '_blank', 'noopener');
+    const im = e.target.closest('img[data-img]'); ed.querySelectorAll('img.sel').forEach(x => x !== im && x.classList.remove('sel')); if (im) im.classList.toggle('sel');
+  });
+  ed.addEventListener('keydown', e => {
+    if ((e.key === 'Delete' || e.key === 'Backspace') && ed.querySelector('img.sel')) { e.preventDefault(); ed.querySelector('img.sel').remove(); pgSaveNow(); }
+    if (e.key === 'Tab') {
+      e.preventDefault(); const cell = selCell();
+      if (cell) { const cells = [...cell.closest('table').querySelectorAll('th,td')], i = cells.indexOf(cell); let nx = cells[i + (e.shiftKey ? -1 : 1)]; if (!nx && !e.shiftKey) { edCmd('rowAdd'); nx = cell.closest('table').querySelectorAll('tr')[[...cell.closest('table').querySelectorAll('tr')].indexOf(cell.parentNode) + 1].firstElementChild; } if (nx) { const r = document.createRange(); r.selectNodeContents(nx); r.collapse(false); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); } return; }
+      document.execCommand(e.shiftKey ? 'outdent' : 'indent');
+    }
+  });
+  ed.addEventListener('paste', e => { const files = [...(e.clipboardData?.files || [])].filter(f => f.type.startsWith('image/')); if (files.length) { e.preventDefault(); insertImageFiles(files); } });
+  ed.addEventListener('drop', e => { const files = [...(e.dataTransfer?.files || [])].filter(f => f.type.startsWith('image/')); if (files.length) { e.preventDefault(); insertImageFiles(files); } });
+  const bar = $('#edBar');
+  bar.addEventListener('mousedown', e => { if (e.target.closest('button.tb')) e.preventDefault(); });
+  bar.addEventListener('click', e => { const b = e.target.closest('[data-cmd]'); if (b) edCmd(b.dataset.cmd); });
+  bar.addEventListener('change', e => {
+    const t = e.target;
+    if (t.id === 'edBlock') { edFocus(); document.execCommand('formatBlock', false, '<' + t.value + '>'); pgSaveSoon(); }
+    if (t.id === 'edHl' && t.value) { edFocus(); document.execCommand('styleWithCSS', false, true); document.execCommand('hiliteColor', false, t.value); document.execCommand('styleWithCSS', false, false); t.value = ''; pgSaveSoon(); }
+    if (t.id === 'edFc' && t.value) { edFocus(); document.execCommand('styleWithCSS', false, true); document.execCommand('foreColor', false, t.value === 'inherit' ? getComputedStyle(ed).color : t.value); document.execCommand('styleWithCSS', false, false); t.value = ''; pgSaveSoon(); }
+    if (t.id === 'edImg' && t.files.length) { insertImageFiles([...t.files]); t.value = ''; }
+  });
+}
+document.addEventListener('selectionchange', () => {
+  const ops = $('#edTblOps'); if (ops) ops.hidden = !selCell();
+  const ed = $('#pgEditor'), sel = $('#edBlock'); if (!ed || !sel) return;
+  const s = window.getSelection(); let n = s && s.anchorNode; if (!n || !ed.contains(n)) return;
+  while (n && n !== ed && !/^(P|H1|H2|H3|BLOCKQUOTE|LI|DIV)$/.test(n.nodeName)) n = n.parentNode;
+  const tag = n && n !== ed ? n.nodeName.toLowerCase() : 'p'; sel.value = ['h1', 'h2', 'h3', 'blockquote'].includes(tag) ? tag : 'p';
+  ['bold', 'italic', 'underline', 'strikeThrough'].forEach(c => { const b = document.querySelector(`#edBar [data-cmd="${c}"]`); if (b) b.classList.toggle('on', document.queryCommandState(c)); });
+});
+
+/* ---- dibujar a mano ---- */
+function openDraw() {
+  const ed = $('#pgEditor'), s = window.getSelection(), range = s && s.rangeCount && ed.contains(s.anchorNode) ? s.getRangeAt(0).cloneRange() : null;
+  openSheet('Dibujar', `<div class="dr-tools"><div class="ag-colors" id="drCol">${['#14171a', '#d9624f', '#2c6fb7', '#2e7d5b', '#d9a23b'].map((c, i) => `<button type="button" data-c="${c}" class="${i ? '' : 'on'}" style="background:${c}" aria-label="Color ${i + 1}"></button>`).join('')}</div><div class="seg" id="drW"><button type="button" data-w="2">Fino</button><button type="button" data-w="4" class="on">Medio</button><button type="button" data-w="9">Grueso</button><button type="button" data-w="e">Borrador</button></div><button type="button" class="btn sm" id="drUndo">Deshacer</button><button type="button" class="btn sm" id="drClr">Limpiar</button></div>
+    <canvas id="drC" class="dr-c" width="900" height="560"></canvas><button class="btn pri">Insertar dibujo</button>`, () => {
+    const c = $('#drC'), url = c.toDataURL('image/jpeg', 0.8);
+    setTimeout(() => { const e2 = $('#pgEditor'); e2.focus(); if (range) { const s2 = window.getSelection(); s2.removeAllRanges(); s2.addRange(range); } const { id, n } = storeImage(url); document.execCommand('insertHTML', false, `<p><img data-img="${id}" data-n="${n}" src="${url}" class="drawing" alt="Dibujo"></p>`); pgSaveNow(); }, 40);
+  }, f => {
+    const c = $('#drC'), x = c.getContext('2d'); let col = '#14171a', w = 4, drawing = false, hist = [];
+    const clear = () => { x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); }; clear();
+    const pos = e => { const r = c.getBoundingClientRect(); return [(e.clientX - r.left) * c.width / r.width, (e.clientY - r.top) * c.height / r.height]; };
+    c.addEventListener('pointerdown', e => { e.preventDefault(); c.setPointerCapture(e.pointerId); hist.push(x.getImageData(0, 0, c.width, c.height)); if (hist.length > 25) hist.shift(); drawing = true; const [px, py] = pos(e); x.beginPath(); x.moveTo(px, py); x.lineCap = 'round'; x.lineJoin = 'round'; x.strokeStyle = w === 'e' ? '#fff' : col; x.lineWidth = (w === 'e' ? 22 : w) * (e.pressure && e.pointerType === 'pen' ? 0.5 + e.pressure : 1); x.lineTo(px + .1, py + .1); x.stroke(); });
+    c.addEventListener('pointermove', e => { if (!drawing) return; const [px, py] = pos(e); x.lineTo(px, py); x.stroke(); });
+    const end = () => { drawing = false; }; c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
+    f.querySelector('#drCol').onclick = e => { const b = e.target.closest('button'); if (!b) return; col = b.dataset.c; f.querySelectorAll('#drCol button').forEach(z => z.classList.toggle('on', z === b)); };
+    f.querySelector('#drW').onclick = e => { const b = e.target.closest('button'); if (!b) return; w = b.dataset.w === 'e' ? 'e' : Number(b.dataset.w); f.querySelectorAll('#drW button').forEach(z => z.classList.toggle('on', z === b)); };
+    $('#drUndo').onclick = () => { const h = hist.pop(); if (h) x.putImageData(h, 0, 0); };
+    $('#drClr').onclick = () => { hist.push(x.getImageData(0, 0, c.width, c.height)); clear(); };
+  });
+}
+
+/* ---- menús de cuaderno, sección y página ---- */
+function nameSheet(title, value, color, onSave, onDel, extra = '') {
+  openSheet(title, `<label class="field"><span>Nombre</span><input id="nmV" value="${esc(value)}" required autofocus></label>
+    <div class="field"><span>Color</span><div class="ag-colors" id="nmC">${NB_COLORS.map(c => `<button type="button" data-c="${c}" class="${c === color ? 'on' : ''}" style="background:${c}" aria-label="${c}"></button>`).join('')}</div></div>${extra}
+    <div class="btns" style="justify-content:space-between">${onDel ? '<button type="button" class="btn danger" id="nmDel">Eliminar</button>' : '<span></span>'}<button class="btn pri">Guardar</button></div>
+    <div id="nmDelC" hidden class="alert bad"><span></span><div><b>¿Eliminar con todo su contenido?</b><p>Se borra también de tu hoja.</p></div><div class="acts"><button type="button" class="btn sm danger" id="nmDelY">Eliminar</button></div></div>`, f => {
+    const v = $('#nmV').value.trim(); if (!v) return 'Escribe el nombre.';
+    onSave(v, f.querySelector('#nmC .on')?.dataset.c || color, f); render();
+  }, f => {
+    f.querySelector('#nmC').onclick = e => { const b = e.target.closest('button'); if (!b) return; f.querySelectorAll('#nmC button').forEach(z => z.classList.toggle('on', z === b)); };
+    $('#nmDel')?.addEventListener('click', () => { $('#nmDelC').hidden = false; });
+    $('#nmDelY')?.addEventListener('click', () => { onDel(); closeSheet(); render(); });
+  });
+}
+function delPage(id) {
+  const p = pgGet(id); if (!p) return;
+  (p.imgs || []).forEach(x => { blobDel('img', x.id, x.n); IDB.del(x.id); });
+  blobDel('pgx', id); opq('rec.delete', { coll: 'pg', id });
+  if (S.ui.pg === id) { S.ui.pg = ''; S.ui.blocPane = 'pages'; }
+}
+function delSection(id) { PGS(id).forEach(p => delPage(p.id)); opq('rec.delete', { coll: 'sec', id }); }
+function pageMenu() {
+  const p = pgGet(S.ui.pg); if (!p) return;
+  pgSaveNow();
+  const secs = NBS().flatMap(n => SECS(n.id).map(s => [s.id, `${n.name} › ${s.name}`]));
+  openSheet('Opciones de la página', `
+    <div class="field"><span>Fondo</span><div class="seg" id="pmBg">${[['blanco', 'Liso'], ['lineas', 'Líneas'], ['cuadros', 'Cuadrícula']].map(([k, l]) => `<button type="button" data-v="${k}" class="${(p.bg || 'lineas') === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+    <div class="field"><span>Tamaño de letra</span><div class="seg" id="pmFs">${[13, 15, 17, 19].map(s => `<button type="button" data-v="${s}" class="${(p.size || 15) === s ? 'on' : ''}">${s}</button>`).join('')}</div></div>
+    <label class="field"><span>Mover a</span>${sel('pmSec', secs, p.sec)}</label>
+    <label class="ag-pin"><input type="checkbox" id="pmPin" ${p.pinned ? 'checked' : ''}> Fijar en Inicio</label>
+    <div class="btns"><button type="button" class="btn" id="pmDup">Duplicar página</button><button type="button" class="btn danger" id="pmDel">Eliminar página</button></div>
+    <div id="pmDelC" hidden class="alert bad"><span></span><div><b>¿Eliminar esta página?</b><p>Se borra también de tu hoja, con sus imágenes.</p></div><div class="acts"><button type="button" class="btn sm danger" id="pmDelY">Eliminar</button></div></div>
+    <button class="btn pri">Guardar</button>`, f => {
+    const meta = Object.assign({}, store('pg')[p.id], { bg: f.querySelector('#pmBg .on').dataset.v, size: Number(f.querySelector('#pmFs .on').dataset.v), sec: $('#pmSec').value, pinned: $('#pmPin').checked, updated: Date.now() });
+    recPut('pg', p.id, meta);
+    if (meta.sec !== p.sec) { const s = store('sec')[meta.sec]; if (s) { S.ui.nb = s.nb; S.ui.sec = meta.sec; } }
+    render();
+  }, f => {
+    ['#pmBg', '#pmFs'].forEach(s => f.querySelector(s).onclick = e => { const b = e.target.closest('button'); if (!b) return; f.querySelectorAll(s + ' button').forEach(z => z.classList.toggle('on', z === b)); });
+    $('#pmDup').onclick = () => { const id = 'p' + uid(), now = Date.now(); const html = pgHtml(p.id); recPut('pg', id, Object.assign({}, store('pg')[p.id], { title: (p.title || 'Sin título') + ' (copia)', created: now, updated: now, pinned: false })); blobPut('pgx', id, html); S.ui.pg = id; closeSheet(); render(); toast('Página duplicada'); };
+    $('#pmDel').onclick = () => { $('#pmDelC').hidden = false; };
+    $('#pmDelY').onclick = () => { delPage(p.id); closeSheet(); render(); toast('Página eliminada'); };
+  });
+}
+
+/* ---- exportar PDF ---- */
+function exportDialog() {
+  if (S.ui.pg) pgSaveNow();
+  const hasPg = !!(S.ui.pg && pgGet(S.ui.pg));
+  openSheet('Exportar PDF', `<div class="seg" id="exS">${hasPg ? '<button type="button" data-v="pg" class="on">Esta página</button>' : ''}<button type="button" data-v="sec" class="${hasPg ? '' : 'on'}">Sección</button><button type="button" data-v="nb">Cuaderno</button><button type="button" data-v="agenda">Agenda</button></div>
+    <label class="ag-pin"><input type="checkbox" id="exImg" checked> Incluir imágenes</label>
+    <label class="ag-pin"><input type="checkbox" id="exHead" checked> Fecha y encabezado</label>
+    <label class="ag-pin"><input type="checkbox" id="exLines"> Fondo de líneas</label>
+    <p class="note">Se abre la ventana de impresión: elige <b>Guardar como PDF</b> como destino. En el celular: Compartir o Imprimir → Guardar como PDF.</p>
+    <button class="btn pri">Crear PDF</button>`, f => {
+    const scope = f.querySelector('#exS .on').dataset.v;
+    buildPrint(scope, { img: $('#exImg').checked, head: $('#exHead').checked, lines: $('#exLines').checked });
+  }, f => { f.querySelector('#exS').onclick = e => { const b = e.target.closest('button'); if (!b) return; f.querySelectorAll('#exS button').forEach(z => z.classList.toggle('on', z === b)); }; });
+}
+async function buildPrint(scope, o) {
+  let area = $('#printArea'); if (!area) { area = document.createElement('div'); area.id = 'printArea'; document.body.appendChild(area); }
+  const nb = NBS().find(n => n.id === S.ui.nb) || {};
+  let docTitle = '', parts = [];
+  if (scope === 'agenda') {
+    docTitle = 'Agenda';
+    const notes = S.data.notes.map(n => Object.assign({}, n, { kind: kindOf(n) }));
+    const block = (t, L) => L.length ? `<h2>${t}</h2><ul>${L.map(n => `<li>${n.due ? `<b>${dLabel(n.due)}${n.time ? ' ' + esc(n.time) : ''}</b> · ` : ''}${isDone(n) ? '☑ ' : n.kind === 'pendiente' ? '☐ ' : ''}${esc(n.text)}${n.tag ? ` <i>#${esc(n.tag)}</i>` : ''}${n.action ? `<br><small>${esc(n.action)}</small>` : ''}</li>`).join('')}</ul>` : '';
+    const by = (a, b) => (a.due || '9').localeCompare(b.due || '9') || (a.time || '').localeCompare(b.time || '');
+    parts.push(`<section class="pp">${block('Actividades', notes.filter(n => n.kind === 'evento' && n.due >= today()).sort(by))}${block('Pendientes', notes.filter(n => n.kind === 'pendiente' && !isDone(n)).sort(by))}${block('Notas', notes.filter(n => n.kind === 'nota'))}</section>`);
+  } else {
+    const pages = scope === 'pg' ? [pgGet(S.ui.pg)] : scope === 'sec' ? PGS(S.ui.sec).reverse() : SECS(S.ui.nb).flatMap(s => PGS(s.id).reverse());
+    docTitle = scope === 'pg' ? (pages[0].title || 'Página') : scope === 'sec' ? ((SECS(S.ui.nb).find(s => s.id === S.ui.sec) || {}).name || 'Sección') : (nb.name || 'Cuaderno');
+    for (const p of pages) {
+      const d = document.createElement('div'); d.innerHTML = pgHtml(p.id);
+      for (const im of d.querySelectorAll('img[data-img]')) { if (o.img) im.src = await imgSrc(im.dataset.img); else im.remove(); }
+      const sec = (store('sec')[p.sec] || {}).name || '';
+      parts.push(`<section class="pp ${o.lines ? 'lines' : ''}" style="--fs:${p.size || 15}px">${o.head ? `<div class="pp-meta">${new Date(p.created || Date.now()).toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · ${esc(nb.name || '')} › ${esc(sec)}</div>` : ''}<h1 class="pp-title">${esc(p.title || 'Sin título')}</h1><div class="pp-body">${d.innerHTML}</div></section>`);
+    }
+  }
+  area.innerHTML = `${o.head ? `<div class="pp-doc">${esc(docTitle)} · Mis Finanzas · ${dLabel(today())}</div>` : ''}${parts.join('')}`;
+  const prev = document.title; document.title = docTitle.replace(/[\\/:*?"<>|]/g, '') + ' ' + today();
+  await Promise.all([...area.querySelectorAll('img')].map(im => im.complete ? 0 : new Promise(r => { im.onload = im.onerror = r; })));
+  setTimeout(() => { try { window.print(); } catch (e) { toast('Tu navegador no permite imprimir aquí'); } setTimeout(() => { document.title = prev; }, 1500); }, 120);
+}
+
+/* ---- tarjeta de páginas fijadas en Inicio ---- */
+function pinnedPagesCard() {
+  const L = PGS().filter(p => p.pinned).slice(0, 4); if (!L.length) return '';
+  return `<section class="card side-card"><header style="margin:0"><h2>Notas fijadas</h2><a href="#bloc">Bloc</a></header>${L.map(p => `<button type="button" class="bl-pg" data-act="blOpen" data-v="${p.id}" style="--c:${(store('sec')[p.sec] || {}).color || '#8c958f'}"><b>${esc(p.title || 'Sin título')}</b><small>${esc((p.snip || '').slice(0, 70))}</small></button>`).join('')}</section>`;
+}
+
+/* ---- panel rápido de agenda (barra superior) ---- */
+function agPanelHTML() {
+  const td = today(), ws = weekStart(td), it = agItemsOn(td), d = new Date(td + 'T12:00');
+  const strip = Array.from({ length: 7 }, (_, i) => { const ds = addDays(ws, i); return `<button type="button" class="agp-d ${ds === td ? 'on' : ''}" data-act="agpDay" data-v="${ds}"><span>${WEEK[i][0]}</span><b>${new Date(ds + 'T12:00').getDate()}</b>${agDot(ds) ? '<i></i>' : ''}</button>`; }).join('');
+  const any = it.ev.length || it.td.length || it.pays.length;
+  return `<div class="agp-head"><b>Hoy · ${WDAY_FULL[d.getDay()]} ${d.getDate()}</b><a href="#agenda" data-act="agpClose">Abrir agenda ›</a></div>
+    <div class="agp-strip">${strip}</div>
+    ${any ? `<div class="ag-evs">${it.ev.map(agEventRow).join('')}</div><div class="ag-todos">${it.pays.filter(x => !x.s.marked).map(agPayRow).join('')}${it.td.map(n => agTodoRow(n, false)).join('')}</div>` : '<p class="note">Nada para hoy.</p>'}
+    <form id="agpQuick" class="ag-quick"><input id="agpQ" type="text" autocomplete="off" placeholder="Anota algo: llamar a cliente mañana 3pm"><button class="btn sm pri" type="submit">+</button></form>`;
+}
+function agPanelCount() { const it = agItemsOn(today()); return it.ev.filter(n => !isDone(n)).length + it.td.filter(n => !isDone(n)).length + it.pays.filter(x => !x.s.marked).length; }
+function renderAgBtn() {
+  const b = $('#agBtn'); if (!b || !S.data) return;
+  const n = agPanelCount(), badge = b.querySelector('.badge'); badge.hidden = !n; badge.textContent = n;
+  const p = $('#agPanel'); if (p && !p.hidden && !p.contains(document.activeElement)) p.innerHTML = agPanelHTML();
+}
+
 /* ---- Notas ---- */
 function vNotas() {
   const L = S.data.notes.slice().sort((a, b) => (a.status === 'Hecho') - (b.status === 'Hecho') || (b.date || '').localeCompare(a.date || ''));
@@ -1409,6 +1800,20 @@ const ACT = {
   agToggle: el => { const n = S.data.notes.find(x => x.id === el.dataset.id); if (!n) return; const m = (S.noteMeta || {})[n.id] || {}; noteSave(Object.assign({}, n, { kind: kindOf(n), time: n.time || m.time || '', color: n.color || m.color || '', pinned: n.pinned || !!m.pinned, status: isDone(n) ? 'Pendiente' : 'Hecho' })); if (!isDone(n)) toast('Hecho'); },
   agTagF: el => { S.ui.agTag = el.dataset.v; render(); },
   agBackup: () => agBackup(),
+  blNb: el => { S.ui.nb = el.dataset.v; S.ui.sec = ''; S.ui.blocQ = ''; render(); },
+  blSec: el => { S.ui.sec = el.dataset.v; S.ui.blocQ = ''; S.ui.pg = ''; S.ui.blocPane = 'pages'; render(); },
+  blPg: el => { const p = pgGet(el.dataset.v); if (p) { const s = store('sec')[p.sec]; if (s) { S.ui.nb = s.nb; S.ui.sec = p.sec; } } S.ui.pg = el.dataset.v; S.ui.blocPane = 'editor'; render(); },
+  blOpen: el => { const p = pgGet(el.dataset.v); if (p) { const s = store('sec')[p.sec]; if (s) { S.ui.nb = s.nb; S.ui.sec = p.sec; } S.ui.pg = p.id; S.ui.blocPane = 'editor'; } go('bloc'); },
+  blPane: el => { S.ui.blocPane = el.dataset.v; if (el.dataset.v !== 'editor') { if (edTimer) pgSaveNow(); } render(); },
+  blNewNb: () => nameSheet('Nuevo cuaderno', '', NB_COLORS[NBS().length % NB_COLORS.length], (v, c) => { const id = 'n' + uid(), s = 's' + uid(); recPut('nb', id, { name: v, color: c, order: NBS().length + 1 }); recPut('sec', s, { nb: id, name: 'General', color: c, order: 1 }); S.ui.nb = id; S.ui.sec = s; S.ui.pg = ''; }),
+  blNewSec: () => { const nb = NBS().find(n => n.id === curNb()); nameSheet('Nueva sección', '', NB_COLORS[SECS(nb.id).length % NB_COLORS.length], (v, c) => { const id = 's' + uid(); recPut('sec', id, { nb: nb.id, name: v, color: c, order: SECS(nb.id).length + 1 }); S.ui.sec = id; S.ui.pg = ''; S.ui.blocPane = 'pages'; }); },
+  blNbMenu: el => { const n = NBS().find(x => x.id === el.dataset.v); nameSheet('Cuaderno', n.name, n.color, (v, c) => recPut('nb', n.id, Object.assign({}, store('nb')[n.id], { name: v, color: c })), NBS().length > 1 ? () => { SECS(n.id).forEach(s => delSection(s.id)); opq('rec.delete', { coll: 'nb', id: n.id }); S.ui.nb = ''; } : null); },
+  blSecMenu: el => { const s = Object.assign({ id: el.dataset.v }, store('sec')[el.dataset.v]); nameSheet('Sección', s.name, s.color, (v, c) => recPut('sec', s.id, Object.assign({}, store('sec')[s.id], { name: v, color: c })), SECS(s.nb).length > 1 ? () => { delSection(s.id); S.ui.sec = ''; } : null); },
+  blNewPg: el => newPage(el.dataset.v),
+  blPageMenu: () => pageMenu(),
+  blExport: () => exportDialog(),
+  agpDay: el => { S.ui.agDay = el.dataset.v; S.ui.agTab = 'dia'; $('#agPanel').hidden = true; go('agenda'); },
+  agpClose: () => { $('#agPanel').hidden = true; },
   homeDay: el => { S.ui.homeDay = el.dataset.v; render(); },
   newMovOn: el => editMov(null, { date: el.dataset.v }),
   stPeriod: el => { S.ui.stPeriod = el.dataset.v; render(); },
@@ -1466,6 +1871,7 @@ document.addEventListener('input', e => { if (e.target === calcTarget) calcPrevi
 document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('calc') && isExpr(e.target.value)) { const z = calc(e.target.value); if (isFinite(z)) { e.preventDefault(); e.target.value = String(r2(z)); e.target.dispatchEvent(new Event('input', { bubbles: true })); calcPreview(); } } });
 document.addEventListener('input', e => {
   const id = e.target.id;
+  if (id === 'blSearch') { S.ui.blocQ = e.target.value; clearTimeout(window._blT); window._blT = setTimeout(() => { const pos = e.target.selectionStart; render(); const q = $('#blSearch'); if (q) { q.focus(); q.setSelectionRange(pos, pos); } }, 250); }
   if (id === 'agSearch') { S.ui.agQ = e.target.value; clearTimeout(window._agT); window._agT = setTimeout(() => { const pos = e.target.selectionStart; render(); const q = $('#agSearch'); if (q) { q.focus(); q.setSelectionRange(pos, pos); } }, 250); }
   if (id === 'agQ' || id === 'agQH') { const h = $('#agQhint'); if (h) { const p = parseTodo(e.target.value); h.textContent = e.target.value.trim() ? `Se guardará: “${p.text}”${p.due ? ' · ' + agDueLabel(p.due) : ' · sin fecha'}${p.time ? ' · ' + p.time : ''}` : ''; } }
   if (id === 'fq') { S.ui.q = e.target.value; clearTimeout(window._qT); window._qT = setTimeout(() => { const pos = e.target.selectionStart; render(); const q = $('#fq'); q.focus(); q.setSelectionRange(pos, pos); }, 250); }
@@ -1473,6 +1879,7 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => {
   const id = e.target.id, map = { fPeriod: 'fPeriod', fType: 'fType', fAcc: 'fAcc', fCat: 'fCat' };
   if (map[id]) { S.ui[map[id]] = e.target.value; render(); }
+  if (id === 'blTpl' && e.target.value) { newPage(e.target.value); return; }
   if (id === 'impFile') {
     const file = e.target.files[0]; if (!file) return;
     file.text().then(t => { const j = JSON.parse(t); S.data = normalize(j.data || j); save(); render(); toast('Copia importada'); }).catch(() => toast('Ese archivo no es una copia válida'));
@@ -1480,7 +1887,7 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('submit', e => {
   if (e.target.id === 'connForm') { e.preventDefault(); S.cfg.url = $('#cUrl').value.trim(); S.cfg.token = $('#cTok').value.trim(); S.syncErr = ''; save(); sync(true); }
-  if (e.target.id === 'agQuick' || e.target.id === 'agQuickHome') { e.preventDefault(); const inp = e.target.querySelector('input'); const p = parseTodo(inp.value); if (!p.text) return toast('Escribe el pendiente'); noteSave({ id: uid(), date: today(), tag: '', text: p.text, action: '', due: p.due, status: 'Pendiente', kind: 'pendiente', time: p.time, color: 'verde', pinned: false }); toast(p.due ? `Pendiente para ${agDueLabel(p.due).toLowerCase()}${p.time ? ' a las ' + p.time : ''}` : 'Pendiente agregado'); setTimeout(() => { const n = $('#' + inp.id); n && n.focus(); }, 30); return; }
+  if (e.target.id === 'agQuick' || e.target.id === 'agQuickHome' || e.target.id === 'agpQuick') { e.preventDefault(); const inp = e.target.querySelector('input'); const p = parseTodo(inp.value); if (!p.text) return toast('Escribe el pendiente'); noteSave({ id: uid(), date: today(), tag: '', text: p.text, action: '', due: p.due, status: 'Pendiente', kind: 'pendiente', time: p.time, color: 'verde', pinned: false }); toast(p.due ? `Pendiente para ${agDueLabel(p.due).toLowerCase()}${p.time ? ' a las ' + p.time : ''}` : 'Pendiente agregado'); setTimeout(() => { if (inp.id === 'agpQ') { $('#agPanel').innerHTML = agPanelHTML(); } const n = $('#' + inp.id); n && n.focus(); }, 30); return; }
   if (e.target.id === 'envForm') { e.preventDefault(); const amt = $('#eAmt').value.trim() ? calcVal('#eAmt') : r2($('#eAmt').placeholder); if (!(amt > 0)) return toast('Escribe el monto por semana'); S.cfg.envelope = { on: true, amount: amt, acc: $('#eAcc').value }; pushSettings(); render(); toast('Sobre semanal activado'); }
   if (e.target.id === 'anaForm') { e.preventDefault(); S.cfg.emergencyMonths = Number($('#aEm').value) || 6; S.cfg.name = $('#aName').value.trim(); pushSettings(); S.cfg.needs = [...e.target.querySelectorAll('input[name=need]:checked')].map(i => i.value); save(); render(); toast('Guardado'); }
   if (e.target.id === 'catForm') { e.preventDefault(); const sub = $('#nSub').value.trim(), cat = $('#nCat').value.trim(); if (!sub || !cat) return; if (catMap()[sub]) return toast('Esa subcategoría ya existe'); op('cat.add', { sub, cat, type: $('#nType').value }); toast('Subcategoría agregada'); }
@@ -1499,6 +1906,10 @@ function followMonth(force) {
   if (now !== S.ui.seenYm || force) { S.ui.seenYm = now; if (S.ui.ym !== now) { S.ui.ym = now; S.ui.homeDay = ''; S.ui.calDay = ''; render(); } }
 }
 setInterval(() => followMonth(false), 60000);
+$('#agBtn').onclick = e => { e.stopPropagation(); const p = $('#agPanel'); p.hidden = !p.hidden; if (!p.hidden) p.innerHTML = agPanelHTML(); $('#notifs').hidden = true; if (TP.open && TP.mode === 'drop') { TP.open = false; tapeRender(); } };
+$('#blocBtn').onclick = () => { $('#agPanel').hidden = true; go('bloc'); };
+document.addEventListener('click', e => { const p = $('#agPanel'); if (p && !p.hidden && !e.target.closest('#agPanel') && !e.target.closest('#agBtn') && $('#sheetBg').hidden) p.hidden = true; });
+document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && S.ui.view === 'bloc') { e.preventDefault(); pgSaveNow(); toast('Guardado'); } });
 $('#bell').onclick = e => { e.stopPropagation(); $('#notifs').hidden = !$('#notifs').hidden; if (typeof TP !== 'undefined' && TP.open && TP.mode === 'drop') { TP.open = false; tapeRender(); } };
 document.addEventListener('click', e => { const p = $('#notifs'); if (p && !p.hidden && (!e.target.closest('#notifs') || e.target.closest('.nf'))) p.hidden = true; });
 $('#syncPill').onclick = () => S.cfg.url ? sync(true) : go('ajustes');
