@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '2.0.3';
+const VERSION = '2.0.4';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -1234,7 +1234,7 @@ function vBloc() {
   const p = S.ui.pg && pgGet(S.ui.pg);
   const ed = p ? editorHTML(p) : `<div class="bl-empty"><p>Elige una página o crea una nueva.</p><div class="btns">${Object.entries(TEMPLATES).map(([k, [t]]) => `<button type="button" class="btn sm ${k === 'blanco' ? 'pri' : ''}" data-act="blNewPg" data-v="${k}">${t}</button>`).join('')}</div></div>`;
   return `<div class="bloc pane-${pane}">
-    <div class="bl-mhead"><button type="button" class="linkbtn" data-act="blPane" data-v="${pane === 'editor' ? 'pages' : 'tree'}">${pane === 'editor' ? '‹ ' + esc(secObj ? secObj.name : 'Páginas') : pane === 'pages' ? '‹ Cuadernos' : ''}</button><b>${pane === 'tree' ? 'Bloc de notas' : ''}</b><button type="button" class="btn sm" data-act="blExport">PDF</button></div>
+    <div class="bl-mhead"><button type="button" class="linkbtn" data-act="blPane" data-v="${pane === 'editor' ? 'pages' : 'tree'}">${pane === 'editor' ? '‹ ' + esc(secObj ? secObj.name : 'Páginas') : pane === 'pages' ? '‹ Cuadernos' : ''}</button><b>${pane === 'tree' ? 'Bloc de notas' : ''}</b><span class="bl-macts">${pane === 'editor' && S.ui.pg ? `<button type="button" class="btn sm ed-del" data-act="blDelPg" data-v="${S.ui.pg}" title="Eliminar página" aria-label="Eliminar página"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button><button type="button" class="btn sm" data-act="blPageMenu">Página</button>` : ''}<button type="button" class="btn sm pri" data-act="blExport">PDF</button></span></div>
     ${tree}${pages}<div class="bl-ed">${ed}</div></div>`;
 }
 function editorHTML(p) {
@@ -1484,6 +1484,7 @@ function edBind() {
   });
   ed.addEventListener('drop', e => { const files = [...(e.dataTransfer?.files || [])].filter(f => f.type.startsWith('image/')); if (files.length) { e.preventDefault(); insertImageFiles(files); } });
   const bar = $('#edBar');
+  const barEnd = () => bar.classList.toggle('end', bar.scrollLeft + bar.clientWidth >= bar.scrollWidth - 4); bar.addEventListener('scroll', barEnd, { passive: true }); barEnd();
   bar.addEventListener('mousedown', e => { if (e.target.closest('button.tb')) e.preventDefault(); });
   bar.addEventListener('click', e => { const b = e.target.closest('[data-cmd]'); if (b) edCmd(b.dataset.cmd); });
   bar.addEventListener('change', e => {
