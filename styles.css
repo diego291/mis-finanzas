@@ -498,3 +498,54 @@ body[data-design="c"] .next-step b { color: var(--cta-bg); }
 .cash .calc-bar { grid-column: 1 / -1; }
 
 .month #mLabel { cursor: pointer; }
+
+/* ---------- Cuenta rápida (cinta) ---------- */
+#calcBtn.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.bell .badge.info { background: var(--accent); color: var(--accent-fg); }
+.tape { position: absolute; z-index: 45; top: calc(100% + 8px); right: -60px; width: 330px; max-width: calc(100vw - 24px); max-height: calc(100vh - 90px); overflow: auto; background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: 0 14px 40px rgb(0 0 0 / .3); padding: 10px; display: grid; gap: 8px; }
+.tape.float { position: fixed; right: auto; z-index: 55; }
+.tape.float .tp-head { cursor: move; touch-action: none; }
+.tp-head { display: flex; justify-content: space-between; align-items: center; padding: 2px 2px 0 4px; }
+.tp-head b { font-size: .95rem; }
+.tp-tools { display: flex; gap: 2px; }
+.tp-tools button { width: 32px; height: 32px; border: 0; border-radius: 8px; background: none; color: var(--muted); display: grid; place-items: center; }
+.tp-tools button:hover { background: var(--surface-2); color: var(--fg); }
+.tp-tools svg { width: 17px; height: 17px; }
+.tp-lines { display: grid; background: var(--surface-2); border-radius: 10px; padding: 2px 8px; max-height: 190px; overflow: auto; }
+.tp-line { display: flex; justify-content: space-between; gap: 10px; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--fg); padding: 8px 0; font-size: .86rem; text-align: left; }
+.tp-line:last-child { border-bottom: 0; }
+.tp-line span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tp-line b { font-family: var(--f-num); font-weight: 500; white-space: nowrap; }
+.tp-line.neg b { color: var(--pos); }
+.tp-line.on { background: var(--accent-soft); margin: 0 -8px; padding: 8px; }
+.tp-empty { margin: 0; padding: 10px 0; color: var(--muted); font-size: .82rem; line-height: 1.4; }
+.tp-cur { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 6px; align-items: center; }
+.tp-sign { height: 34px; border: 1px solid var(--line); background: var(--surface-2); border-radius: 8px; font-family: var(--f-num); font-size: 1.1rem; font-weight: 700; color: var(--neg); }
+.tp-cur.neg .tp-sign { color: var(--pos); }
+.tp-cur input { min-width: 0; height: 34px; border: 1px solid var(--line); background: var(--surface-2); border-radius: 8px; padding: 0 9px; font-size: .86rem; }
+.tp-cur input:focus { outline: none; border-color: var(--accent); }
+.tp-amt { font-family: var(--f-num); font-size: 1.15rem; text-align: right; display: grid; justify-items: end; line-height: 1.1; min-width: 70px; }
+.tp-amt small { font-size: .68rem; color: var(--muted); }
+.tp-total { display: flex; justify-content: space-between; align-items: baseline; border-top: 2px solid var(--fg); padding-top: 6px; }
+.tp-total span { font-size: .8rem; color: var(--muted); font-weight: 600; }
+.tp-total b { font-family: var(--f-num); font-size: 1.5rem; font-weight: 500; color: var(--accent); }
+.tp-total b.neg { color: var(--pos); }
+.tp-keys { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+.tp-keys button { height: 42px; border: 0; border-radius: 10px; background: var(--surface-2); color: var(--fg); font-family: var(--f-num); font-size: 1.1rem; }
+.tp-keys button.op { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.tp-keys button.ok { background: var(--hero-accent); color: var(--hero-bg); font-weight: 800; }
+.tp-keys button:active { filter: brightness(.9); }
+.tp-acts { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
+.tp-acts .btn[disabled] { opacity: .45; }
+.tape-bubble { position: fixed; z-index: 54; right: max(18px, env(safe-area-inset-right, 0px)); bottom: calc(96px + env(safe-area-inset-bottom, 0px)); display: inline-flex; align-items: center; gap: 7px; border: 0; border-radius: 999px; padding: 10px 14px 10px 11px; background: var(--hero-bg); color: var(--hero-accent); box-shadow: 0 8px 24px rgb(0 0 0 / .3); touch-action: none; }
+.tape-bubble svg { width: 20px; height: 20px; }
+.tape-bubble b { font-family: var(--f-num); font-weight: 500; font-size: .92rem; }
+@media (min-width: 900px) { .tape-bubble { bottom: 28px; } }
+@media (max-width: 600px) { .tape:not(.float) { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 60px); left: 12px; right: 12px; width: auto; max-width: none; } }
+
+@media (max-width: 600px) {
+  .top { gap: 6px; }
+  .month span { min-width: 72px !important; font-size: .86rem; }
+  .month button { padding: 6px 8px; }
+  .sync { max-width: 34px !important; padding: 6px 12px; } .sync span { display: none; }
+}

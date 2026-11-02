@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '1.6.1';
+const VERSION = '1.7.0';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -400,7 +400,7 @@ function render() {
   document.body.dataset.design = S.cfg.design;
   if (S.cfg.theme === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = S.cfg.theme;
   const tc = { a: '#14171a', b: '#0b2239', c: '#0f141b' }[S.cfg.design]; document.querySelector('meta[name=theme-color]')?.setAttribute('content', tc);
-  $('#mLabel').textContent = ymLabel(S.ui.ym);
+  { const [yy, mm] = S.ui.ym.split('-').map(Number); $('#mLabel').textContent = window.innerWidth < 600 ? `${MSHORT[mm - 1]} ${yy}` : ymLabel(S.ui.ym); }
   renderNav(); updatePill(); try { renderBell(); } catch (e) { console.error(e); }
   const fn = { inicio: vInicio, estados: vEstados, movimientos: vMovs, cuentas: vCuentas, metas: vMetas, presupuesto: vPresupuesto, pagos: vPagos, deudas: vDeudas, estadisticas: vStats, revision: vRevision, notas: vNotas, ajustes: vAjustes }[S.ui.view];
   try { $('#view').innerHTML = `<div class="wrap">${fn()}</div>`; S.lastError = ''; }
@@ -1302,7 +1302,7 @@ function followMonth(force) {
   if (now !== S.ui.seenYm || force) { S.ui.seenYm = now; if (S.ui.ym !== now) { S.ui.ym = now; S.ui.homeDay = ''; S.ui.calDay = ''; render(); } }
 }
 setInterval(() => followMonth(false), 60000);
-$('#bell').onclick = e => { e.stopPropagation(); $('#notifs').hidden = !$('#notifs').hidden; };
+$('#bell').onclick = e => { e.stopPropagation(); $('#notifs').hidden = !$('#notifs').hidden; if (typeof TP !== 'undefined' && TP.open && TP.mode === 'drop') { TP.open = false; tapeRender(); } };
 document.addEventListener('click', e => { const p = $('#notifs'); if (p && !p.hidden && (!e.target.closest('#notifs') || e.target.closest('.nf'))) p.hidden = true; });
 $('#syncPill').onclick = () => S.cfg.url ? sync(true) : go('ajustes');
 window.addEventListener('hashchange', route);
@@ -1312,6 +1312,147 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) { awa
 setInterval(() => { if (!document.hidden) { sync(); } }, 120000);
 setInterval(updatePill, 30000);
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); S.installEvt = e; render(); });
+
+/* ---- Calculadora de cinta (botón junto a la campana / burbuja flotante) ---- */
+const TAPE_LS = 'misfinanzas.tape';
+const TP = { lines: [], cur: { note: '', amt: '', sign: 1 }, edit: -1, mode: 'drop', x: null, y: null, open: false };
+try { Object.assign(TP, JSON.parse(localStorage.getItem(TAPE_LS) || '{}'), { open: false }); } catch (e) { }
+const tapeSave = () => { try { localStorage.setItem(TAPE_LS, JSON.stringify({ lines: TP.lines, cur: TP.cur, mode: TP.mode, x: TP.x, y: TP.y })); } catch (e) { } };
+const lineVal = l => { const v = calc(l.amt); return isFinite(v) ? r2(v) * (l.sign || 1) : 0; };
+const tapeTotal = () => r2(sum(TP.lines, lineVal) + (TP.edit < 0 ? lineVal(TP.cur) : 0));
+function tapeCommit() {
+  const l = TP.cur; if (!l.amt || !isFinite(calc(l.amt))) return false;
+  const rec = { note: (l.note || '').trim(), amt: String(r2(calc(l.amt))), sign: l.sign || 1 };
+  if (TP.edit >= 0) TP.lines[TP.edit] = rec; else TP.lines.push(rec);
+  TP.cur = { note: '', amt: '', sign: 1 }; TP.edit = -1; return true;
+}
+function tapeHTML() {
+  const total = tapeTotal(), cur = TP.cur, ex = isExpr(cur.amt), cv = calc(cur.amt);
+  const n = TP.lines.filter(l => lineVal(l) > 0).length + (TP.edit < 0 && lineVal(cur) > 0 ? 1 : 0);
+  return `<div class="tp-head" data-tp="drag"><b>Cuenta rápida</b><span class="tp-tools">
+      <button type="button" data-tp="mode" aria-label="${TP.mode === 'float' ? 'Fijar junto a la campana' : 'Hacer flotante'}" title="${TP.mode === 'float' ? 'Fijar junto a la campana' : 'Hacer flotante'}">${TP.mode === 'float' ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M9 4v6l-3 4h12l-3-4V4M8 4h8M12 14v6"/></svg>' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><rect x="4" y="8" width="12" height="12" rx="2"/><path d="M10 4h10v10"/></svg>'}</button>
+      ${TP.mode === 'float' ? '<button type="button" data-tp="min" aria-label="Minimizar" title="Minimizar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12"/></svg></button>' : ''}
+      <button type="button" data-tp="close" aria-label="Cerrar" title="Cerrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span></div>
+    <div class="tp-lines">${TP.lines.map((l, i) => `<button type="button" class="tp-line ${i === TP.edit ? 'on' : ''} ${l.sign < 0 ? 'neg' : ''}" data-tp="pick" data-i="${i}"><span>${esc(l.note || 'Sin nota')}</span><b>${l.sign < 0 ? '−' : '+'} ${r2(calc(l.amt)).toFixed(2)}</b></button>`).join('') || '<p class="tp-empty">Suma y resta como en una lista: escribe el monto, ponle nota y presiona ↵.</p>'}</div>
+    <div class="tp-cur ${cur.sign < 0 ? 'neg' : ''}">
+      <button type="button" class="tp-sign" data-tp="sign" aria-label="Cambiar a ${cur.sign < 0 ? 'sumar' : 'restar'}">${cur.sign < 0 ? '−' : '+'}</button>
+      <input id="tpNote" type="text" autocomplete="off" placeholder="Nota (opcional)" value="${esc(cur.note)}">
+      <span class="tp-amt">${ex ? `<small>${esc(cur.amt.replace(/\*/g, '×').replace(/\//g, '÷'))}</small>${isFinite(cv) ? r2(cv).toFixed(2) : '…'}` : esc(cur.amt || '0')}</span>
+    </div>
+    <div class="tp-total"><span>Total${TP.lines.length ? ` · ${TP.lines.length} línea${TP.lines.length > 1 ? 's' : ''}` : ''}</span><b class="${total < 0 ? 'neg' : ''}">${money(total)}</b></div>
+    <div class="tp-keys">${['7', '8', '9', '-', '4', '5', '6', '+', '1', '2', '3', '*', '.', '0', 'del', 'ok'].map(k => `<button type="button" data-tp="key" data-v="${k}" class="${'+-*'.includes(k) ? 'op' : ''} ${k === 'ok' ? 'ok' : ''}" aria-label="${{ del: 'Borrar', ok: 'Agregar línea', '-': 'Restar', '+': 'Sumar', '*': 'Multiplicar', '.': 'Punto' }[k] || k}">${{ del: '⌫', ok: '↵', '-': '−', '*': '×' }[k] || k}</button>`).join('')}</div>
+    <div class="tp-acts">
+      ${TP.edit >= 0 ? `<button type="button" class="btn sm danger" data-tp="delLine">Quitar línea</button><button type="button" class="btn sm" data-tp="cancelEdit">Cancelar</button>` : `<button type="button" class="btn sm" data-tp="clear">Limpiar</button><button type="button" class="btn sm" data-tp="copy">Copiar</button>`}
+      <span style="flex:1"></span>
+      ${n > 1 ? `<button type="button" class="btn sm" data-tp="regMany">Registrar ${n} gastos</button>` : ''}
+      <button type="button" class="btn sm pri" data-tp="regOne" ${Math.abs(total) < .005 ? 'disabled' : ''}>Registrar ${money(Math.abs(total))}</button>
+    </div>`;
+}
+function tapeRender() {
+  const box = $('#tape'), bub = $('#tapeBubble');
+  if (!box) return;
+  box.hidden = !TP.open; box.classList.toggle('float', TP.mode === 'float');
+  bub.hidden = !(TP.mode === 'float' && !TP.open && (TP.lines.length || TP.cur.amt));
+  bub.querySelector('b').textContent = money(tapeTotal());
+  const btn = $('#calcBtn'); btn.classList.toggle('on', TP.open);
+  const dot = btn.querySelector('.badge'); dot.hidden = !(TP.lines.length && !TP.open); dot.textContent = TP.lines.length;
+  if (!TP.open) return;
+  const focusNote = document.activeElement && document.activeElement.id === 'tpNote', caret = focusNote ? document.activeElement.selectionStart : null;
+  box.innerHTML = tapeHTML();
+  if (TP.mode === 'float') {
+    const w = box.offsetWidth, h = box.offsetHeight;
+    const x = TP.x == null ? window.innerWidth - w - 24 : Math.min(Math.max(8, TP.x), window.innerWidth - w - 8);
+    const y = TP.y == null ? 90 : Math.min(Math.max(8, TP.y), window.innerHeight - Math.min(h, window.innerHeight - 16) - 8);
+    box.style.left = x + 'px'; box.style.top = y + 'px';
+  } else { box.style.left = ''; box.style.top = ''; }
+  if (focusNote) { const n = $('#tpNote'); n.focus(); try { n.setSelectionRange(caret, caret); } catch (e) { } }
+}
+function tapeKey(v) {
+  const c = TP.cur; let a = c.amt || ''; const seg = a.split(/[+\-*/]/).pop();
+  if (v === 'ok') { if (!tapeCommit()) return; }
+  else if (v === 'del') { if (a) a = a.slice(0, -1); else if (TP.edit < 0 && TP.lines.length) { TP.edit = TP.lines.length - 1; TP.cur = Object.assign({}, TP.lines[TP.edit]); tapeRender(); return; } }
+  else if ('+-*'.includes(v)) {
+    if (!a && v !== '*') { c.sign = v === '-' ? -1 : 1; }
+    else if (a && '+-*/'.includes(a.slice(-1))) a = a.slice(0, -1) + v;
+    else if (a && (v === '+' || v === '-')) { tapeCommit(); TP.cur.sign = v === '-' ? -1 : 1; tapeSave(); tapeRender(); return; }
+    else if (a) a += v;
+  }
+  else if (v === '.') { if (!seg.includes('.')) a += seg ? '.' : '0.'; }
+  else if (!(seg.includes('.') && seg.split('.')[1].length >= 2) && a.length < 24) a = a === '0' ? v : a + v;
+  if (v !== 'ok') c.amt = a;
+  tapeSave(); tapeRender();
+}
+function tapeRegister(many) {
+  if (TP.cur.amt) tapeCommit();
+  const lines = TP.lines.filter(l => Math.abs(lineVal(l)) > .004);
+  if (!lines.length) return;
+  if (!many) {
+    const total = tapeTotal(), note = lines.map(l => (l.sign < 0 ? '−' : '') + (l.note || r2(calc(l.amt)).toFixed(2))).join(', ');
+    TP.open = false; tapeRender();
+    editMov(null, { type: total >= 0 ? 'Gasto' : 'Ingreso', amount: Math.abs(total), desc: lines.length === 1 ? (lines[0].note || '') : '', notes: lines.length > 1 ? 'Cuenta rápida: ' + note : '' }, { after: () => { TP.lines = []; TP.cur = { note: '', amt: '', sign: 1 }; tapeSave(); tapeRender(); } });
+    return;
+  }
+  const queue = lines.filter(l => lineVal(l) > 0);
+  TP.open = false; tapeRender();
+  const next = () => {
+    const l = queue.shift(); if (!l) { TP.lines = TP.lines.filter(x => lineVal(x) <= 0); tapeSave(); tapeRender(); toast('Gastos de la cuenta rápida registrados'); return; }
+    const p = parseQuick((l.note || '') + ' ' + l.amt);
+    editMov(null, Object.assign({ type: 'Gasto' }, p.sub && catMap()[p.sub]?.type === 'Gasto' ? { sub: p.sub } : {}, { amount: r2(calc(l.amt)), desc: l.note || '' }), { after: () => { TP.lines = TP.lines.filter(x => x !== l); tapeSave(); setTimeout(next, 250); } });
+    toast(`Gasto ${lines.filter(x => lineVal(x) > 0).length - queue.length} de ${lines.filter(x => lineVal(x) > 0).length}: elige categoría y guarda`);
+  };
+  next();
+}
+function tapeInit() {
+  const box = $('#tape');
+  $('#calcBtn').onclick = e => { e.stopPropagation(); TP.open = !TP.open; $('#notifs').hidden = true; tapeRender(); };
+  $('#tapeBubble').onclick = () => { TP.open = true; tapeRender(); };
+  box.addEventListener('click', e => {
+    e.stopPropagation();
+    const b = e.target.closest('[data-tp]'); if (!b || b.dataset.tp === 'drag') return;
+    const a = b.dataset.tp;
+    if (a === 'key') return tapeKey(b.dataset.v);
+    if (a === 'close') { TP.open = false; }
+    else if (a === 'min') { TP.open = false; }
+    else if (a === 'mode') { TP.mode = TP.mode === 'float' ? 'drop' : 'float'; }
+    else if (a === 'sign') { TP.cur.sign = (TP.cur.sign || 1) * -1; }
+    else if (a === 'pick') { if (TP.cur.amt && TP.edit < 0) tapeCommit(); const i = Number(b.dataset.i); TP.edit = i; TP.cur = Object.assign({}, TP.lines[i]); }
+    else if (a === 'delLine') { TP.lines.splice(TP.edit, 1); TP.edit = -1; TP.cur = { note: '', amt: '', sign: 1 }; }
+    else if (a === 'cancelEdit') { TP.edit = -1; TP.cur = { note: '', amt: '', sign: 1 }; }
+    else if (a === 'clear') { if (!TP.lines.length && !TP.cur.amt) return; TP.lines = []; TP.cur = { note: '', amt: '', sign: 1 }; TP.edit = -1; toast('Cuenta rápida limpia'); }
+    else if (a === 'copy') { const t = TP.lines.map(l => `${l.sign < 0 ? '−' : '+'} ${r2(calc(l.amt)).toFixed(2)}${l.note ? '  ' + l.note : ''}`).concat(['= ' + money(tapeTotal())]).join('\n'); navigator.clipboard?.writeText(t).then(() => toast('Cuenta copiada'), () => toast('No se pudo copiar')); return; }
+    else if (a === 'regOne') return tapeRegister(false);
+    else if (a === 'regMany') return tapeRegister(true);
+    tapeSave(); tapeRender();
+  });
+  box.addEventListener('input', e => { if (e.target.id === 'tpNote') { TP.cur.note = e.target.value; tapeSave(); } });
+  box.addEventListener('keydown', e => {
+    if (e.target.id === 'tpNote') { if (e.key === 'Enter') { e.preventDefault(); tapeKey('ok'); } return; }
+  });
+  document.addEventListener('keydown', e => {
+    if (!TP.open || ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName) || !$('#sheetBg').hidden) return;
+    const k = { x: '*', X: '*', ',': '.', Enter: 'ok', '=': 'ok', Backspace: 'del' }[e.key] || e.key;
+    if (/^[0-9.+\-*]$/.test(k) || k === 'ok' || k === 'del') { e.preventDefault(); tapeKey(k); }
+    else if (e.key === 'Escape') { TP.open = false; tapeRender(); }
+  });
+  document.addEventListener('click', e => { if (TP.open && TP.mode === 'drop' && !e.target.closest('#tape') && !e.target.closest('#calcBtn') && $('#sheetBg').hidden) { TP.open = false; tapeRender(); } });
+  // arrastrar en modo flotante (y la burbuja)
+  const drag = (el, onEnd) => {
+    let sx, sy, ox, oy, moved = false;
+    el.addEventListener('pointerdown', e => {
+      const isHead = e.target.closest('[data-tp="drag"]') && !e.target.closest('button');
+      if (el === box && !(TP.mode === 'float' && isHead)) return;
+      sx = e.clientX; sy = e.clientY; const r = el.getBoundingClientRect(); ox = r.left; oy = r.top; moved = false;
+      const mv = ev => { const dx = ev.clientX - sx, dy = ev.clientY - sy; if (Math.abs(dx) + Math.abs(dy) > 4) moved = true; el.style.left = Math.min(Math.max(4, ox + dx), window.innerWidth - el.offsetWidth - 4) + 'px'; el.style.top = Math.min(Math.max(4, oy + dy), window.innerHeight - 50) + 'px'; el.style.right = 'auto'; el.style.bottom = 'auto'; };
+      const up = () => { document.removeEventListener('pointermove', mv); document.removeEventListener('pointerup', up); if (moved) onEnd(el.getBoundingClientRect()); };
+      document.addEventListener('pointermove', mv); document.addEventListener('pointerup', up);
+    });
+    el.addEventListener('click', e => { if (moved) { e.stopImmediatePropagation(); e.preventDefault(); moved = false; } }, true);
+  };
+  drag(box, r => { TP.x = r.left; TP.y = r.top; tapeSave(); });
+  drag($('#tapeBubble'), r => { TP.bx = r.left; TP.by = r.top; });
+  window.addEventListener('resize', () => { if (TP.open && TP.mode === 'float') tapeRender(); const [yy, mm] = S.ui.ym.split('-').map(Number); $('#mLabel').textContent = window.innerWidth < 600 ? `${MSHORT[mm - 1]} ${yy}` : ymLabel(S.ui.ym); });
+  tapeRender();
+}
 
 /* ---------------- Service worker: sin internet + actualizaciones desde GitHub ---------------- */
 function registerSW() {
@@ -1330,6 +1471,7 @@ function registerSW() {
 load();
 S.ui.ym = ymOf(today()); S.ui.seenYm = S.ui.ym;
 try { route(); } catch (e) { console.error(e); }
+try { tapeInit(); } catch (e) { console.error(e); }
 try { registerSW(); } catch (e) { }
 sync();
 window.addEventListener('error', e => { if (e && e.message) toast('Error: ' + e.message); });
