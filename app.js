@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '1.8.0';
+const VERSION = '1.9.0';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -112,6 +112,7 @@ function load() {
 function save() { try { localStorage.setItem(LS, JSON.stringify({ data: S.data, outbox: S.outbox, cfg: S.cfg, noteMeta: S.noteMeta || {} })); } catch (e) { } }
 function normalize(d) {
   ['accounts', 'goals', 'debts', 'fixed', 'budgets', 'cats', 'notes', 'movs'].forEach(k => d[k] = d[k] || []);
+  if (!d.store || typeof d.store !== 'object') d.store = {};
   d.lists = Object.assign(emptyData().lists, d.lists || {});
   if (!d.lists.scopes.includes('Negocio')) d.lists.scopes.push('Negocio');
   if (!d.lists.accTypes.includes('Inversión')) d.lists.accTypes.push('Inversión');
@@ -163,9 +164,26 @@ function applyLocal({ type, data: d }) {
     case 'cat.add': if (!D.cats.some(c => c.sub === d.sub)) { D.cats.push({ sub: d.sub, cat: d.cat, type: d.type }); const L = d.type === 'Ingreso' ? D.lists.incomeCats : D.lists.expenseCats; if (!L.includes(d.cat)) L.push(d.cat); if (d.type === 'Gasto' && !D.budgets.some(b => b.cat === d.cat)) D.budgets.push({ cat: d.cat, amount: 0 }); } break;
     case 'note.upsert': { const i = D.notes.findIndex(n => n.id === d.id); if (i >= 0) D.notes[i] = d; else D.notes.push(d); break; }
     case 'note.delete': D.notes = D.notes.filter(n => n.id !== d.id); break;
+    case 'rec.upsert': D.store = D.store || {}; (D.store[d.coll] = D.store[d.coll] || {})[d.id] = d.data; break;
+    case 'rec.delete': if (D.store && D.store[d.coll]) delete D.store[d.coll][d.id]; break;
   }
 }
 
+/* ---------------- Ajustes compartidos entre dispositivos (hoja AppData) ---------------- */
+const SHARED = ['name', 'emergencyMonths', 'needs', 'envelope', 'design'];
+function pushSettings() {
+  if (!S.cfg.url || !(S.cfg.serverV >= 3)) { save(); return; }
+  const data = { stamp: Date.now() }; SHARED.forEach(k => data[k] = S.cfg[k]);
+  S.cfg.setStamp = data.stamp;
+  op('rec.upsert', { coll: 'settings', id: 'app', data });
+}
+function pullSettings() {
+  const s = ((S.data.store || {}).settings || {}).app;
+  if (!s || !s.stamp || s.stamp <= (S.cfg.setStamp || 0)) return;
+  if (S.outbox.some(o => o.type === 'rec.upsert' && o.data.coll === 'settings')) return;
+  SHARED.forEach(k => { if (s[k] !== undefined) S.cfg[k] = s[k]; });
+  S.cfg.setStamp = s.stamp;
+}
 /* ---------------- Sincronización con la hoja ---------------- */
 let syncTimer = null, again = false;
 function scheduleSync(ms = 1500) { if (!S.cfg.url) return updatePill(); clearTimeout(syncTimer); syncTimer = setTimeout(sync, ms); updatePill(); }
@@ -188,9 +206,12 @@ async function sync(manual) {
     if (!j.data || !Array.isArray(j.data.movs)) throw new Error('La hoja respondió sin datos');
     S.outbox = S.outbox.slice(sent.length);
     S.agendaV1 = !(j.v >= 2) && S.data.notes.some(n => n.kind && n.kind !== 'nota');
+    S.cfg.serverV = j.v || 1;
     S.data = normalize(j.data);
+    pullSettings();
     S.outbox.forEach(applyLocal);
     S.cfg.lastSync = Date.now(); S.syncErr = '';
+    if (S.cfg.serverV >= 3 && !((S.data.store || {}).settings || {}).app && S.cfg.name !== undefined) pushSettings();
     const bad = (j.results || []).filter(r => !r.ok);
     if (bad.length) toast(`La hoja rechazó ${bad.length} cambio(s): ${bad[0].error}`);
     else if (manual === true) toast('Hoja sincronizada');
@@ -914,7 +935,7 @@ function vAgenda() {
   const tab = S.ui.agTab || 'dia';
   const pend = S.outbox.filter(o => o.type.startsWith('note.')).length;
   const status = !S.cfg.url ? `<span class="ag-sync warn">Solo en este equipo · <a href="#ajustes">conecta tu hoja</a> para respaldar</span>`
-    : S.agendaV1 ? `<span class="ag-sync warn">Actualiza el conector de tu hoja para respaldar horas, colores y fijadas en otros equipos</span>`
+    : S.agendaV1 || (S.cfg.serverV && S.cfg.serverV < 2) ? `<span class="ag-sync warn">Actualiza el conector de tu hoja para respaldar horas, colores y fijadas en otros equipos</span>`
     : pend ? `<span class="ag-sync">${pend} cambio${pend > 1 ? 's' : ''} por respaldar</span>`
     : `<span class="ag-sync ok">Respaldado en tu hoja${S.cfg.lastSync ? ' · ' + ago(S.cfg.lastSync) : ''}</span>`;
   const tabs = `<div class="ptabs">${[['dia', 'Día'], ['pend', 'Pendientes'], ['notas', 'Notas']].map(([k, l]) => `<button type="button" data-act="agTab" data-v="${k}" class="${tab === k ? 'on' : ''}">${l}</button>`).join('')}</div>`;
@@ -1051,6 +1072,7 @@ function vAjustes() {
     <label class="field"><span>Código de acceso (lo muestra la función configurar)</span><input id="cTok" type="password" value="${esc(c.token)}" required autocomplete="off"></label>
     <div class="err-msg" id="cErr">${esc(S.syncErr)}</div>
     <div class="btns"><button class="btn pri" type="submit">${c.url ? 'Guardar y sincronizar' : 'Conectar'}</button>${c.url ? '<button class="btn" type="button" data-act="syncNow">Sincronizar ahora</button><button class="btn danger" type="button" data-act="disconnect">Desconectar</button>' : ''}</div></form>
+    ${c.url && c.serverV && c.serverV < 3 ? `<div class="alert" style="margin-top:12px"><span></span><div><b>Actualiza el conector de tu hoja (una sola vez)</b><p>Tu hoja tiene el conector v${c.serverV}. Con la versión 3 la agenda completa y tus ajustes se respaldan y se comparten entre tus equipos, y las mejoras futuras ya no necesitarán este paso.</p></div><div class="acts"><a class="btn sm" href="https://github.com/diego291/mis-finanzas/blob/main/apps-script/Code.gs" target="_blank" rel="noopener">Ver código</a></div></div>` : c.url && c.serverV >= 3 ? '<p class="muted" style="font-size:.82rem;margin:12px 0 0">Conector v3: tus ajustes se comparten entre tus equipos.</p>' : ''}
     <p class="muted" style="font-size:.82rem;margin:12px 0 0">La hoja es la fuente de verdad: lo que cambies directo en Sheets también aparece aquí. ${S.outbox.length ? `<b>${S.outbox.length} cambio(s) esperan para enviarse.</b>` : ''}</p></section>
   <section class="card"><header><h2>Personal y análisis</h2></header><form class="form" id="anaForm"><label class="field"><span>Tu nombre (para el saludo)</span><input id="aName" value="${esc(c.name)}" placeholder="Diego"></label><label class="field"><span>Meses de gastos para el fondo de emergencia</span><input id="aEm" type="number" min="1" max="12" value="${c.emergencyMonths}"></label>
     <div class="field"><span>Categorías que cuentan como necesidad (regla 50/30/20)</span><div class="chips" style="flex-wrap:wrap">${S.data.lists.expenseCats.map(k => `<label class="chip" style="border-style:solid;${c.needs.includes(k) ? 'color:var(--accent);border-color:var(--accent)' : ''}"><input type="checkbox" name="need" value="${esc(k)}" ${c.needs.includes(k) ? 'checked' : ''} style="margin-right:5px">${esc(k)}</label>`).join('')}</div></div><div><button class="btn" type="submit">Guardar</button></div></form></section>
@@ -1378,7 +1400,7 @@ const ACT = {
   goMonth: el => { S.ui.ym = el.dataset.v; S.ui.mTab = 'dia'; S.ui.fPeriod = 'mes'; render(); },
   accGo: el => { S.ui.fAcc = el.dataset.n; S.ui.mTab = 'dia'; go('movimientos'); },
   clearAcc: () => { S.ui.fAcc = ''; render(); },
-  envOff: () => { S.cfg.envelope = Object.assign({}, S.cfg.envelope, { on: false }); save(); render(); },
+  envOff: () => { S.cfg.envelope = Object.assign({}, S.cfg.envelope, { on: false }); pushSettings(); render(); },
   envelope: () => { const env = envelopeState(); if (!env) return go('ajustes'); if (!catMap()[ENV_SUB]) op('cat.add', { sub: ENV_SUB, cat: 'Otros gastos', type: 'Gasto' }); const [y, m, d] = env.ws.split('-').map(Number); op('mov.upsert', { id: uid(), date: today(), type: 'Gasto', acc: env.acc, sub: ENV_SUB, desc: `Sobre semana del ${d} ${MSHORT[m - 1].toLowerCase()}`, amount: env.amount, scope: 'Personal', method: 'Efectivo', notes: '', to: '', goal: '', debt: '' }); toast('Sobre de la semana registrado'); },
   agTab: el => { S.ui.agTab = el.dataset.v; render(); },
   agDay: el => { S.ui.agDay = el.dataset.v; render(); },
@@ -1391,7 +1413,7 @@ const ACT = {
   newMovOn: el => editMov(null, { date: el.dataset.v }),
   stPeriod: el => { S.ui.stPeriod = el.dataset.v; render(); },
   cash: cashCounter, scope: el => { S.cfg.scope = el.dataset.v; save(); render(); },
-  design: el => { S.cfg.design = el.dataset.v; save(); render(); }, theme: el => { S.cfg.theme = el.dataset.v; save(); render(); },
+  design: el => { S.cfg.design = el.dataset.v; pushSettings(); render(); }, theme: el => { S.cfg.theme = el.dataset.v; save(); render(); },
   fix: el => { const a = CHECKS[el.dataset.i]?.acts?.[el.dataset.j]; if (a) a[1](); },
   go: el => go(el.dataset.v), syncNow: () => sync(true),
   disconnect: () => { S.cfg.url = ''; S.cfg.token = ''; save(); render(); toast('Hoja desconectada. Los datos siguen en este equipo.'); },
@@ -1459,8 +1481,8 @@ document.addEventListener('change', e => {
 document.addEventListener('submit', e => {
   if (e.target.id === 'connForm') { e.preventDefault(); S.cfg.url = $('#cUrl').value.trim(); S.cfg.token = $('#cTok').value.trim(); S.syncErr = ''; save(); sync(true); }
   if (e.target.id === 'agQuick' || e.target.id === 'agQuickHome') { e.preventDefault(); const inp = e.target.querySelector('input'); const p = parseTodo(inp.value); if (!p.text) return toast('Escribe el pendiente'); noteSave({ id: uid(), date: today(), tag: '', text: p.text, action: '', due: p.due, status: 'Pendiente', kind: 'pendiente', time: p.time, color: 'verde', pinned: false }); toast(p.due ? `Pendiente para ${agDueLabel(p.due).toLowerCase()}${p.time ? ' a las ' + p.time : ''}` : 'Pendiente agregado'); setTimeout(() => { const n = $('#' + inp.id); n && n.focus(); }, 30); return; }
-  if (e.target.id === 'envForm') { e.preventDefault(); const amt = $('#eAmt').value.trim() ? calcVal('#eAmt') : r2($('#eAmt').placeholder); if (!(amt > 0)) return toast('Escribe el monto por semana'); S.cfg.envelope = { on: true, amount: amt, acc: $('#eAcc').value }; save(); render(); toast('Sobre semanal activado'); }
-  if (e.target.id === 'anaForm') { e.preventDefault(); S.cfg.emergencyMonths = Number($('#aEm').value) || 6; S.cfg.name = $('#aName').value.trim(); S.cfg.needs = [...e.target.querySelectorAll('input[name=need]:checked')].map(i => i.value); save(); render(); toast('Guardado'); }
+  if (e.target.id === 'envForm') { e.preventDefault(); const amt = $('#eAmt').value.trim() ? calcVal('#eAmt') : r2($('#eAmt').placeholder); if (!(amt > 0)) return toast('Escribe el monto por semana'); S.cfg.envelope = { on: true, amount: amt, acc: $('#eAcc').value }; pushSettings(); render(); toast('Sobre semanal activado'); }
+  if (e.target.id === 'anaForm') { e.preventDefault(); S.cfg.emergencyMonths = Number($('#aEm').value) || 6; S.cfg.name = $('#aName').value.trim(); pushSettings(); S.cfg.needs = [...e.target.querySelectorAll('input[name=need]:checked')].map(i => i.value); save(); render(); toast('Guardado'); }
   if (e.target.id === 'catForm') { e.preventDefault(); const sub = $('#nSub').value.trim(), cat = $('#nCat').value.trim(); if (!sub || !cat) return; if (catMap()[sub]) return toast('Esa subcategoría ya existe'); op('cat.add', { sub, cat, type: $('#nType').value }); toast('Subcategoría agregada'); }
 });
 $('#sheetBg').addEventListener('click', e => { if (e.target.id === 'sheetBg') closeSheet(); });

@@ -89,7 +89,7 @@ Si no subes el número en `sw.js`, los equipos seguirán usando la versión guar
 
 ## Actualizar el conector de tu hoja (cuando la app lo pida)
 
-Algunas versiones guardan datos nuevos en la hoja (por ejemplo, la Agenda usa las columnas H a K de **Notas**: tipo, hora, color y fijada).
+El conector v3 es universal: guarda en la hoja **AppData** cualquier dato nuevo de la app (ajustes compartidos entre equipos y funciones futuras). Una vez instalado, las mejoras de la app ya no necesitan cambiar Apps Script. La Agenda usa además las columnas H a K de **Notas** (tipo, hora, color y fijada).
 
 1. Abre tu hoja → **Extensiones → Apps Script**.
 2. Reemplaza todo `Código.gs` con `apps-script/Code.gs` de este repositorio y guarda.

@@ -7,6 +7,10 @@
  * de Estadísticas, Inicio, Presupuesto, etc. siguen funcionando igual.
  *
  * Instalación: ver README.md del repositorio (sección "Conectar tu hoja").
+ *
+ * Versión 3 (universal): además de tus hojas de siempre, guarda en la hoja "AppData"
+ * cualquier dato nuevo de la app (ajustes compartidos, funciones futuras), así que
+ * las próximas mejoras de la app ya no necesitan cambiar este código.
  */
 
 // ---------- Estructura de tu hoja (no cambiar salvo que muevas columnas) ----------
@@ -18,7 +22,8 @@ const PAG = { sheet: 'Pagos fijos', first: 6, last: 30 };                       
 const PRE = { sheet: 'Presupuesto', first: 6, last: 45 };                           // A categoría (fórmula), B monto
 const CAT = { sheet: 'Categorias', first: 5, last: 400 };                           // A sub, B categoría, C tipo; E gasto, G ingreso, K métodos, M ámbitos, O tipos de cuenta
 const NOT = { sheet: 'Notas', first: 6, last: 1005, idCol: 7, extra: 4 };          // A..F, G = ID de la app, H tipo, I hora, J color, K fijada
-const API_VERSION = 2;
+const API_VERSION = 3;
+const APP = { sheet: 'AppData' };                                                  // almacén genérico: Colección | ID | Datos (JSON) | Actualizado
 
 const TZ = 'America/El_Salvador';
 
@@ -134,6 +139,13 @@ function applyOp_(ss, op) {
       return;
     }
     case 'note.delete': { const sh = ss.getSheetByName(NOT.sheet); const r = findById_(sh, NOT, d.id); if (r) { sh.getRange(r, 1, 1, 6).clearContent(); sh.getRange(r, NOT.idCol, 1, 1 + NOT.extra).clearContent(); } return; }
+    case 'rec.upsert': {
+      const sh = appSheet_(ss), row = findRec_(sh, d.coll, d.id) || sh.getLastRow() + 1;
+      sh.getRange(row, 2).setNumberFormat('@');
+      sh.getRange(row, 1, 1, 4).setValues([[String(d.coll), String(d.id), JSON.stringify(d.data == null ? null : d.data), new Date()]]);
+      return;
+    }
+    case 'rec.delete': { const sh = appSheet_(ss), row = findRec_(sh, d.coll, d.id); if (row) sh.deleteRow(row); return; }
     default: throw new Error('Operación desconocida: ' + op.type);
   }
 }
@@ -215,8 +227,18 @@ function snapshot_(ss) {
   const list = col => catRows.map(r => r[col]).filter(v => v !== '' && !String(v).startsWith('No editar'));
   const notes = read(NOT, NOT.idCol + NOT.extra).filter(r => r[2] !== '').map(r => ({ id: r[6], date: fmt_(r[0]), tag: r[1], text: r[2], action: r[3], due: fmt_(r[4]), status: r[5], kind: r[7] || '', time: r[8] instanceof Date ? Utilities.formatDate(r[8], TZ, 'HH:mm') : String(r[8] || ''), color: r[9] || '', pinned: r[10] === 'Sí' || r[10] === true }));
 
+  const store = {};
+  const ash = ss.getSheetByName(APP.sheet);
+  if (ash && ash.getLastRow() > 1) {
+    ash.getRange(2, 1, ash.getLastRow() - 1, 3).getValues().forEach(r => {
+      if (r[0] === '' || r[1] === '') return;
+      let v = null; try { v = JSON.parse(r[2]); } catch (e) { v = r[2]; }
+      (store[r[0]] = store[r[0]] || {})[String(r[1])] = v;
+    });
+  }
+
   return {
-    accounts, goals, debts, fixed, budgets, cats, notes, movs,
+    accounts, goals, debts, fixed, budgets, cats, notes, movs, store,
     lists: { expenseCats: list(4), incomeCats: list(6), types: list(8), methods: list(10), scopes: list(12), accTypes: list(14) }
   };
 }
@@ -235,6 +257,23 @@ function assignIds_(ss) {
     });
     if (changed) sh.getRange(T.first, T.idCol, n, 1).setValues(ids);
   });
+}
+
+function appSheet_(ss) {
+  let sh = ss.getSheetByName(APP.sheet);
+  if (!sh) {
+    sh = ss.insertSheet(APP.sheet);
+    sh.getRange(1, 1, 1, 4).setValues([['Colección', 'ID', 'Datos (no editar a mano)', 'Actualizado']]).setFontWeight('bold');
+    sh.setFrozenRows(1); sh.setColumnWidth(3, 520);
+  }
+  return sh;
+}
+
+function findRec_(sh, coll, id) {
+  const n = sh.getLastRow() - 1; if (n < 1) return 0;
+  const v = sh.getRange(2, 1, n, 2).getValues();
+  const i = v.findIndex(r => String(r[0]) === String(coll) && String(r[1]) === String(id));
+  return i < 0 ? 0 : i + 2;
 }
 
 function ensureNoteHeaders_(sh) {
