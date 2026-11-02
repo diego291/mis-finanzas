@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '2.0.1';
+const VERSION = '2.0.2';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -1152,6 +1152,48 @@ const TEMPLATES = {
   compras: ['Lista de compras', `<ul class="chk"><li><br></li><li><br></li><li><br></li></ul><p><b>Presupuesto:</b> $</p>`],
   reunion: ['Reunión', `<p><b>Fecha y hora:</b>&nbsp;</p><p><b>Participantes:</b>&nbsp;</p><h2>Temas</h2><ul><li><br></li></ul><h2>Acuerdos</h2><ul class="chk"><li><br></li></ul>`]
 };
+/* ---- importar archivos como páginas ---- */
+function mdToHTML(md) {
+  const inl = t => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(^|[^*])\*(?!\s)(.+?)\*/g, '$1<i>$2</i>').replace(/~~(.+?)~~/g, '<s>$1</s>').replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2">$1</a>');
+  const out = []; let list = null;
+  const close = () => { if (list) { out.push(`</${list}>`); list = null; } };
+  const open = t => { if (list !== t) { close(); out.push(t === 'chk' ? '<ul class="chk">' : `<${t}>`); list = t; } };
+  String(md).split(/\r?\n/).forEach(l => {
+    let m;
+    if ((m = l.match(/^\s*(#{1,6})\s+(.*)/))) { close(); const h = Math.min(3, m[1].length); out.push(`<h${h}>${inl(m[2])}</h${h}>`); }
+    else if ((m = l.match(/^\s*[-*+]\s+\[( |x|X)\]\s+(.*)/))) { open('chk'); out.push(`<li${m[1].trim() ? ' class="done"' : ''}>${inl(m[2])}</li>`); }
+    else if ((m = l.match(/^\s*(?:[-*+•·]|☐|☑)\s+(.*)/))) { open('ul'); out.push(`<li>${inl(m[1])}</li>`); }
+    else if ((m = l.match(/^\s*\d+[.)]\s+(.*)/))) { open('ol'); out.push(`<li>${inl(m[1])}</li>`); }
+    else if ((m = l.match(/^\s*>\s?(.*)/))) { close(); out.push(`<blockquote>${inl(m[1])}</blockquote>`); }
+    else if (/^\s*(-{3,}|\*{3,})\s*$/.test(l)) { close(); out.push('<hr>'); }
+    else if (!l.trim()) { close(); out.push('<p><br></p>'); }
+    else { close(); out.push(`<p>${inl(l)}</p>`); }
+  });
+  close(); return out.join('');
+}
+async function importFiles(files) {
+  const sec = curSec(); if (!sec) return toast('Crea primero una sección');
+  let last = '', n = 0;
+  for (const f of files) {
+    try {
+      const raw = await f.text(), isHtml = /\.html?$/i.test(f.name) || /html/.test(f.type) || /^\s*<(!doctype|html|body|div|p|h\d)/i.test(raw);
+      let title = f.name.replace(/\.[^.]+$/, ''), html;
+      if (isHtml) {
+        const t = (raw.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1]; if (t && t.trim()) title = plain(t);
+        const body = (raw.match(/<body[^>]*>([\s\S]*)<\/body>/i) || [])[1] || raw;
+        html = cleanHTML(body);
+      } else html = cleanHTML(mdToHTML(raw));
+      const d = document.createElement('div'); d.innerHTML = html;
+      const h1 = d.firstElementChild; if (h1 && h1.tagName === 'H1' && plain(h1.innerHTML).toLowerCase() === title.toLowerCase()) h1.remove();
+      for (const im of [...d.querySelectorAll('img[data-pending]')]) { try { const url = await compressImage(await (await fetch(im.src)).blob()); const r = storeImage(url); im.removeAttribute('data-pending'); im.removeAttribute('src'); im.setAttribute('data-img', r.id); im.setAttribute('data-n', r.n); } catch (e) { im.remove(); } }
+      const id = 'p' + uid(), now = Date.now(), imgs = [...d.querySelectorAll('img[data-img]')].map(im => ({ id: im.dataset.img, n: Number(im.dataset.n) || 1 }));
+      blobPut('pgx', id, d.innerHTML);
+      recPut('pg', id, { sec, title, created: now, updated: now, bg: 'lineas', size: 15, pinned: false, imgs, snip: plain(d.innerHTML).slice(0, 120) });
+      last = id; n++;
+    } catch (e) { toast(`No pude leer ${f.name}`); }
+  }
+  if (last) { S.ui.pg = last; S.ui.blocPane = 'editor'; S.ui.blocQ = ''; render(); toast(n > 1 ? `${n} páginas importadas` : 'Página importada'); }
+}
 function newPage(tplKey) {
   const sec = curSec(); if (!sec) return toast('Crea primero una sección');
   const [t, html] = TEMPLATES[tplKey] || TEMPLATES.blanco, id = 'p' + uid(), now = Date.now();
@@ -1178,7 +1220,7 @@ function vBloc() {
   const pages = `<div class="bl-pages"><input class="ctl" id="blSearch" type="search" placeholder="Buscar en todo el bloc" value="${esc(S.ui.blocQ || '')}">
       <div class="bl-h">${q ? `Resultados (${all.length})` : esc(secObj ? secObj.name : '')}</div>
       ${all.map(p => `<button type="button" class="bl-pg ${p.id === S.ui.pg ? 'on' : ''}" data-act="blPg" data-v="${p.id}" style="--c:${(SECS(nb).find(s => s.id === p.sec) || {}).color || '#8c958f'}"><b>${p.pinned ? '📌 ' : ''}${esc(p.title || 'Sin título')}</b><small>${new Date(p.updated || p.created).toLocaleDateString('es', { day: 'numeric', month: 'short' })}${p.imgs && p.imgs.length ? ` · ${p.imgs.length} foto${p.imgs.length > 1 ? 's' : ''}` : ''}${p.snip ? ' · ' + esc(p.snip.slice(0, 40)) : ''}</small></button>`).join('') || `<p class="note">${q ? 'Nada coincide.' : 'Sección vacía.'}</p>`}
-      ${q ? '' : `<div class="bl-newpg"><button type="button" class="btn sm pri" data-act="blNewPg" data-v="blanco">+ Página</button><select class="ctl" id="blTpl" aria-label="Nueva página desde plantilla"><option value="">Plantilla…</option>${Object.entries(TEMPLATES).filter(([k]) => k !== 'blanco').map(([k, [t]]) => `<option value="${k}">${t}</option>`).join('')}</select></div>`}</div>`;
+      ${q ? '' : `<div class="bl-newpg"><button type="button" class="btn sm pri" data-act="blNewPg" data-v="blanco">+ Página</button><select class="ctl" id="blTpl" aria-label="Nueva página desde plantilla"><option value="">Plantilla…</option>${Object.entries(TEMPLATES).filter(([k]) => k !== 'blanco').map(([k, [t]]) => `<option value="${k}">${t}</option>`).join('')}</select><label class="btn sm" title="Importar archivo .html, .txt o .md como página nueva">Importar<input type="file" id="blImport" accept=".html,.htm,.txt,.md,text/html,text/plain,text/markdown" multiple hidden></label></div>`}</div>`;
   const p = S.ui.pg && pgGet(S.ui.pg);
   const ed = p ? editorHTML(p) : `<div class="bl-empty"><p>Elige una página o crea una nueva.</p><div class="btns">${Object.entries(TEMPLATES).map(([k, [t]]) => `<button type="button" class="btn sm ${k === 'blanco' ? 'pri' : ''}" data-act="blNewPg" data-v="${k}">${t}</button>`).join('')}</div></div>`;
   return `<div class="bloc pane-${pane}">
@@ -1211,6 +1253,8 @@ function editorHTML(p) {
       <input id="pgTitle" class="ed-title" value="${esc(p.title || '')}" placeholder="Título de la página" autocomplete="off">
       <div class="ed-meta">${new Date(p.created || Date.now()).toLocaleString('es', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit' })} · ${esc(nb.name || '')} › ${esc(sec.name || '')}<span id="edSaved"></span></div>
       <div id="pgEditor" class="ed-body" contenteditable="true" spellcheck="true" data-placeholder="Escribe aquí. Pega o arrastra imágenes, usa las herramientas de arriba.">${pgHtml(p.id)}</div>
+      <div class="img-bar" id="imgBar" hidden><span class="ib-l">Tamaño</span>${[['25', 'S'], ['50', 'M'], ['75', 'L'], ['100', 'XL']].map(([w, l]) => `<button type="button" data-iw="${w}" title="${w}% del ancho">${l}</button>`).join('')}<span class="ib-sep"></span>${[['l', '<path d="M3 5h8v8H3zM14 6h7M14 10h7M3 17h18M3 21h14"/>', 'Izquierda, con texto al lado'], ['c', '<path d="M7 4h10v9H7zM3 17h18M6 21h12"/>', 'Centrada'], ['r', '<path d="M13 5h8v8h-8zM3 6h7M3 10h7M3 17h18M7 21h14"/>', 'Derecha, con texto al lado']].map(([a, d, t]) => `<button type="button" data-ia="${a}" title="${t}" aria-label="${t}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg></button>`).join('')}<span class="ib-sep"></span><button type="button" data-ix="reset" title="Tamaño original">Original</button><button type="button" data-ix="del" title="Quitar imagen" aria-label="Quitar imagen" class="ib-del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button><span class="ib-w" id="imgW"></span></div>
+      <span class="img-h" id="imgH" hidden title="Arrastra para cambiar el tamaño"></span>
     </div></div>`;
 }
 
@@ -1221,6 +1265,7 @@ function pgSaveNow() {
   const ed = $('#pgEditor'), p = S.ui.pg && pgGet(S.ui.pg); if (!ed || !p) return;
   const c = ed.cloneNode(true);
   c.querySelectorAll('img[data-img]').forEach(im => im.removeAttribute('src'));
+  c.querySelectorAll('img.sel').forEach(im => { im.classList.remove('sel'); if (!im.className) im.removeAttribute('class'); });
   const html = c.innerHTML, title = ($('#pgTitle')?.value || '').trim();
   const imgs = [...c.querySelectorAll('img[data-img]')].map(im => ({ id: im.dataset.img, n: Number(im.dataset.n) || 1 }));
   const gone = (p.imgs || []).filter(x => !imgs.some(y => y.id === x.id));
@@ -1257,7 +1302,8 @@ function cleanHTML(html) {
       const st = (n.getAttribute('style') || '').toLowerCase();
       const bold = /font-weight\s*:\s*(bold|[6-9]00)/.test(st), ital = /font-style\s*:\s*italic/.test(st), und = /text-decoration[^;]*underline/.test(st), strike = /text-decoration[^;]*line-through/.test(st);
       const bgm = st.match(/background(?:-color)?\s*:\s*([^;]+)/), bg = bgm && !/url\(/.test(bgm[1]) && !isLightBg(bgm[1]) ? bgm[1].trim() : '';
-      const keepCls = tag === 'UL' && n.classList.contains('chk') ? 'chk' : tag === 'LI' && n.classList.contains('done') ? 'done' : tag === 'IMG' && n.classList.contains('drawing') ? 'drawing' : '';
+      const keepCls = tag === 'UL' && n.classList.contains('chk') ? 'chk' : tag === 'LI' && n.classList.contains('done') ? 'done' : tag === 'IMG' ? [...n.classList].filter(c => /^(drawing|al-[lcr])$/.test(c)).join(' ') : '';
+      const imW = tag === 'IMG' && (st.match(/(?:^|;)\s*width\s*:\s*(\d{1,3}(?:\.\d+)?)%/) || [])[1];
       const keep = { href: n.getAttribute('href'), src: n.getAttribute('src'), dimg: n.getAttribute('data-img'), dn: n.getAttribute('data-n'), colspan: n.getAttribute('colspan'), rowspan: n.getAttribute('rowspan'), alt: n.getAttribute('alt') };
       [...n.attributes].forEach(a => n.removeAttribute(a.name));
       if (keepCls) n.className = keepCls;
@@ -1268,6 +1314,7 @@ function cleanHTML(html) {
         else if (keep.src && /^(data:image|https?:)/i.test(keep.src)) { n.setAttribute('src', keep.src); if (keep.src.startsWith('data:')) n.setAttribute('data-pending', '1'); }
         else { n.remove(); return; }
         if (keep.alt) n.setAttribute('alt', keep.alt);
+        if (imW && Number(imW) >= 5 && Number(imW) <= 100) n.setAttribute('style', `width:${Math.round(Number(imW))}%`);
       }
       let el = n;
       if (!KEEP_TAGS.has(tag)) {
@@ -1342,11 +1389,54 @@ function edCmd(cmd) {
   }
   edFocus(); document.execCommand(cmd, false, null); pgSaveSoon();
 }
+/* ---- tamaño y posición de imágenes ---- */
+function imgSel() { const ed = $('#pgEditor'); return ed && ed.querySelector('img.sel'); }
+function imgBarPlace() {
+  const bar = $('#imgBar'), h = $('#imgH'), im = imgSel(); if (!bar || !h) return;
+  if (!im) { bar.hidden = true; h.hidden = true; return; }
+  const paper = bar.parentNode, pr = paper.getBoundingClientRect(), r = im.getBoundingClientRect();
+  bar.hidden = false; h.hidden = false;
+  const bw = bar.offsetWidth, top = r.top - pr.top - bar.offsetHeight - 8;
+  bar.style.top = Math.max(4, top < 4 ? r.bottom - pr.top + 8 : top) + 'px';
+  bar.style.left = Math.max(4, Math.min(pr.width - bw - 4, r.left - pr.left + r.width / 2 - bw / 2)) + 'px';
+  h.style.top = (r.bottom - pr.top - 9) + 'px'; h.style.left = (r.right - pr.left - 9) + 'px';
+  const w = (im.style.width || '').replace('%', ''), al = ['l', 'c', 'r'].find(a => im.classList.contains('al-' + a)) || '';
+  bar.querySelectorAll('[data-iw]').forEach(b => b.classList.toggle('on', b.dataset.iw === w));
+  bar.querySelectorAll('[data-ia]').forEach(b => b.classList.toggle('on', b.dataset.ia === al));
+  $('#imgW').textContent = w ? w + '%' : 'auto';
+}
+function imgSet(im, o) {
+  if (o.w !== undefined) { if (o.w) im.style.width = o.w + '%'; else im.style.removeProperty('width'); if (!im.getAttribute('style')) im.removeAttribute('style'); }
+  if (o.al !== undefined) { im.classList.remove('al-l', 'al-c', 'al-r'); if (o.al) im.classList.add('al-' + o.al); }
+  requestAnimationFrame(imgBarPlace); pgSaveSoon();
+}
+function imgBind(ed) {
+  const bar = $('#imgBar'), h = $('#imgH'); if (!bar || !h) return;
+  bar.addEventListener('mousedown', e => e.preventDefault());
+  bar.addEventListener('click', e => {
+    const b = e.target.closest('button'), im = imgSel(); if (!b || !im) return;
+    if (b.dataset.iw) return imgSet(im, { w: Number(b.dataset.iw) });
+    if (b.dataset.ia) { const cur = im.classList.contains('al-' + b.dataset.ia); return imgSet(im, { al: cur ? '' : b.dataset.ia, w: !cur && b.dataset.ia !== 'c' && (!im.style.width || parseFloat(im.style.width) > 60) ? 40 : undefined }); }
+    if (b.dataset.ix === 'reset') return imgSet(im, { w: 0, al: '' });
+    if (b.dataset.ix === 'del') { const p = im.parentNode; im.remove(); if (p && p !== ed && p.nodeName === 'P' && !p.textContent.trim() && !p.querySelector('img')) p.innerHTML = '<br>'; imgBarPlace(); pgSaveNow(); }
+  });
+  h.addEventListener('pointerdown', e => {
+    const im = imgSel(); if (!im) return; e.preventDefault(); h.setPointerCapture(e.pointerId);
+    const full = ed.clientWidth, left = im.getBoundingClientRect().left, rtl = im.classList.contains('al-c') ? 2 : 1;
+    const startX = e.clientX, startW = im.getBoundingClientRect().width;
+    const mv = ev => { const w = Math.max(10, Math.min(100, Math.round((startW + (ev.clientX - startX) * rtl) / full * 100))); im.style.width = w + '%'; imgBarPlace(); };
+    const up = () => { h.removeEventListener('pointermove', mv); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up); const w = Math.round(parseFloat(im.style.width) / 5) * 5; im.style.width = Math.max(10, w) + '%'; imgBarPlace(); pgSaveNow(); };
+    h.addEventListener('pointermove', mv); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
+  });
+  ed.addEventListener('load', e => { if (e.target.tagName === 'IMG' && e.target.classList.contains('sel')) imgBarPlace(); }, true);
+  ed.addEventListener('input', () => requestAnimationFrame(imgBarPlace));
+  window.addEventListener('resize', imgBarPlace);
+}
 function edBind() {
   const ed = $('#pgEditor'); if (!ed || ed.dataset.b) return; ed.dataset.b = 1;
   try { document.execCommand('styleWithCSS', false, false); document.execCommand('defaultParagraphSeparator', false, 'p'); } catch (e) { }
   if (looksMessy(ed.innerHTML)) { ed.innerHTML = cleanHTML(ed.innerHTML); setTimeout(() => { pgSaveNow(); toast('Arreglé el formato pegado de esta página'); }, 50); }
-  hydrateImgs(ed);
+  hydrateImgs(ed); imgBind(ed);
   ed.addEventListener('input', pgSaveSoon);
   ed.addEventListener('blur', () => edTimer && pgSaveNow());
   $('#pgTitle').addEventListener('input', pgSaveSoon);
@@ -1354,10 +1444,11 @@ function edBind() {
   ed.addEventListener('click', e => {
     const li = e.target.closest('ul.chk > li'); if (li && e.offsetX < 26) { li.classList.toggle('done'); pgSaveSoon(); }
     const a = e.target.closest('a[href]'); if (a && (e.ctrlKey || e.metaKey)) window.open(a.href, '_blank', 'noopener');
-    const im = e.target.closest('img[data-img]'); ed.querySelectorAll('img.sel').forEach(x => x !== im && x.classList.remove('sel')); if (im) im.classList.toggle('sel');
+    const im = e.target.closest('img'); ed.querySelectorAll('img.sel').forEach(x => x !== im && x.classList.remove('sel')); if (im) { im.classList.add('sel'); const r = document.createRange(); r.setStartAfter(im); r.collapse(true); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); } imgBarPlace();
   });
   ed.addEventListener('keydown', e => {
-    if ((e.key === 'Delete' || e.key === 'Backspace') && ed.querySelector('img.sel')) { e.preventDefault(); ed.querySelector('img.sel').remove(); pgSaveNow(); }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && ed.querySelector('img.sel')) { e.preventDefault(); ed.querySelector('img.sel').remove(); imgBarPlace(); pgSaveNow(); }
+    else if (ed.querySelector('img.sel') && !['Shift', 'Control', 'Meta', 'Alt'].includes(e.key)) { ed.querySelectorAll('img.sel').forEach(x => x.classList.remove('sel')); imgBarPlace(); }
     if (e.key === 'Tab') {
       e.preventDefault(); const cell = selCell();
       if (cell) { const cells = [...cell.closest('table').querySelectorAll('th,td')], i = cells.indexOf(cell); let nx = cells[i + (e.shiftKey ? -1 : 1)]; if (!nx && !e.shiftKey) { edCmd('rowAdd'); nx = cell.closest('table').querySelectorAll('tr')[[...cell.closest('table').querySelectorAll('tr')].indexOf(cell.parentNode) + 1].firstElementChild; } if (nx) { const r = document.createRange(); r.selectNodeContents(nx); r.collapse(false); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); } return; }
@@ -1968,6 +2059,7 @@ document.addEventListener('change', e => {
   const id = e.target.id, map = { fPeriod: 'fPeriod', fType: 'fType', fAcc: 'fAcc', fCat: 'fCat' };
   if (map[id]) { S.ui[map[id]] = e.target.value; render(); }
   if (id === 'blTpl' && e.target.value) { newPage(e.target.value); return; }
+  if (id === 'blImport' && e.target.files.length) { importFiles([...e.target.files]); e.target.value = ''; return; }
   if (id === 'impFile') {
     const file = e.target.files[0]; if (!file) return;
     file.text().then(t => { const j = JSON.parse(t); S.data = normalize(j.data || j); save(); render(); toast('Copia importada'); }).catch(() => toast('Ese archivo no es una copia válida'));
