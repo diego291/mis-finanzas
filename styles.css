@@ -496,3 +496,5 @@ body[data-design="c"] .next-step b { color: var(--cta-bg); }
 .calc-bar button { min-width: 38px; height: 34px; border: 1px solid var(--line); background: var(--surface-2); color: var(--accent); border-radius: 8px; font-family: var(--f-num); font-size: 1rem; font-weight: 700; }
 .calc-res { font-family: var(--f-num); font-size: .85rem; color: var(--muted); margin-left: 6px; }
 .cash .calc-bar { grid-column: 1 / -1; }
+
+.month #mLabel { cursor: pointer; }

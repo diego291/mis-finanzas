@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '1.6.0';
+const VERSION = '1.6.1';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -1294,13 +1294,21 @@ $('#fab').onclick = () => editMov();
 $('#addBtn').onclick = () => editMov();
 $('#mPrev').onclick = () => { S.ui.ym = addM(S.ui.ym, -1); render(); };
 $('#mNext').onclick = () => { S.ui.ym = addM(S.ui.ym, 1); render(); };
+$('#mLabel').onclick = () => { if (S.ui.ym !== ymOf(today())) { S.ui.ym = ymOf(today()); render(); } };
+/* El mes sigue al calendario: al abrir la app, al volver a ella o a medianoche del último día */
+let awaySince = 0;
+function followMonth(force) {
+  const now = ymOf(today());
+  if (now !== S.ui.seenYm || force) { S.ui.seenYm = now; if (S.ui.ym !== now) { S.ui.ym = now; S.ui.homeDay = ''; S.ui.calDay = ''; render(); } }
+}
+setInterval(() => followMonth(false), 60000);
 $('#bell').onclick = e => { e.stopPropagation(); $('#notifs').hidden = !$('#notifs').hidden; };
 document.addEventListener('click', e => { const p = $('#notifs'); if (p && !p.hidden && (!e.target.closest('#notifs') || e.target.closest('.nf'))) p.hidden = true; });
 $('#syncPill').onclick = () => S.cfg.url ? sync(true) : go('ajustes');
 window.addEventListener('hashchange', route);
 window.addEventListener('online', () => { updatePill(); sync(); });
 window.addEventListener('offline', updatePill);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { awaySince = Date.now(); return; } followMonth(awaySince && Date.now() - awaySince > 30 * 60000); awaySince = 0; sync(); });
 setInterval(() => { if (!document.hidden) { sync(); } }, 120000);
 setInterval(updatePill, 30000);
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); S.installEvt = e; render(); });
@@ -1320,7 +1328,7 @@ function registerSW() {
 
 /* ---------------- Arranque ---------------- */
 load();
-if (S.data && !S.data.movs.some(m => ymOf(m.date) === S.ui.ym)) { const last = S.data.movs.map(m => ymOf(m.date)).filter(x => x <= ymOf(today())).sort().pop(); if (last) S.ui.ym = last; }
+S.ui.ym = ymOf(today()); S.ui.seenYm = S.ui.ym;
 try { route(); } catch (e) { console.error(e); }
 try { registerSW(); } catch (e) { }
 sync();
