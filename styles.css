@@ -713,3 +713,4 @@ body[data-design="c"] .next-step b { color: var(--cta-bg); }
 .ed-body td img, .ed-body th img { max-width: 260px; }
 @media print { .pp-body table { width: auto !important; } .pp-body td img, .pp-body th img { max-width: 70mm; } }
 .ed-body th, .ed-body td { text-align: left !important; } .ed-body th { color: var(--fg) !important; }
+.ed-body span[style*="background"], .ed-body font[style*="background"] { color: #14171a; border-radius: 3px; padding: 0 2px; }

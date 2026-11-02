@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '2.0.0';
+const VERSION = '2.0.1';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -1232,6 +1232,76 @@ function pgSaveNow() {
 }
 function pgSaveSoon() { const s = $('#edSaved'); if (s) s.textContent = ' · Guardando…'; clearTimeout(edTimer); edTimer = setTimeout(pgSaveNow, 900); }
 
+/* ---- Limpieza de lo que se pega (OneNote, Word, páginas web) ---- */
+const KEEP_TAGS = new Set(['P', 'BR', 'B', 'STRONG', 'I', 'EM', 'U', 'S', 'STRIKE', 'H1', 'H2', 'H3', 'UL', 'OL', 'LI', 'BLOCKQUOTE', 'TABLE', 'THEAD', 'TBODY', 'TR', 'TD', 'TH', 'A', 'IMG', 'SPAN', 'MARK', 'SUB', 'SUP', 'HR']);
+const DROP_TAGS = new Set(['STYLE', 'SCRIPT', 'META', 'LINK', 'TITLE', 'HEAD', 'XML', 'O:P', 'NOSCRIPT', 'IFRAME', 'OBJECT', 'EMBED', 'SVG', 'CANVAS', 'VIDEO', 'AUDIO', 'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'FORM']);
+const BLOCKS = /^(P|DIV|H[1-6]|UL|OL|LI|TABLE|THEAD|TBODY|TR|TD|TH|BLOCKQUOTE|PRE|SECTION|ARTICLE|HEADER|FOOTER|ASIDE|NAV|MAIN|FIGURE|DL|DT|DD|HR|ADDRESS)$/;
+function isLightBg(c) {
+  if (!c) return true; c = c.trim().toLowerCase();
+  if (['transparent', 'white', 'inherit', 'initial', 'none', 'window', 'rgba(0, 0, 0, 0)'].includes(c)) return true;
+  const m = c.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/); let r, g, b;
+  if (m) { const h = m[1].length === 3 ? m[1].split('').map(x => x + x).join('') : m[1]; r = parseInt(h.slice(0, 2), 16); g = parseInt(h.slice(2, 4), 16); b = parseInt(h.slice(4, 6), 16); }
+  else { const n = c.match(/rgba?\(([^)]+)\)/); if (!n) return false; [r, g, b] = n[1].split(',').map(Number); if (n[1].split(',').length === 4 && Number(n[1].split(',')[3]) === 0) return true; }
+  const l = (0.299 * r + 0.587 * g + 0.114 * b); return l > 238 || l < 40;
+}
+function cleanHTML(html) {
+  html = String(html || '').replace(/<!--[\s\S]*?-->/g, '').replace(/<\/?o:p[^>]*>/gi, '').replace(/<\/?(w|m|v|st1):[^>]*>/gi, '');
+  const tpl = document.createElement('template'); tpl.innerHTML = html;
+  const walk = node => {
+    [...node.childNodes].forEach(n => {
+      if (n.nodeType === 8) { n.remove(); return; }
+      if (n.nodeType !== 1) return;
+      const tag = n.tagName.toUpperCase();
+      if (DROP_TAGS.has(tag) || tag.includes(':')) { n.remove(); return; }
+      walk(n);
+      const st = (n.getAttribute('style') || '').toLowerCase();
+      const bold = /font-weight\s*:\s*(bold|[6-9]00)/.test(st), ital = /font-style\s*:\s*italic/.test(st), und = /text-decoration[^;]*underline/.test(st), strike = /text-decoration[^;]*line-through/.test(st);
+      const bgm = st.match(/background(?:-color)?\s*:\s*([^;]+)/), bg = bgm && !/url\(/.test(bgm[1]) && !isLightBg(bgm[1]) ? bgm[1].trim() : '';
+      const keepCls = tag === 'UL' && n.classList.contains('chk') ? 'chk' : tag === 'LI' && n.classList.contains('done') ? 'done' : tag === 'IMG' && n.classList.contains('drawing') ? 'drawing' : '';
+      const keep = { href: n.getAttribute('href'), src: n.getAttribute('src'), dimg: n.getAttribute('data-img'), dn: n.getAttribute('data-n'), colspan: n.getAttribute('colspan'), rowspan: n.getAttribute('rowspan'), alt: n.getAttribute('alt') };
+      [...n.attributes].forEach(a => n.removeAttribute(a.name));
+      if (keepCls) n.className = keepCls;
+      if (tag === 'A' && keep.href && /^(https?:|mailto:|tel:)/i.test(keep.href)) { n.setAttribute('href', keep.href); n.setAttribute('target', '_blank'); n.setAttribute('rel', 'noopener'); }
+      if ((tag === 'TD' || tag === 'TH')) { if (keep.colspan) n.setAttribute('colspan', keep.colspan); if (keep.rowspan) n.setAttribute('rowspan', keep.rowspan); }
+      if (tag === 'IMG') {
+        if (keep.dimg) { n.setAttribute('data-img', keep.dimg); if (keep.dn) n.setAttribute('data-n', keep.dn); if (keep.src && keep.src.startsWith('data:')) n.setAttribute('src', keep.src); }
+        else if (keep.src && /^(data:image|https?:)/i.test(keep.src)) { n.setAttribute('src', keep.src); if (keep.src.startsWith('data:')) n.setAttribute('data-pending', '1'); }
+        else { n.remove(); return; }
+        if (keep.alt) n.setAttribute('alt', keep.alt);
+      }
+      let el = n;
+      if (!KEEP_TAGS.has(tag)) {
+        if (/^(H4|H5|H6)$/.test(tag)) { const h = document.createElement('h3'); while (n.firstChild) h.appendChild(n.firstChild); n.replaceWith(h); el = h; }
+        else if (BLOCKS.test(tag) && ![...n.childNodes].some(c => c.nodeType === 1 && BLOCKS.test(c.tagName))) { const p = document.createElement('p'); while (n.firstChild) p.appendChild(n.firstChild); n.replaceWith(p); el = p; }
+        else { const f = document.createDocumentFragment(); while (n.firstChild) f.appendChild(n.firstChild); n.replaceWith(f); return; }
+      }
+      const wrapIn = t => { const w = document.createElement(t); while (el.firstChild) w.appendChild(el.firstChild); el.appendChild(w); };
+      if (/^(P|LI|TD|TH|SPAN|H1|H2|H3|BLOCKQUOTE)$/.test(el.tagName)) { if (strike) wrapIn('s'); if (und) wrapIn('u'); if (ital) wrapIn('i'); if (bold && !/^H[1-3]$/.test(el.tagName)) wrapIn('b'); }
+      if (bg && el.tagName !== 'IMG') { if (el.tagName === 'SPAN' || el.tagName === 'MARK') el.setAttribute('style', `background-color:${bg}`); else { const s = document.createElement('span'); s.setAttribute('style', `background-color:${bg}`); while (el.firstChild) s.appendChild(el.firstChild); el.appendChild(s); } }
+      if (el.tagName === 'SPAN' && !el.getAttribute('style')) { const f = document.createDocumentFragment(); while (el.firstChild) f.appendChild(el.firstChild); el.replaceWith(f); }
+    });
+  };
+  walk(tpl.content);
+  // párrafos vacíos repetidos y espacios raros
+  let out = tpl.innerHTML.replace(/&nbsp;/g, ' ').replace(/ /g, ' ').replace(/(<p>(\s|<br\s*\/?>)*<\/p>\s*){2,}/gi, '<p><br></p>').replace(/<(b|i|u|s|strong|em)>\s*<\/\1>/gi, '');
+  // texto suelto fuera de bloques → párrafo
+  const t2 = document.createElement('template'); t2.innerHTML = out;
+  let run = null;
+  [...t2.content.childNodes].forEach(n => {
+    const inline = n.nodeType === 3 ? n.textContent.trim() !== '' : n.nodeType === 1 && !BLOCKS.test(n.tagName) && n.tagName !== 'IMG' ? true : n.nodeType === 1 && n.tagName === 'IMG';
+    if (inline) { if (!run) { run = document.createElement('p'); n.before(run); } run.appendChild(n); } else { if (n.nodeType === 3 && !n.textContent.trim()) n.remove(); run = null; }
+  });
+  return t2.innerHTML;
+}
+const looksMessy = html => /position\s*:\s*absolute|mso-|font-family|class="?Mso|<div[^>]*style=|color\s*:\s*(white|#fff)|file:\/\//i.test(html || '');
+async function absorbPastedImages(root) {
+  const L = [...root.querySelectorAll('img[data-pending]')];
+  for (const im of L) {
+    try { const blob = await (await fetch(im.src)).blob(); const url = await compressImage(blob); const { id, n } = storeImage(url); im.removeAttribute('data-pending'); im.setAttribute('data-img', id); im.setAttribute('data-n', n); im.src = url; } catch (e) { im.removeAttribute('data-pending'); }
+  }
+  return L.length;
+}
+
 /* ---- herramientas del editor ---- */
 function edFocus() { const ed = $('#pgEditor'); if (ed && !ed.contains(document.activeElement)) ed.focus(); }
 function insertHTML(html) { edFocus(); document.execCommand('insertHTML', false, html); pgSaveSoon(); }
@@ -1275,6 +1345,7 @@ function edCmd(cmd) {
 function edBind() {
   const ed = $('#pgEditor'); if (!ed || ed.dataset.b) return; ed.dataset.b = 1;
   try { document.execCommand('styleWithCSS', false, false); document.execCommand('defaultParagraphSeparator', false, 'p'); } catch (e) { }
+  if (looksMessy(ed.innerHTML)) { ed.innerHTML = cleanHTML(ed.innerHTML); setTimeout(() => { pgSaveNow(); toast('Arreglé el formato pegado de esta página'); }, 50); }
   hydrateImgs(ed);
   ed.addEventListener('input', pgSaveSoon);
   ed.addEventListener('blur', () => edTimer && pgSaveNow());
@@ -1293,7 +1364,23 @@ function edBind() {
       document.execCommand(e.shiftKey ? 'outdent' : 'indent');
     }
   });
-  ed.addEventListener('paste', e => { const files = [...(e.clipboardData?.files || [])].filter(f => f.type.startsWith('image/')); if (files.length) { e.preventDefault(); insertImageFiles(files); } });
+  ed.addEventListener('paste', async e => {
+    const cd = e.clipboardData; if (!cd) return;
+    const files = [...(cd.files || [])].filter(f => f.type.startsWith('image/'));
+    const html = cd.getData('text/html'), txt = cd.getData('text/plain');
+    if (html) {
+      e.preventDefault();
+      const lostImgs = (html.match(/<img[^>]+src=["']?(file:|cid:|[a-z]:\\)/gi) || []).length;
+      const clean = cleanHTML(html);
+      document.execCommand('insertHTML', false, clean.trim() ? clean : esc(txt).replace(/\n/g, '<br>'));
+      const n = await absorbPastedImages(ed);
+      if (files.length && (lostImgs || !/<img/i.test(clean))) await insertImageFiles(files);
+      else if (lostImgs) toast(`${lostImgs} imagen${lostImgs > 1 ? 'es' : ''} de OneNote no se pudo copiar: pégala o insértala aparte`);
+      hydrateImgs(ed); pgSaveNow(); return;
+    }
+    if (files.length) { e.preventDefault(); insertImageFiles(files); return; }
+    if (txt) { e.preventDefault(); document.execCommand('insertHTML', false, txt.split(/\r?\n/).map(l => `<p>${esc(l) || '<br>'}</p>`).join('')); pgSaveSoon(); }
+  });
   ed.addEventListener('drop', e => { const files = [...(e.dataTransfer?.files || [])].filter(f => f.type.startsWith('image/')); if (files.length) { e.preventDefault(); insertImageFiles(files); } });
   const bar = $('#edBar');
   bar.addEventListener('mousedown', e => { if (e.target.closest('button.tb')) e.preventDefault(); });
@@ -1366,7 +1453,7 @@ function pageMenu() {
     <div class="field"><span>Tamaño de letra</span><div class="seg" id="pmFs">${[13, 15, 17, 19].map(s => `<button type="button" data-v="${s}" class="${(p.size || 15) === s ? 'on' : ''}">${s}</button>`).join('')}</div></div>
     <label class="field"><span>Mover a</span>${sel('pmSec', secs, p.sec)}</label>
     <label class="ag-pin"><input type="checkbox" id="pmPin" ${p.pinned ? 'checked' : ''}> Fijar en Inicio</label>
-    <div class="btns"><button type="button" class="btn" id="pmDup">Duplicar página</button><button type="button" class="btn danger" id="pmDel">Eliminar página</button></div>
+    <div class="btns"><button type="button" class="btn" id="pmClean">Limpiar formato pegado</button><button type="button" class="btn" id="pmDup">Duplicar página</button><button type="button" class="btn danger" id="pmDel">Eliminar página</button></div>
     <div id="pmDelC" hidden class="alert bad"><span></span><div><b>¿Eliminar esta página?</b><p>Se borra también de tu hoja, con sus imágenes.</p></div><div class="acts"><button type="button" class="btn sm danger" id="pmDelY">Eliminar</button></div></div>
     <button class="btn pri">Guardar</button>`, f => {
     const meta = Object.assign({}, store('pg')[p.id], { bg: f.querySelector('#pmBg .on').dataset.v, size: Number(f.querySelector('#pmFs .on').dataset.v), sec: $('#pmSec').value, pinned: $('#pmPin').checked, updated: Date.now() });
@@ -1376,6 +1463,7 @@ function pageMenu() {
   }, f => {
     ['#pmBg', '#pmFs'].forEach(s => f.querySelector(s).onclick = e => { const b = e.target.closest('button'); if (!b) return; f.querySelectorAll(s + ' button').forEach(z => z.classList.toggle('on', z === b)); });
     $('#pmDup').onclick = () => { const id = 'p' + uid(), now = Date.now(); const html = pgHtml(p.id); recPut('pg', id, Object.assign({}, store('pg')[p.id], { title: (p.title || 'Sin título') + ' (copia)', created: now, updated: now, pinned: false })); blobPut('pgx', id, html); S.ui.pg = id; closeSheet(); render(); toast('Página duplicada'); };
+    $('#pmClean').onclick = () => { const html = cleanHTML(pgHtml(p.id)); blobPut('pgx', p.id, html); recPut('pg', p.id, Object.assign({}, store('pg')[p.id], { updated: Date.now(), snip: plain(html).slice(0, 120) })); closeSheet(); render(); toast('Formato limpio'); };
     $('#pmDel').onclick = () => { $('#pmDelC').hidden = false; };
     $('#pmDelY').onclick = () => { delPage(p.id); closeSheet(); render(); toast('Página eliminada'); };
   });
