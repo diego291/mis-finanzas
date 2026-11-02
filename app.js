@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '2.0.4';
+const VERSION = '2.0.5';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -424,6 +424,7 @@ function route() {
 /* ---------------- Render principal ---------------- */
 function render() {
   document.body.dataset.design = S.cfg.design;
+  setTimeout(() => { if (!$('#pgEditor')) document.body.classList.remove('ed-kb'); }, 0);
   if (S.cfg.theme === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = S.cfg.theme;
   const tc = { a: '#14171a', b: '#0b2239', c: '#0f141b' }[S.cfg.design]; document.querySelector('meta[name=theme-color]')?.setAttribute('content', tc);
   { const [yy, mm] = S.ui.ym.split('-').map(Number); $('#mLabel').textContent = window.innerWidth < 600 ? `${MSHORT[mm - 1]} ${yy}` : ymLabel(S.ui.ym); }
@@ -1484,6 +1485,13 @@ function edBind() {
   });
   ed.addEventListener('drop', e => { const files = [...(e.dataTransfer?.files || [])].filter(f => f.type.startsWith('image/')); if (files.length) { e.preventDefault(); insertImageFiles(files); } });
   const bar = $('#edBar');
+  const kb = () => {
+    const vv = window.visualViewport, on = window.innerWidth < 900 && document.activeElement === ed;
+    document.body.classList.toggle('ed-kb', on);
+    if (on && vv) document.body.style.setProperty('--kb', Math.max(0, window.innerHeight - vv.height - vv.offsetTop) + 'px');
+  };
+  ed.addEventListener('focus', kb); ed.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== ed && !bar.contains(document.activeElement)) document.body.classList.remove('ed-kb'); }, 150));
+  if (window.visualViewport && !window._kbB) { window._kbB = 1; const f = () => { const e = $('#pgEditor'); if (e && document.activeElement === e) { const vv = window.visualViewport; document.body.style.setProperty('--kb', Math.max(0, window.innerHeight - vv.height - vv.offsetTop) + 'px'); } }; visualViewport.addEventListener('resize', f); visualViewport.addEventListener('scroll', f); }
   const barEnd = () => bar.classList.toggle('end', bar.scrollLeft + bar.clientWidth >= bar.scrollWidth - 4); bar.addEventListener('scroll', barEnd, { passive: true }); barEnd();
   bar.addEventListener('mousedown', e => { if (e.target.closest('button.tb')) e.preventDefault(); });
   bar.addEventListener('click', e => { const b = e.target.closest('[data-cmd]'); if (b) edCmd(b.dataset.cmd); });
