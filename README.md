@@ -101,3 +101,16 @@ El conector v3 es universal: guarda en la hoja **AppData** cualquier dato nuevo 
 - **Bloc de notas** (cuadernos, secciones, páginas, fotos y dibujos): hoja **AppData**, que crea sola el conector v3. Las fotos se comprimen (≈1100 px) y se guardan en trozos; en cada equipo quedan en caché para abrir rápido.
 - **PDF**: botón PDF → elige página, sección, cuaderno o agenda → en la ventana de impresión, **Guardar como PDF**.
 - No edites a mano la hoja AppData.
+
+## Vehículos
+
+Sección **Vehículos** (y tarjeta en Inicio) para llevar cada vehículo por separado:
+
+- **Kilometraje:** toca el número grande para anotarlo; también se actualiza al cargar gasolina o registrar un mantenimiento.
+- **Plan de mantenimiento:** cada tarea va "cada X km o cada X meses, lo que llegue primero". Al crear el vehículo se carga un plan sugerido (moto o carro) que puedes editar. Los avisos salen en la campanita.
+- **Mantenimiento:** checklist con lo que toca. Marcas cada cosa como cambiado, ajustado, revisado, reparado o limpiado, con precio, detalle y fotos de la factura. Al guardar, la app pregunta si lo registra como gasto (y si lo saca del fondo).
+- **Gasolina:** total, precio por galón y km; calcula km/galón y avisa si el rendimiento baja.
+- **Documentos:** circulación, seguro, licencia; aviso 30 días antes del vencimiento.
+- **Presupuesto:** mensual de mantenimiento y de gasolina por vehículo, más un fondo (meta) para piezas grandes. También calcula el **costo por km**.
+
+Se guarda en la hoja AppData (conector v3).

@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '2.0.5';
+const VERSION = '2.1.0';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -91,6 +91,7 @@ const ICON = {
   revision: '<path d="M12 3l9 16H3zM12 10v4M12 17v.5"/>',
   ajustes: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   estados: '<path d="M5 3h14v18H5zM9 8h6M9 12h6M9 16h3"/>',
+  vehiculos: '<circle cx="5.5" cy="16.5" r="3.5"/><circle cx="18.5" cy="16.5" r="3.5"/><path d="M5.5 16.5l4-6h5l4 6M9.5 10.5L8 7H5.5M14.5 10.5l2-3.5H19"/>',
   mas: '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>'
 };
 const svgI = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICON[k]}</svg>`;
@@ -397,7 +398,7 @@ function hbars(entries, total, ref) {
 
 /* ---------------- Navegación ---------------- */
 const VIEWS = [
-  ['inicio', 'Inicio', 'Día a día'], ['movimientos', 'Movimientos'], ['agenda', 'Agenda'], ['bloc', 'Bloc de notas'], ['estados', 'Estados'], ['cuentas', 'Cuentas'], ['metas', 'Metas'],
+  ['inicio', 'Inicio', 'Día a día'], ['movimientos', 'Movimientos'], ['agenda', 'Agenda'], ['bloc', 'Bloc de notas'], ['vehiculos', 'Vehículos'], ['estados', 'Estados'], ['cuentas', 'Cuentas'], ['metas', 'Metas'],
   ['presupuesto', 'Presupuesto', 'Planear'], ['pagos', 'Pagos fijos'], ['deudas', 'Deudas'],
   ['estadisticas', 'Estadísticas', 'Analizar'], ['revision', 'Revisión'], ['ajustes', 'Ajustes', 'App']
 ];
@@ -432,7 +433,7 @@ function render() {
   const ae = document.activeElement;
   if (S.ui.view === 'bloc' && $('#pgEditor') && ae && ($('#pgEditor').contains(ae) || ae.id === 'pgTitle' || ae.closest('#edBar')) && $('#pgEditor').dataset.pg === S.ui.pg) return;
   if (typeof edTimer !== 'undefined' && edTimer) pgSaveNow();
-  const fn = { inicio: vInicio, estados: vEstados, movimientos: vMovs, cuentas: vCuentas, metas: vMetas, presupuesto: vPresupuesto, pagos: vPagos, deudas: vDeudas, estadisticas: vStats, revision: vRevision, notas: vAgenda, agenda: vAgenda, bloc: vBloc, ajustes: vAjustes }[S.ui.view];
+  const fn = { inicio: vInicio, estados: vEstados, movimientos: vMovs, cuentas: vCuentas, metas: vMetas, presupuesto: vPresupuesto, pagos: vPagos, deudas: vDeudas, estadisticas: vStats, revision: vRevision, notas: vAgenda, agenda: vAgenda, bloc: vBloc, vehiculos: vVehiculos, ajustes: vAjustes }[S.ui.view];
   try { $('#view').innerHTML = `<div class="wrap">${fn()}</div>`; S.lastError = ''; if (S.ui.view === 'bloc') { const ed = $('#pgEditor'); if (ed) { ed.dataset.pg = S.ui.pg; edBind(); } } }
   catch (e) {
     console.error(e); S.lastError = (e && e.message) || String(e);
@@ -529,6 +530,7 @@ function vInicio() {
       <div class="home-cards">
         ${todayCard()}
         ${pinnedPagesCard()}
+        ${vehCard()}
         ${envelopeCard()}
         ${stagesCard(false)}
         <section class="card side-card"><header style="margin:0"><h2>Presupuesto</h2><a href="#presupuesto">Detalle</a></header>
@@ -625,6 +627,7 @@ function notifications() {
   const dc = daysSince(lastCountDate);
   if (hasCash && (dc == null || dc >= 3)) out.push({ sev: 'mid', text: dc == null ? 'Cuadra tu efectivo por primera vez' : `Cuadra tu efectivo: el último cuadre fue hace ${dc} días`, act: 'cash' });
   const env = envelopeState(); if (env && !env.done) out.push({ sev: 'info', text: `Registra tu sobre de la semana · <b class="num">${money(env.amount)}</b>`, act: 'envelope' });
+  try { out.push(...vehNotifs()); } catch (e) { console.error(e); }
   const n = checks().filter(c => c.sev !== 'info').length; if (n) out.push({ sev: 'mid', text: `${n} dato${n > 1 ? 's' : ''} por revisar`, href: '#revision' });
   if (!S.cfg.url && !window.__SEED__) out.unshift({ sev: 'info', text: 'Conecta tu hoja de Google', href: '#ajustes' });
   if (S.installEvt) out.push({ sev: 'info', text: 'Instala la app en este equipo', act: 'install' });
@@ -634,7 +637,7 @@ function renderBell() {
   const b = $('#bell'); if (!b) return;
   const L = notifications(), urgent = L.filter(x => x.sev === 'bad').length;
   const badge = b.querySelector('.badge'); badge.hidden = !L.length; badge.textContent = L.length; badge.classList.toggle('bad', !!urgent);
-  $('#notifs').innerHTML = `<div class="nf-head">Avisos</div>${L.length ? L.map(x => x.act ? `<button type="button" class="nf ${x.sev}" data-act="${x.act}"><i></i><span>${x.text}</span></button>` : `<a class="nf ${x.sev}" href="${x.href}"><i></i><span>${x.text}</span></a>`).join('') : '<p class="nf-empty">Todo en orden. No tienes avisos.</p>'}`;
+  $('#notifs').innerHTML = `<div class="nf-head">Avisos</div>${L.length ? L.map(x => x.act ? `<button type="button" class="nf ${x.sev}" data-act="${x.act}"${x.veh ? ` data-v="${x.veh}"` : ''}><i></i><span>${x.text}</span></button>` : `<a class="nf ${x.sev}" href="${x.href}"><i></i><span>${x.text}</span></a>`).join('') : '<p class="nf-empty">Todo en orden. No tienes avisos.</p>'}`;
 }
 function dayHead(dt, ms) {
   const inc = sum(ms.filter(x => x.type === 'Ingreso'), x => x.amount), out = sum(ms.filter(x => x.type === 'Gasto'), x => x.amount);
@@ -2148,7 +2151,7 @@ function tapeHTML() {
       <span class="tp-amt">${ex ? `<small>${esc(cur.amt.replace(/\*/g, '×').replace(/\//g, '÷'))}</small>${isFinite(cv) ? r2(cv).toFixed(2) : '…'}` : esc(cur.amt || '0')}</span>
     </div>
     <div class="tp-total"><span>Total${TP.lines.length ? ` · ${TP.lines.length} línea${TP.lines.length > 1 ? 's' : ''}` : ''}</span><b class="${total < 0 ? 'neg' : ''}">${money(total)}</b></div>
-    <div class="tp-keys">${['7', '8', '9', '-', '4', '5', '6', '+', '1', '2', '3', '*', '.', '0', 'del', 'ok'].map(k => `<button type="button" data-tp="key" data-v="${k}" class="${'+-*'.includes(k) ? 'op' : ''} ${k === 'ok' ? 'ok' : ''}" aria-label="${{ del: 'Borrar', ok: 'Agregar línea', '-': 'Restar', '+': 'Sumar', '*': 'Multiplicar', '.': 'Punto' }[k] || k}">${{ del: '⌫', ok: '↵', '-': '−', '*': '×' }[k] || k}</button>`).join('')}</div>
+    <div class="tp-keys">${['7', '8', '9', '/', '4', '5', '6', '*', '1', '2', '3', '-', '.', '0', 'del', '+', 'ok'].map(k => `<button type="button" data-tp="key" data-v="${k}" class="${'+-*/'.includes(k) ? 'op' : ''} ${k === 'ok' ? 'ok' : ''}" aria-label="${{ del: 'Borrar', ok: 'Agregar línea', '-': 'Restar', '+': 'Sumar', '*': 'Multiplicar', '/': 'Dividir', '.': 'Punto' }[k] || k}">${{ del: '⌫', ok: '↵ Agregar', '-': '−', '*': '×', '/': '÷' }[k] || k}</button>`).join('')}</div>
     <div class="tp-acts">
       ${TP.edit >= 0 ? `<button type="button" class="btn sm danger" data-tp="delLine">Quitar línea</button><button type="button" class="btn sm" data-tp="cancelEdit">Cancelar</button>` : `<button type="button" class="btn sm" data-tp="clear">Limpiar</button><button type="button" class="btn sm" data-tp="copy">Copiar</button>`}
       <span style="flex:1"></span>
@@ -2179,8 +2182,9 @@ function tapeKey(v) {
   const c = TP.cur; let a = c.amt || ''; const seg = a.split(/[+\-*/]/).pop();
   if (v === 'ok') { if (!tapeCommit()) return; }
   else if (v === 'del') { if (a) a = a.slice(0, -1); else if (TP.edit < 0 && TP.lines.length) { TP.edit = TP.lines.length - 1; TP.cur = Object.assign({}, TP.lines[TP.edit]); tapeRender(); return; } }
-  else if ('+-*'.includes(v)) {
-    if (!a && v !== '*') { c.sign = v === '-' ? -1 : 1; }
+  else if ('+-*/'.includes(v)) {
+    if (!a && (v === '*' || v === '/')) return;
+    if (!a) { c.sign = v === '-' ? -1 : 1; }
     else if (a && '+-*/'.includes(a.slice(-1))) a = a.slice(0, -1) + v;
     else if (a && (v === '+' || v === '-')) { tapeCommit(); TP.cur.sign = v === '-' ? -1 : 1; tapeSave(); tapeRender(); return; }
     else if (a) a += v;
@@ -2238,8 +2242,8 @@ function tapeInit() {
   });
   document.addEventListener('keydown', e => {
     if (!TP.open || ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName) || !$('#sheetBg').hidden) return;
-    const k = { x: '*', X: '*', ',': '.', Enter: 'ok', '=': 'ok', Backspace: 'del' }[e.key] || e.key;
-    if (/^[0-9.+\-*]$/.test(k) || k === 'ok' || k === 'del') { e.preventDefault(); tapeKey(k); }
+    const k = { x: '*', X: '*', ',': '.', Enter: 'ok', '=': 'ok', Backspace: 'del', '÷': '/' }[e.key] || e.key;
+    if (/^[0-9.+\-*/]$/.test(k) || k === 'ok' || k === 'del') { e.preventDefault(); tapeKey(k); }
     else if (e.key === 'Escape') { TP.open = false; tapeRender(); }
   });
   document.addEventListener('click', e => { if (TP.open && TP.mode === 'drop' && !e.target.closest('#tape') && !e.target.closest('#calcBtn') && $('#sheetBg').hidden) { TP.open = false; tapeRender(); } });
@@ -2274,6 +2278,434 @@ function registerSW() {
   let reloaded = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloaded) { reloaded = true; location.reload(); } });
 }
+
+/* ---------------- Vehículos: km, plan de mantenimiento, servicios, gasolina y documentos ---------------- */
+const VEH_TYPES = ['Moto', 'Carro', 'Pick-up', 'Otro'];
+const ACTIONS = ['Cambiado', 'Ajustado', 'Revisado', 'Reparado', 'Limpiado'];
+const DOC_NAMES = ['Tarjeta de circulación', 'Seguro', 'Licencia de conducir', 'Revisión técnica', 'Póliza de garantía'];
+const PLAN_TPL = {
+  Moto: [['Aceite de motor', 3000, 4, 'Cambiado'], ['Filtro de aceite', 6000, 8, 'Cambiado'], ['Lubricar y tensar cadena', 1000, 1, 'Ajustado'], ['Kit de arrastre (cadena, piñón, corona)', 20000, 0, 'Cambiado'], ['Pastillas / zapatas de freno', 5000, 0, 'Revisado'], ['Líquido de frenos', 0, 12, 'Cambiado'], ['Bujía', 8000, 12, 'Cambiado'], ['Filtro de aire', 5000, 6, 'Limpiado'], ['Llantas (desgaste y presión)', 3000, 1, 'Revisado'], ['Batería', 0, 6, 'Revisado'], ['Ajuste de válvulas', 12000, 0, 'Ajustado'], ['Luces, cables y clutch', 2000, 2, 'Revisado']],
+  Carro: [['Aceite y filtro', 5000, 6, 'Cambiado'], ['Filtro de aire', 15000, 12, 'Cambiado'], ['Rotación de llantas', 10000, 0, 'Ajustado'], ['Alineación y balanceo', 10000, 12, 'Ajustado'], ['Frenos', 10000, 0, 'Revisado'], ['Refrigerante', 40000, 24, 'Cambiado'], ['Batería', 0, 12, 'Revisado'], ['Bujías', 40000, 0, 'Cambiado'], ['Filtro de cabina', 15000, 12, 'Cambiado'], ['Correa de distribución', 60000, 0, 'Cambiado']]
+};
+PLAN_TPL['Pick-up'] = PLAN_TPL.Carro;
+const VICON = {
+  Moto: '<circle cx="5.5" cy="16.5" r="3.5"/><circle cx="18.5" cy="16.5" r="3.5"/><path d="M5.5 16.5l4-6h5l4 6M9.5 10.5L8 7H5.5M14.5 10.5l2-3.5H19"/>',
+  Carro: '<path d="M5 17H3v-5l2-5h14l2 5v5h-2M5 12h14"/><circle cx="7.5" cy="17" r="2"/><circle cx="16.5" cy="17" r="2"/>',
+  'Pick-up': '<path d="M3 17v-5l2-4h7v4h9v5h-2M3 12h9"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>',
+  Otro: '<circle cx="12" cy="12" r="9"/><path d="M12 3v6M12 15v6M3 12h6M15 12h6"/>'
+};
+const vsvg = t => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${VICON[t] || VICON.Otro}</svg>`;
+const fmtKm = n => (Math.round(Number(n) || 0)).toLocaleString('en-US') + ' km';
+const VEHS = () => Object.entries(store('veh')).map(([id, v]) => Object.assign({ id }, v)).filter(v => !v.del).sort((a, b) => (a.order || 0) - (b.order || 0) || (a.created || 0) - (b.created || 0));
+const vGet = id => { const v = store('veh')[id]; return v ? Object.assign({ id }, v) : null; };
+const vList = (coll, vid) => Object.entries(store(coll)).map(([id, x]) => Object.assign({ id }, x)).filter(x => x.veh === vid);
+const vTasks = vid => vList('vtask', vid);
+const vLogs = vid => vList('vlog', vid).sort((a, b) => b.date.localeCompare(a.date) || (b.km || 0) - (a.km || 0));
+const vFuel = vid => vList('fuel', vid).sort((a, b) => b.date.localeCompare(a.date) || (b.km || 0) - (a.km || 0));
+const vDocs = vid => vList('vdoc', vid).sort((a, b) => (a.due || '9').localeCompare(b.due || '9'));
+const vKms = vid => vList('vkm', vid);
+const daysTo = d => Math.round((new Date(d + 'T12:00') - new Date(today() + 'T12:00')) / 864e5);
+const addMonthsD = (d, k) => { const [y, m, dd] = d.split('-').map(Number); const ym = addM(`${y}-${pad(m)}`, k); return `${ym}-${pad(Math.min(dd, daysIn(ym)))}`; };
+let _vr = null;
+function vPut(c, id, d) { recPut(c, id, d); clearTimeout(_vr); _vr = setTimeout(render, 0); }
+function vehBlocked() { return S.cfg.url && S.cfg.serverV && S.cfg.serverV < 3; }
+function curVeh() { const L = VEHS(); if (!L.find(v => v.id === S.ui.veh)) S.ui.veh = L[0] && L[0].id; return S.ui.veh ? vGet(S.ui.veh) : null; }
+
+/* ---- estado de cada tarea del plan ---- */
+function taskState(t, v) {
+  const km = Number(v.km) || 0, every = Number(t.everyKm) || 0, months = Number(t.everyMonths) || 0;
+  const lastKm = t.lastKm != null && t.lastKm !== '' ? Number(t.lastKm) : null, lastDate = t.lastDate || '';
+  let remKm = null, dueDate = '', p = 0, sev = 'ok';
+  if (every && lastKm != null) { remKm = lastKm + every - km; p = Math.max(p, (km - lastKm) / every); }
+  if (months && lastDate) { dueDate = addMonthsD(lastDate, months); const tot = daysTo(dueDate) - daysTo(lastDate); p = Math.max(p, tot > 0 ? -daysTo(lastDate) / tot : 1); }
+  const never = lastKm == null && !lastDate;
+  const dd = dueDate ? daysTo(dueDate) : null;
+  if (never) sev = 'new';
+  else if ((remKm != null && remKm <= 0) || (dd != null && dd <= 0)) sev = 'bad';
+  else if ((remKm != null && remKm <= Math.max(150, every * .1)) || (dd != null && dd <= 15)) sev = 'mid';
+  let label;
+  if (never) label = 'Sin registro';
+  else if (sev === 'bad') label = remKm != null && remKm <= 0 ? `Vencido hace ${fmtKm(-remKm)}` : `Vencido el ${dLabel(dueDate)}`;
+  else {
+    const rate = vRate(v), useKm = remKm != null && (dd == null || (rate ? remKm / rate <= dd : remKm / every <= dd / (months * 30.4)));
+    label = useKm ? `Faltan ${fmtKm(remKm)}` : dd <= 60 ? `En ${dd} día${dd === 1 ? '' : 's'}` : dLabel(dueDate);
+  }
+  return { remKm, dueDate, dd, p: Math.max(0, Math.min(1, p)), sev, label, never };
+}
+const SEV_ORDER = { bad: 0, mid: 1, ok: 2, new: 3 };
+function sortedTasks(v) { return vTasks(v.id).map(t => ({ t, s: taskState(t, v) })).sort((a, b) => SEV_ORDER[a.s.sev] - SEV_ORDER[b.s.sev] || (a.s.remKm ?? 1e9) - (b.s.remKm ?? 1e9) || a.t.name.localeCompare(b.t.name)); }
+
+/* ---- números del vehículo ---- */
+function vRate(v) { const R = vReadings(v); if (R.length < 2) return 0; const a = R.find(x => daysTo(x[0]) >= -60) || R[0], b = R[R.length - 1], d = daysTo(b[0]) - daysTo(a[0]); return d >= 7 && b[1] > a[1] ? (b[1] - a[1]) / d : 0; }
+function vReadings(v) {
+  const r = [];
+  vKms(v.id).forEach(x => r.push([x.date, Number(x.km)]));
+  vFuel(v.id).forEach(x => x.km && r.push([x.date, Number(x.km)]));
+  vLogs(v.id).forEach(x => x.km && r.push([x.date, Number(x.km)]));
+  if (v.km) r.push([v.kmDate || today(), Number(v.km)]);
+  return r.filter(x => x[0] && x[1] > 0).sort((a, b) => a[0].localeCompare(b[0]) || a[1] - b[1]);
+}
+function vMonth(v, ym) {
+  const mant = sum(vLogs(v.id).filter(x => ymOf(x.date) === ym), x => Number(x.total) || 0);
+  const fuel = sum(vFuel(v.id).filter(x => ymOf(x.date) === ym), x => Number(x.total) || 0);
+  const docs = sum(vDocs(v.id).flatMap(d => d.hist || []).filter(h => ymOf(h.date) === ym), h => Number(h.cost) || 0);
+  return { mant: mant + docs, fuel, total: mant + fuel + docs };
+}
+function vCostKm(v, days = 90) {
+  const d0 = (() => { const d = new Date(); d.setDate(d.getDate() - days); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; })();
+  const R = vReadings(v); if (R.length < 2) return null;
+  const before = R.filter(x => x[0] <= d0).pop() || R.find(x => x[0] >= d0);
+  const kmRun = (Number(v.km) || R[R.length - 1][1]) - (before ? before[1] : 0);
+  if (!(kmRun > 50)) return null;
+  const since = before ? before[0] : d0;
+  const cost = sum(vLogs(v.id).filter(x => x.date >= since), x => Number(x.total) || 0) + sum(vFuel(v.id).filter(x => x.date >= since), x => Number(x.total) || 0);
+  const fuelOnly = sum(vFuel(v.id).filter(x => x.date >= since), x => Number(x.total) || 0);
+  return { perKm: cost / kmRun, fuelKm: fuelOnly / kmRun, kmRun, days: daysTo(today()) - daysTo(since) || days };
+}
+function vEfficiency(v) {
+  const F = vFuel(v.id).filter(x => x.km && x.gal > 0).sort((a, b) => a.km - b.km);
+  const out = []; let lastFull = null, gal = 0;
+  F.forEach(f => { gal += Number(f.gal) || 0; if (f.full !== false) { if (lastFull && f.km > lastFull.km) out.push({ date: f.date, kmpg: (f.km - lastFull.km) / gal }); lastFull = f; gal = 0; } });
+  if (!out.length) return null;
+  const last = out[out.length - 1].kmpg, prev = out.slice(-4, -1), avg = prev.length ? sum(prev, x => x.kmpg) / prev.length : last;
+  return { last, avg, drop: prev.length >= 2 && last < avg * .85, n: out.length };
+}
+function vAlerts(v) {
+  const out = [];
+  sortedTasks(v).forEach(({ t, s }) => { if (s.sev === 'bad' || s.sev === 'mid') out.push({ sev: s.sev, text: `${esc(v.name)}: ${esc(t.name)} · ${esc(s.label)}`, veh: v.id }); });
+  vDocs(v.id).forEach(d => { if (!d.due) return; const n = daysTo(d.due); if (n <= 30) out.push({ sev: n < 0 ? 'bad' : 'mid', text: `${esc(v.name)}: ${esc(d.name)} ${n < 0 ? 'venció' : n === 0 ? 'vence hoy' : `vence en ${n} día${n > 1 ? 's' : ''}`}`, veh: v.id }); });
+  const R = vReadings(v), last = R.length ? R[R.length - 1][0] : '';
+  if (vTasks(v.id).length && (!last || daysTo(last) <= -8)) out.push({ sev: 'info', text: `Anota el kilometraje de ${esc(v.name)}${last ? ` (última vez hace ${-daysTo(last)} días)` : ''}`, act: 'vehKm', veh: v.id });
+  const m = vMonth(v, ymOf(today()));
+  if (v.budMant > 0 && m.mant > v.budMant) out.push({ sev: 'mid', text: `${esc(v.name)}: mantenimiento pasó el presupuesto (${money(m.mant)} de ${money(v.budMant)})`, veh: v.id });
+  if (v.budFuel > 0 && m.fuel > v.budFuel) out.push({ sev: 'mid', text: `${esc(v.name)}: gasolina pasó el presupuesto (${money(m.fuel)} de ${money(v.budFuel)})`, veh: v.id });
+  const e = vEfficiency(v); if (e && e.drop) out.push({ sev: 'mid', text: `${esc(v.name)} rinde menos: ${e.last.toFixed(1)} km/gal contra ${e.avg.toFixed(1)} de costumbre. Puede necesitar revisión.`, veh: v.id });
+  return out;
+}
+function vehNotifs() { if (!S.data || !S.data.store || !S.data.store.veh) return []; return VEHS().flatMap(vAlerts).map(a => Object.assign(a, a.act ? { act: a.act } : { act: 'vehGo' })); }
+
+/* ---- vista ---- */
+function vVehiculos() {
+  if (vehBlocked() && !VEHS().length) return `${head('Vehículos')}<div class="alert"><span></span><div><b>Actualiza el conector de tu hoja para usar Vehículos</b><p>Los vehículos se guardan en la hoja AppData, que necesita el conector v3. Pégalo una vez en Apps Script (Ajustes te dice cómo) y vuelve aquí.</p></div><div class="acts"><a class="btn sm" href="#ajustes">Ir a Ajustes</a></div></div>`;
+  const L = VEHS(), v = curVeh();
+  if (!v) return `${head('Vehículos', 'Kilometraje, mantenimientos, gasolina y documentos de cada vehículo, por separado.')}
+    <div class="card veh-empty"><span class="veh-ic big">${vsvg('Moto')}</span><h2>Agrega tu primer vehículo</h2><p class="muted">Te armo un plan de mantenimiento según el tipo y te aviso cuando le toca cada cosa por kilometraje o por fecha.</p><button class="btn pri" data-act="vehNew">Agregar vehículo</button></div>`;
+  const ym = ymOf(today()), m = vMonth(v, ym), ck = vCostKm(v), ef = vEfficiency(v);
+  const T = sortedTasks(v), logs = vLogs(v.id), fuel = vFuel(v.id), docs = vDocs(v.id);
+  const goal = v.fund ? S.data.goals.find(g => g.name === v.fund) : null, gs = goal ? goalSaved(goal) : 0;
+  const tabs = L.length > 1 ? `<div class="veh-tabs">${L.map(x => { const bad = vAlerts(x).some(a => a.sev === 'bad'); return `<button type="button" class="${x.id === v.id ? 'on' : ''}" data-act="vehSel" data-v="${x.id}">${vsvg(x.type)}<span>${esc(x.name)}</span>${bad ? '<i class="dot-bad"></i>' : ''}</button>`; }).join('')}<button type="button" class="add" data-act="vehNew" aria-label="Agregar vehículo">+</button></div>` : '';
+  const bud = (lab, spent, b) => b > 0 ? `<div class="mini"><div class="row2"><span>${lab}</span><span class="num ${spent > b ? 'neg' : ''}">${money(spent)} / ${money(b)}</span></div><div class="bar ${spent > b ? 'over' : spent >= b * .85 ? 'near' : 'good'}"><i style="width:${Math.min(100, spent / b * 100)}%"></i></div></div>` : '';
+  const hist = S.ui.vHist || 'serv';
+  const logItem = x => `<div class="item click" data-act="vehLog" data-v="${x.id}"><span class="ic">${gsvg('work')}</span><div class="t"><b>${esc(x.title || (x.items || []).filter(i => i.on).map(i => i.name).slice(0, 3).join(', ') || 'Mantenimiento')}</b><small>${dLabel(x.date)} · ${fmtKm(x.km)}${x.shop ? ' · ' + esc(x.shop) : ''}${(x.imgs || []).length ? ` · ${x.imgs.length} foto${x.imgs.length > 1 ? 's' : ''}` : ''}${x.movId ? ' · en gastos' : ''}</small></div><span class="amt">${money(x.total)}</span></div>`;
+  const fuelItem = x => `<div class="item click" data-act="vehFuelEdit" data-v="${x.id}"><span class="ic">${gsvg('fuel')}</span><div class="t"><b>${x.gal ? (+x.gal).toFixed(2) + ' gal' : 'Gasolina'}${x.price ? ' · ' + money(x.price) + '/gal' : ''}</b><small>${dLabel(x.date)} · ${fmtKm(x.km)}${x.station ? ' · ' + esc(x.station) : ''}${x.full === false ? ' · parcial' : ''}${x.movId ? ' · en gastos' : ''}</small></div><span class="amt">${money(x.total)}</span></div>`;
+  const kmItem = x => `<div class="item"><span class="ic">${svgI('estadisticas')}</span><div class="t"><b>${fmtKm(x[1])}</b><small>${dLabel(x[0])}</small></div><span></span></div>`;
+  const histBody = hist === 'gas' ? (fuel.map(fuelItem).join('') || '<p class="note">Registra cada carga para saber cuánto rinde y cuánto te cuesta cada km.</p>')
+    : hist === 'km' ? (vReadings(v).slice().reverse().slice(0, 30).map(kmItem).join('') || '<p class="note">Sin lecturas todavía.</p>')
+      : (logs.map(logItem).join('') || '<p class="note">Aún no hay mantenimientos registrados.</p>');
+  return `${head('Vehículos')}${tabs}
+  <section class="card veh-hero">
+    <div class="vh-top"><span class="veh-ic">${vsvg(v.type)}</span><div class="vh-name"><h2>${esc(v.name)}</h2><small class="muted">${esc([v.brand, v.year, v.plate].filter(Boolean).join(' · ') || v.type)}${v.scope && v.scope !== 'Personal' ? ' · ' + esc(v.scope) : ''}</small></div><button type="button" class="btn sm" data-act="vehEdit" data-v="${v.id}">Editar</button></div>
+    <button type="button" class="vh-km" data-act="vehKm" data-v="${v.id}"><span class="num">${fmtKm(v.km)}</span><small>${v.kmDate ? 'anotado ' + (daysTo(v.kmDate) === 0 ? 'hoy' : dLabel(v.kmDate)) : 'toca para anotar'} · actualizar</small></button>
+    <div class="vh-acts"><button class="btn pri" data-act="vehServ" data-v="${v.id}">${gsvg('work')}Mantenimiento</button><button class="btn" data-act="vehFuel" data-v="${v.id}">${gsvg('fuel')}Gasolina</button></div>
+  </section>
+  <div class="kpis veh-kpis"><div class="kpi"><span class="label">Gastado en ${MONTHS[Number(ym.slice(5)) - 1].toLowerCase()}</span><span class="v">${money(m.total)}</span><span class="d">Mant. ${money(m.mant)} · Gasolina ${money(m.fuel)}</span></div>
+    <div class="kpi"><span class="label">Costo por km</span><span class="v">${ck ? '$' + ck.perKm.toFixed(3) : '—'}</span><span class="d">${ck ? `${fmtKm(ck.kmRun)} en ${ck.days} días · gasolina $${ck.fuelKm.toFixed(3)}/km` : 'Necesito al menos dos lecturas de km'}</span></div>
+    <div class="kpi"><span class="label">Rendimiento</span><span class="v ${ef && ef.drop ? 'neg' : ''}">${ef ? ef.last.toFixed(1) + ' km/gal' : '—'}</span><span class="d">${ef ? `promedio ${ef.avg.toFixed(1)}${ef.drop ? ' · bajó, revisa' : ''}` : 'Registra dos cargas con tanque lleno'}</span></div></div>
+  <div class="grid-2 veh-grid">
+    <section class="card side-card"><header style="margin:0"><h2>Plan de mantenimiento</h2><button type="button" class="linkbtn" data-act="vehTask" data-v="">+ Tarea</button></header>
+      ${T.length ? `<div class="vtasks">${T.map(({ t, s }) => `<button type="button" class="vtask" data-act="vehTask" data-v="${t.id}"><div class="row2"><span>${esc(t.name)}</span><span class="pill ${s.sev === 'new' ? '' : s.sev}">${esc(s.label)}</span></div><div class="bar ${s.sev === 'bad' ? 'over' : s.sev === 'mid' ? 'near' : 'good'}"><i style="width:${s.never ? 0 : Math.max(4, s.p * 100)}%"></i></div><small class="muted">${[t.everyKm ? 'cada ' + fmtKm(t.everyKm) : '', t.everyMonths ? `cada ${t.everyMonths} mes${t.everyMonths > 1 ? 'es' : ''}` : ''].filter(Boolean).join(' o ')}${t.lastDate ? ` · último ${dLabel(t.lastDate)}${t.lastKm ? ' a ' + fmtKm(t.lastKm) : ''}` : ''}</small></button>`).join('')}</div>`
+      : `<p class="note">Sin plan todavía.</p>${PLAN_TPL[v.type] ? `<button class="btn" data-act="vehTpl" data-v="${v.id}">Cargar plan sugerido para ${esc(v.type.toLowerCase())}</button>` : ''}`}
+      ${T.some(x => x.s.never) ? '<p class="note">Las tareas “Sin registro” empiezan a contar cuando las marques en un mantenimiento. Si ya las hiciste hace poco, toca la tarea y pon cuándo.</p>' : ''}
+    </section>
+    <div class="veh-col">
+      <section class="card side-card"><header style="margin:0"><h2>Presupuesto y fondo</h2><button type="button" class="linkbtn" data-act="vehEdit" data-v="${v.id}">Ajustar</button></header>
+        ${bud('Mantenimiento del mes', m.mant, v.budMant)}${bud('Gasolina del mes', m.fuel, v.budFuel)}
+        ${goal ? `<div class="row2"><span>Fondo · ${esc(goal.name)}</span><span class="num">${money(gs)}${goal.target ? ' / ' + money(goal.target) : ''}</span></div>${goal.target ? `<div class="bar ${gs >= goal.target ? 'good' : ''}"><i style="width:${Math.min(100, Math.max(0, gs / goal.target * 100))}%"></i></div>` : ''}<div class="btns"><button class="btn sm" data-act="goalIn" data-n="${esc(goal.name)}">Aportar al fondo</button></div>` : ''}
+        ${!v.budMant && !v.budFuel && !goal ? '<p class="note">Define cuánto quieres gastar al mes en mantenimiento y gasolina, y un fondo para piezas grandes (llantas, kit de arrastre).</p>' : ''}
+        ${!goal ? `<button class="btn sm" data-act="vehFund" data-v="${v.id}">Crear fondo de mantenimiento</button>` : ''}
+      </section>
+      <section class="card side-card"><header style="margin:0"><h2>Documentos</h2><button type="button" class="linkbtn" data-act="vehDoc" data-v="">+ Documento</button></header>
+        ${docs.length ? docs.map(d => { const n = d.due ? daysTo(d.due) : null; return `<button type="button" class="vdoc" data-act="vehDoc" data-v="${d.id}"><span>${esc(d.name)}${(d.imgs || []).length ? ' <small class="muted">· foto</small>' : ''}</span><span class="pill ${n == null ? '' : n < 0 ? 'bad' : n <= 30 ? 'mid' : 'ok'}">${n == null ? 'Sin fecha' : n < 0 ? 'Vencido' : n === 0 ? 'Vence hoy' : n <= 60 ? `${n} días` : dLabel(d.due)}</span></button>`; }).join('') : '<p class="note">Tarjeta de circulación, seguro, licencia: te aviso 30 días antes de que venzan.</p>'}
+      </section>
+    </div>
+  </div>
+  <section class="card side-card"><header style="margin:0"><h2>Historial</h2><span class="muted" style="font-size:.84rem">${y2(v)}</span></header>
+    <div class="seg">${[['serv', 'Mantenimientos'], ['gas', 'Gasolina'], ['km', 'Kilometraje']].map(([k, l]) => `<button type="button" data-act="vehHist" data-v="${k}" class="${hist === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+    <div class="list">${histBody}</div>
+  </section>`;
+}
+function y2(v) { const y = today().slice(0, 4); const t = sum(vLogs(v.id).filter(x => x.date.startsWith(y)), x => +x.total || 0), f = sum(vFuel(v.id).filter(x => x.date.startsWith(y)), x => +x.total || 0); return t || f ? `${y}: mant. ${money(t)} · gasolina ${money(f)}` : ''; }
+
+function vehCard() {
+  const L = VEHS(); if (!L.length) return '';
+  return `<section class="card side-card"><header style="margin:0"><h2>Vehículos</h2><a href="#vehiculos">Ver</a></header>
+  ${L.slice(0, 3).map(v => { const t = sortedTasks(v).find(x => x.s.sev !== 'new'), docs = vDocs(v.id).filter(d => d.due && daysTo(d.due) <= 30); return `<div class="vcard"><div class="row2"><button type="button" class="linkbtn vc-name" data-act="vehGo" data-v="${v.id}">${vsvg(v.type)}<b>${esc(v.name)}</b></button><button type="button" class="btn sm" data-act="vehKm" data-v="${v.id}">${fmtKm(v.km)}</button></div>
+    ${t && t.s.sev !== 'new' ? `<div class="row2" style="font-size:.84rem"><span>${esc(t.t.name)}</span><span class="pill ${t.s.sev}">${esc(t.s.label)}</span></div><div class="bar ${t.s.sev === 'bad' ? 'over' : t.s.sev === 'mid' ? 'near' : 'good'}"><i style="width:${Math.max(4, t.s.p * 100)}%"></i></div>` : ''}
+    ${docs.map(d => `<p class="note ${daysTo(d.due) < 0 ? 'neg' : ''}" style="margin:0">${esc(d.name)} ${daysTo(d.due) < 0 ? 'vencido' : 'vence ' + dLabel(d.due)}</p>`).join('')}</div>`; }).join('')}</section>`;
+}
+
+/* ---- formularios ---- */
+function ensureSub(sub, cat) { if (sub && !catMap()[sub]) { const c = cat || (S.data.lists.expenseCats.includes('Transporte') ? 'Transporte' : S.data.lists.expenseCats[0] || 'Otros gastos'); op('cat.add', { sub, cat: c, type: 'Gasto' }); } return sub; }
+function defaultSubs() {
+  const subs = S.data.cats.filter(c => c.type === 'Gasto');
+  const mant = (subs.find(c => /manten.*(veh|moto|auto|carro)|repuesto|taller|mec[aá]nic/i.test(c.sub)) || {}).sub || 'Mantenimiento de vehículo';
+  const fuel = (subs.find(c => /combust|gasolin/i.test(c.sub)) || {}).sub || 'Combustible';
+  return { mant, fuel };
+}
+function vSave(v) { const id = v.id; const d = Object.assign({}, v); delete d.id; vPut('veh', id, d); }
+function editVeh(v) {
+  const isNew = !v, ds = defaultSubs();
+  v = Object.assign({ id: 'v' + uid(), name: '', type: 'Moto', brand: '', year: '', plate: '', scope: 'Personal', km: '', budMant: '', budFuel: '', subMant: ds.mant, subFuel: ds.fuel, acc: '', fund: '', created: Date.now(), order: VEHS().length + 1 }, v || {});
+  const subs = [...new Set([ds.mant, ds.fuel, ...S.data.cats.filter(c => c.type === 'Gasto').map(c => c.sub)])];
+  openSheet(isNew ? 'Nuevo vehículo' : 'Editar vehículo', `
+    <div class="two"><label class="field"><span>Nombre</span><input id="vName" value="${esc(v.name)}" placeholder="Mi moto" autofocus required></label><label class="field"><span>Tipo</span>${sel('vType', VEH_TYPES, v.type)}</label></div>
+    <div class="two"><label class="field"><span>Marca y modelo</span><input id="vBrand" value="${esc(v.brand)}" placeholder="Honda XR150"></label><label class="field"><span>Año</span><input id="vYear" type="number" inputmode="numeric" value="${esc(v.year)}"></label></div>
+    <div class="two"><label class="field"><span>Placa</span><input id="vPlate" value="${esc(v.plate)}"></label><label class="field"><span>Kilometraje actual</span><input id="vKm" type="number" inputmode="numeric" value="${esc(v.km)}" placeholder="18420"></label></div>
+    <div class="two"><label class="field"><span>Uso (ámbito de los gastos)</span>${sel('vScope', S.data.lists.scopes, v.scope)}</label><label class="field"><span>Cuenta con que pagas normalmente</span>${sel('vAcc', S.data.accounts.map(a => a.name), v.acc, 'Elegir cada vez')}</label></div>
+    <div class="two"><label class="field"><span>Presupuesto mensual de mantenimiento</span><input id="vBudM" class="calc" type="text" inputmode="decimal" value="${v.budMant || ''}" placeholder="0"></label><label class="field"><span>Presupuesto mensual de gasolina</span><input id="vBudF" class="calc" type="text" inputmode="decimal" value="${v.budFuel || ''}" placeholder="0"></label></div>
+    <label class="field"><span>Fondo de ahorro (meta)</span>${sel('vFund', S.data.goals.map(g => g.name), v.fund, 'Sin fondo')}</label>
+    <div class="two"><label class="field"><span>Subcategoría para mantenimiento</span>${sel('vSubM', subs, v.subMant)}</label><label class="field"><span>Subcategoría para gasolina</span>${sel('vSubF', subs, v.subFuel)}</label></div>
+    ${isNew ? `<label class="ag-pin"><input type="checkbox" id="vTpl" checked> Cargar el plan de mantenimiento sugerido</label>` : ''}
+    <div class="btns"><button class="btn pri">Guardar</button>${isNew ? '' : '<button type="button" class="btn danger" id="vDel">Eliminar vehículo</button>'}</div>
+    <div id="vDelC" hidden class="alert bad"><span></span><div><b>¿Eliminar ${esc(v.name)}?</b><p>Se borran su plan, mantenimientos, gasolina, documentos y fotos. Los gastos que ya registraste en tus finanzas se quedan.</p></div><div class="acts"><button type="button" class="btn sm danger" id="vDelY">Eliminar</button></div></div>`, () => {
+    const name = $('#vName').value.trim(); if (!name) return 'Ponle un nombre.';
+    const km = Number($('#vKm').value) || 0;
+    const rec = Object.assign({}, v, { name, type: $('#vType').value, brand: $('#vBrand').value.trim(), year: $('#vYear').value, plate: $('#vPlate').value.trim().toUpperCase(), scope: $('#vScope').value, acc: $('#vAcc').value, budMant: calcVal('#vBudM'), budFuel: calcVal('#vBudF'), fund: $('#vFund').value, subMant: $('#vSubM').value, subFuel: $('#vSubF').value });
+    if (km && km !== Number(v.km)) { rec.km = km; rec.kmDate = today(); vPut('vkm', 'k' + uid(), { veh: v.id, date: today(), km }); }
+    vSave(rec);
+    if (isNew && $('#vTpl') && $('#vTpl').checked) loadTpl(rec);
+    S.ui.veh = v.id; if (S.ui.view !== 'vehiculos') go('vehiculos');
+    toast(isNew ? 'Vehículo agregado' : 'Guardado');
+  }, f => {
+    const d = f.querySelector('#vDel'); if (d) d.onclick = () => { $('#vDelC').hidden = false; };
+    const y = f.querySelector('#vDelY'); if (y) y.onclick = () => { delVeh(v.id); closeSheet(); render(); toast('Vehículo eliminado'); };
+  });
+}
+function delVeh(id) {
+  ['vtask', 'vlog', 'fuel', 'vdoc', 'vkm'].forEach(c => vList(c, id).forEach(x => { (x.imgs || []).forEach(im => { blobDel('img', im.id, im.n); IDB.del(im.id); IMG.delete(im.id); }); opq('rec.delete', { coll: c, id: x.id }); }));
+  op('rec.delete', { coll: 'veh', id }); S.ui.veh = '';
+}
+function loadTpl(v) { (PLAN_TPL[v.type] || []).forEach(([name, everyKm, everyMonths, action], i) => opq('rec.upsert', { coll: 'vtask', id: 't' + uid(), data: { veh: v.id, name, everyKm, everyMonths, action, order: i } })); save(); render(); scheduleSync(); }
+function editTask(t, vid) {
+  const v = vGet(vid), isNew = !t;
+  t = Object.assign({ id: 't' + uid(), veh: vid, name: '', everyKm: '', everyMonths: '', action: 'Cambiado', lastKm: '', lastDate: '', cost: '' }, t || {});
+  openSheet(isNew ? 'Nueva tarea del plan' : esc(t.name), `
+    <label class="field"><span>Tarea</span><input id="tName" value="${esc(t.name)}" placeholder="Aceite de motor" ${isNew ? 'autofocus' : ''} required></label>
+    <div class="two"><label class="field"><span>Cada cuántos km</span><input id="tKm" type="number" inputmode="numeric" value="${esc(t.everyKm || '')}" placeholder="3000"></label><label class="field"><span>o cada cuántos meses</span><input id="tMo" type="number" inputmode="numeric" value="${esc(t.everyMonths || '')}" placeholder="4"></label></div>
+    <p class="note" style="margin:0">Lo que llegue primero. Deja vacío lo que no aplique.</p>
+    <div class="two"><label class="field"><span>Qué se hace normalmente</span>${sel('tAct', ACTIONS, t.action)}</label><label class="field"><span>Costo aproximado</span><input id="tCost" class="calc" type="text" inputmode="decimal" value="${t.cost || ''}"></label></div>
+    <div class="two"><label class="field"><span>Última vez (km)</span><input id="tLastKm" type="number" inputmode="numeric" value="${esc(t.lastKm ?? '')}" placeholder="${esc(v.km || '')}"></label><label class="field"><span>Última vez (fecha)</span><input id="tLastD" type="date" value="${esc(t.lastDate || '')}"></label></div>
+    <div class="btns"><button class="btn pri">Guardar</button>${isNew ? '' : '<button type="button" class="btn" id="tNow">Hecho hoy</button><button type="button" class="btn danger" id="tDel">Quitar del plan</button>'}</div>`, () => {
+    const name = $('#tName').value.trim(); if (!name) return 'Escribe la tarea.';
+    const everyKm = Number($('#tKm').value) || 0, everyMonths = Number($('#tMo').value) || 0;
+    if (!everyKm && !everyMonths) return 'Pon cada cuántos km o cada cuántos meses.';
+    const d = Object.assign({}, t, { name, everyKm, everyMonths, action: $('#tAct').value, cost: calcVal('#tCost'), lastKm: $('#tLastKm').value === '' ? '' : Number($('#tLastKm').value), lastDate: $('#tLastD').value }); delete d.id;
+    vPut('vtask', t.id, d);
+  }, f => {
+    const n = f.querySelector('#tNow'); if (n) n.onclick = () => { $('#tLastKm').value = v.km || ''; $('#tLastD').value = today(); };
+    const x = f.querySelector('#tDel'); if (x) x.onclick = () => { op('rec.delete', { coll: 'vtask', id: t.id }); closeSheet(); };
+  });
+}
+function editKm(vid) {
+  const v = vGet(vid), R = vReadings(v), last = R.length ? R[R.length - 1] : null;
+  openSheet('Kilometraje · ' + esc(v.name), `<label class="field"><span>Kilometraje del tablero</span><input id="kmV" type="number" inputmode="numeric" value="" placeholder="${esc(v.km || '')}" autofocus></label>
+    ${last ? `<p class="note" style="margin:0">Última lectura: ${fmtKm(last[1])} el ${dLabel(last[0])}.</p>` : ''}
+    <label class="field"><span>Fecha</span><input id="kmD" type="date" value="${today()}"></label><div id="kmWarn" class="note neg" style="margin:0"></div>
+    <button class="btn pri">Guardar</button>`, f => {
+    const km = Number($('#kmV').value), date = $('#kmD').value || today();
+    if (!(km > 0)) return 'Escribe el kilometraje.';
+    if (v.km && km < Number(v.km) && !f.dataset.ok) { f.dataset.ok = 1; return `Es menor que el último (${fmtKm(v.km)}). Si es correcto, toca Guardar otra vez.`; }
+    vPut('vkm', 'k' + uid(), { veh: v.id, date, km });
+    vSave(Object.assign({}, v, { km: date >= (v.kmDate || '') || km > (v.km || 0) ? km : v.km, kmDate: date >= (v.kmDate || '') ? date : v.kmDate }));
+    const due = sortedTasks(vGet(v.id)).filter(x => x.s.sev === 'bad' || x.s.sev === 'mid');
+    toast(due.length ? `${due[0].t.name}: ${due[0].s.label.toLowerCase()}` : 'Kilometraje guardado');
+  });
+}
+
+/* ---- registrar mantenimiento ---- */
+function editServ(vid, log) {
+  const v = vGet(vid), isNew = !log, T = sortedTasks(v);
+  log = Object.assign({ id: 'l' + uid(), veh: vid, date: today(), km: v.km || '', shop: '', items: [], labor: '', notes: '', imgs: [], title: '' }, log ? JSON.parse(JSON.stringify(log)) : {});
+  const rows = [];
+  const fromTask = new Set(log.items.map(i => i.task).filter(Boolean));
+  log.items.forEach(i => rows.push(Object.assign({}, i)));
+  T.forEach(({ t, s }) => { if (!fromTask.has(t.id)) rows.push({ task: t.id, name: t.name, action: t.action || 'Cambiado', cost: '', detail: '', on: false, sev: s.sev, label: s.label }); });
+  const rowHTML = (r, i) => `<div class="srow ${r.on ? 'on' : ''} ${r.task && !r.on && !['bad', 'mid'].includes(r.sev) && isNew ? 'later' : ''}" data-i="${i}" data-task="${esc(r.task || '')}" data-name="${esc(r.task ? r.name : '')}">
+    <label class="sr-main"><input type="checkbox" ${r.on ? 'checked' : ''}><span class="sr-name">${r.task ? esc(r.name) : `<input class="sr-nm" value="${esc(r.name)}" placeholder="Pieza o arreglo">`}${r.task && r.sev && (r.sev === 'bad' || r.sev === 'mid') ? ` <span class="pill ${r.sev}">${esc(r.label)}</span>` : ''}</span><input class="calc sr-cost" type="text" inputmode="decimal" placeholder="$0" value="${r.cost || ''}"></label>
+    <div class="sr-more"><div class="seg sr-act">${ACTIONS.map(a => `<button type="button" class="${(r.action || 'Cambiado') === a ? 'on' : ''}">${a}</button>`).join('')}</div><input class="sr-det" placeholder="Marca, medida o detalle (opcional)" value="${esc(r.detail || '')}"></div></div>`;
+  const mBud = vMonth(v, ymOf(log.date)).mant - (isNew ? 0 : Number(log.total) || 0);
+  openSheet(isNew ? 'Mantenimiento · ' + esc(v.name) : 'Editar mantenimiento', `
+    <div class="two"><label class="field"><span>Fecha</span><input id="sDate" type="date" value="${log.date}"></label><label class="field"><span>Kilometraje</span><input id="sKm" type="number" inputmode="numeric" value="${esc(log.km)}"></label></div>
+    <label class="field"><span>Taller o lugar</span><input id="sShop" value="${esc(log.shop)}" list="sShops" placeholder="Taller, agencia o yo mismo"><datalist id="sShops">${[...new Set(VEHS().flatMap(x => vLogs(x.id).map(l => l.shop)).filter(Boolean))].map(s => `<option value="${esc(s)}">`).join('')}</datalist></label>
+    <div class="field"><span>Checklist · marca lo que se hizo</span><div class="srows" id="sRows">${rows.map(rowHTML).join('')}</div>
+      <div class="btns"><button type="button" class="btn sm" id="sAdd">+ Pieza o arreglo</button>${rows.some((r, i) => r.task && !r.on && !['bad', 'mid'].includes(r.sev)) && isNew ? '<button type="button" class="btn sm" id="sAll">Ver todo el plan</button>' : ''}</div></div>
+    <div class="two"><label class="field"><span>Mano de obra</span><input id="sLabor" class="calc" type="text" inputmode="decimal" value="${log.labor || ''}" placeholder="0"></label><label class="field"><span>Fotos (factura, piezas)</span><input id="sImg" type="file" accept="image/*" multiple></label></div>
+    <div class="simgs" id="sImgs"></div>
+    <label class="field"><span>Notas</span><textarea id="sNotes" rows="2" placeholder="Garantía, recomendaciones del mecánico…">${esc(log.notes)}</textarea></label>
+    <div class="stotal"><span>Total</span><b class="num" id="sTot">$0.00</b></div>
+    <p class="note" id="sBud" style="margin:0"></p>
+    <button class="btn pri">Guardar mantenimiento</button>`, f => {
+    const items = readRows(f);
+    if (!items.some(i => i.on) && !calcVal('#sLabor')) return 'Marca al menos una tarea o escribe un costo.';
+    const km = Number($('#sKm').value) || 0, date = $('#sDate').value || today();
+    const total = r2(sum(items.filter(i => i.on), i => i.cost) + calcVal('#sLabor'));
+    const rec = Object.assign({}, log, { date, km, shop: $('#sShop').value.trim(), items: items.filter(i => i.on || !i.task).filter(i => i.on || i.name), labor: calcVal('#sLabor'), notes: $('#sNotes').value.trim(), total, imgs: f._imgs, title: items.filter(i => i.on).map(i => i.name).slice(0, 3).join(', ') + (items.filter(i => i.on).length > 3 ? '…' : '') });
+    (log.imgs || []).filter(x => !f._imgs.some(y => y.id === x.id)).forEach(x => { blobDel('img', x.id, x.n); IDB.del(x.id); IMG.delete(x.id); });
+    const id = rec.id; delete rec.id;
+    vPut('vlog', id, rec);
+    rec.items.filter(i => i.on && i.task).forEach(i => { const t = store('vtask')[i.task]; if (!t) return; if (!t.lastDate || date >= t.lastDate) vPut('vtask', i.task, Object.assign({}, t, { lastKm: km || t.lastKm, lastDate: date })); });
+    if (km && km >= (Number(v.km) || 0)) vSave(Object.assign({}, vGet(v.id), { km, kmDate: date >= (v.kmDate || '') ? date : v.kmDate }));
+    const desc = `${v.name}: ${rec.title || 'mantenimiento'}`.slice(0, 90);
+    if (log.movId && S.data.movs.some(m => m.id === log.movId)) { const m = S.data.movs.find(x => x.id === log.movId); op('mov.upsert', Object.assign({}, m, { amount: total, date, desc })); toast('Mantenimiento y gasto actualizados'); }
+    else if (total > 0) setTimeout(() => askExpense({ v, desc, amount: total, date, sub: v.subMant || defaultSubs().mant, notes: `${fmtKm(km)}${rec.shop ? ' · ' + rec.shop : ''}`, onDone: movId => vPut('vlog', id, Object.assign({}, store('vlog')[id], { movId })) }), 30);
+    else toast('Mantenimiento guardado');
+  }, f => {
+    f._imgs = (log.imgs || []).slice();
+    const box = f.querySelector('#sRows');
+    const upd = () => {
+      const items = readRows(f), tot = r2(sum(items.filter(i => i.on), i => i.cost) + calcVal('#sLabor'));
+      $('#sTot').textContent = money(tot);
+      const b = $('#sBud'); if (v.budMant > 0) { const after = mBud + tot; b.textContent = after > v.budMant ? `Te pasas ${money(after - v.budMant)} del presupuesto de mantenimiento este mes (${money(after)} de ${money(v.budMant)}).` : `Presupuesto de mantenimiento: ${money(after)} de ${money(v.budMant)} este mes.`; b.classList.toggle('neg', after > v.budMant); } else b.textContent = '';
+    };
+    box.addEventListener('change', e => { const r = e.target.closest('.srow'); if (r && e.target.type === 'checkbox') { r.classList.toggle('on', e.target.checked); if (e.target.checked) { r.classList.remove('later'); const t = store('vtask')[r.dataset.task]; const c = r.querySelector('.sr-cost'); if (t && t.cost && !c.value) c.value = t.cost; } } upd(); });
+    box.addEventListener('input', upd);
+    box.addEventListener('click', e => { const b = e.target.closest('.sr-act button'); if (!b) return; b.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); const r = b.closest('.srow'); const cb = r.querySelector('input[type=checkbox]'); if (!cb.checked) { cb.checked = true; r.classList.add('on'); upd(); } });
+    f.querySelector('#sLabor').addEventListener('input', upd);
+    f.querySelector('#sAdd').onclick = () => { rows.push({ name: '', action: 'Cambiado', cost: '', on: true }); box.insertAdjacentHTML('beforeend', rowHTML(rows[rows.length - 1], rows.length - 1)); box.lastElementChild.querySelector('.sr-nm').focus(); };
+    const all = f.querySelector('#sAll'); if (all) all.onclick = () => { box.querySelectorAll('.srow.later').forEach(r => r.classList.remove('later')); all.remove(); };
+    bindPhotos(f, '#sImg', '#sImgs', f._imgs);
+    upd();
+  });
+}
+function readRows(f) {
+  return [...f.querySelectorAll('.srow')].map(r => {
+    const nm = r.querySelector('.sr-nm'), x = calc(r.querySelector('.sr-cost').value);
+    return { name: nm ? nm.value.trim() : r.dataset.name, on: r.querySelector('input[type=checkbox]').checked, cost: isFinite(x) ? r2(x) : 0, action: (r.querySelector('.sr-act .on') || {}).textContent || 'Cambiado', detail: r.querySelector('.sr-det').value.trim(), task: r.dataset.task || '' };
+  });
+}
+function bindPhotos(f, inSel, boxSel, list) {
+  const box = f.querySelector(boxSel);
+  const draw = () => { box.innerHTML = list.map((x, i) => `<span class="sim"><img data-img="${x.id}" alt="Foto ${i + 1}"><button type="button" data-rm="${i}" aria-label="Quitar foto">×</button></span>`).join(''); hydrateImgs(box); };
+  box.addEventListener('click', e => { const b = e.target.closest('[data-rm]'); if (b) { list.splice(Number(b.dataset.rm), 1); draw(); return; } const im = e.target.closest('img'); if (im && im.src) viewPhoto(im.src); });
+  f.querySelector(inSel).addEventListener('change', async e => { for (const file of e.target.files) { try { const url = await compressImage(file, 1400, .7); list.push(storeImage(url)); } catch (er) { toast('No pude leer esa imagen'); } } e.target.value = ''; draw(); });
+  draw();
+}
+function viewPhoto(src) { const d = document.createElement('div'); d.className = 'photo-view'; d.innerHTML = `<img src="${src}" alt="Foto"><button type="button" aria-label="Cerrar">×</button>`; d.onclick = () => d.remove(); document.body.appendChild(d); }
+
+/* ---- preguntar si se registra como gasto ---- */
+function askExpense(o) {
+  const v = o.v, goal = v.fund ? S.data.goals.find(g => g.name === v.fund) : null, gs = goal ? goalSaved(goal) : 0;
+  const accs = S.data.accounts.map(a => a.name), bal = balances();
+  openSheet('¿Lo registro como gasto?', `<div class="stotal"><span>${esc(o.desc)}</span><b class="num">${money(o.amount)}</b></div>
+    <p class="note" style="margin:0">Va a “${esc(o.sub)}”${v.scope && v.scope !== 'Personal' ? ' · ' + esc(v.scope) : ''} el ${dLabel(o.date)}.</p>
+    <label class="field"><span>Pagado con</span>${sel('xAcc', accs.map(a => [a, `${a} · ${money(bal[a] || 0)}`]), v.acc || accOrder()[0])}</label>
+    ${goal ? `<label class="ag-pin"><input type="checkbox" id="xFund" ${gs >= o.amount ? '' : ''}> Sacarlo del fondo “${esc(goal.name)}” (${money(gs)})</label><p class="note" style="margin:0" id="xFundN">${goal.acc ? `El fondo está en ${esc(goal.acc)}: el gasto sale de esa cuenta.` : 'Registro un retiro del fondo a la cuenta elegida y luego el gasto.'}</p>` : ''}
+    <div class="btns"><button class="btn pri">Sí, registrar gasto</button><button type="button" class="btn" id="xNo">No, solo guardarlo aquí</button></div>`, () => {
+    ensureSub(o.sub);
+    const useFund = goal && $('#xFund') && $('#xFund').checked;
+    let acc = $('#xAcc').value;
+    if (useFund && goal.acc) acc = goal.acc;
+    if (useFund && !goal.acc) op('mov.upsert', { id: uid(), date: o.date, type: 'Retiro de meta', acc, sub: '', desc: 'Retiro ' + goal.name + ' · ' + v.name, amount: o.amount, to: '', goal: goal.name, debt: '', scope: v.scope || 'Personal', method: '', notes: o.desc });
+    const id = uid();
+    op('mov.upsert', { id, date: o.date, type: 'Gasto', acc, sub: o.sub, desc: o.desc, amount: o.amount, to: '', goal: '', debt: '', scope: v.scope || 'Personal', method: (S.data.accounts.find(a => a.name === acc) || {}).type === 'Efectivo' ? 'Efectivo' : '', notes: o.notes || '' });
+    if (o.onDone) o.onDone(id);
+    toast('Guardado y registrado como gasto');
+  }, f => { f.querySelector('#xNo').onclick = () => { closeSheet(); toast('Guardado sin tocar tus gastos'); }; });
+}
+
+/* ---- gasolina ---- */
+function editFuelRec(vid, x) {
+  const v = vGet(vid), isNew = !x, last = vFuel(vid).find(f => f.price);
+  x = Object.assign({ id: 'f' + uid(), veh: vid, date: today(), km: '', total: '', price: last ? last.price : '', gal: '', full: true, station: last ? last.station : '' }, x || {});
+  openSheet(isNew ? 'Gasolina · ' + esc(v.name) : 'Editar carga', `
+    <div class="two"><label class="field"><span>Total pagado</span><input id="gTot" class="calc" type="text" inputmode="decimal" value="${x.total || ''}" autofocus></label><label class="field"><span>Precio por galón</span><input id="gPrice" class="calc" type="text" inputmode="decimal" value="${x.price || ''}"></label></div>
+    <div class="two"><label class="field"><span>Kilometraje</span><input id="gKm" type="number" inputmode="numeric" value="${esc(x.km)}" placeholder="${esc(v.km || '')}"></label><label class="field"><span>Fecha</span><input id="gDate" type="date" value="${x.date}"></label></div>
+    <div class="two"><label class="field"><span>Gasolinera</span><input id="gSt" value="${esc(x.station || '')}"></label><label class="ag-pin" style="align-self:end"><input type="checkbox" id="gFull" ${x.full !== false ? 'checked' : ''}> Tanque lleno</label></div>
+    <p class="note" id="gInfo" style="margin:0"></p>
+    <div class="btns"><button class="btn pri">Guardar</button>${isNew ? '' : '<button type="button" class="btn danger" id="gDel">Eliminar</button>'}</div>`, () => {
+    const total = calcVal('#gTot'), price = calcVal('#gPrice'), km = Number($('#gKm').value) || 0, date = $('#gDate').value || today();
+    if (!(total > 0)) return 'Escribe cuánto pagaste.';
+    if (!km) return 'Anota el kilometraje: con eso calculo cuánto rinde.';
+    const rec = Object.assign({}, x, { total, price, gal: price ? r2(total / price * 1000) / 1000 : 0, km, date, station: $('#gSt').value.trim(), full: $('#gFull').checked }); const id = rec.id; delete rec.id;
+    vPut('fuel', id, rec);
+    if (km >= (Number(v.km) || 0)) vSave(Object.assign({}, vGet(v.id), { km, kmDate: date }));
+    const desc = `Gasolina ${v.name}`;
+    if (x.movId && S.data.movs.some(m => m.id === x.movId)) { const m = S.data.movs.find(y => y.id === x.movId); op('mov.upsert', Object.assign({}, m, { amount: total, date })); toast('Carga y gasto actualizados'); }
+    else setTimeout(() => askExpense({ v, desc, amount: total, date, sub: v.subFuel || defaultSubs().fuel, notes: `${rec.gal ? rec.gal.toFixed(2) + ' gal · ' : ''}${fmtKm(km)}`, onDone: movId => vPut('fuel', id, Object.assign({}, store('fuel')[id], { movId })) }), 30);
+  }, f => {
+    const info = () => { const t = calcVal('#gTot'), p = calcVal('#gPrice'), km = Number($('#gKm').value) || 0, prev = vFuel(vid).filter(z => z.id !== x.id && z.km && z.km < km && z.full !== false).sort((a, b) => b.km - a.km)[0]; const g = p ? t / p : 0; $('#gInfo').textContent = g ? `${g.toFixed(2)} galones${prev && $('#gFull').checked ? ` · rinde ${((km - prev.km) / g).toFixed(1)} km/gal desde la carga anterior` : ''}` : ''; };
+    f.addEventListener('input', info); f.addEventListener('change', info); info();
+    const d = f.querySelector('#gDel'); if (d) d.onclick = () => { op('rec.delete', { coll: 'fuel', id: x.id }); closeSheet(); toast(x.movId ? 'Carga eliminada. El gasto sigue en Movimientos.' : 'Carga eliminada'); };
+  });
+}
+
+/* ---- documentos ---- */
+function editDoc(vid, d) {
+  const v = vGet(vid), isNew = !d;
+  d = Object.assign({ id: 'd' + uid(), veh: vid, name: '', due: '', cost: '', notes: '', imgs: [], hist: [] }, d || {});
+  const imgs = (d.imgs || []).slice();
+  openSheet(isNew ? 'Documento · ' + esc(v.name) : esc(d.name), `
+    <label class="field"><span>Documento</span><input id="dName" list="dNames" value="${esc(d.name)}" ${isNew ? 'autofocus' : ''} required><datalist id="dNames">${DOC_NAMES.map(n => `<option value="${n}">`).join('')}</datalist></label>
+    <div class="two"><label class="field"><span>Vence</span><input id="dDue" type="date" value="${d.due}"></label><label class="field"><span>Costo de renovación</span><input id="dCost" class="calc" type="text" inputmode="decimal" value="${d.cost || ''}"></label></div>
+    <label class="field"><span>Notas (número de póliza, aseguradora…)</span><input id="dNotes" value="${esc(d.notes)}"></label>
+    <label class="field"><span>Fotos del documento</span><input id="dImg" type="file" accept="image/*" multiple></label><div class="simgs" id="dImgs"></div>
+    ${(d.hist || []).length ? `<p class="note" style="margin:0">Renovaciones: ${d.hist.map(h => `${dLabel(h.date)} ${money(h.cost)}`).join(' · ')}</p>` : ''}
+    <div class="btns"><button class="btn pri">Guardar</button>${isNew ? '' : '<button type="button" class="btn" id="dRen">Lo renové</button><button type="button" class="btn danger" id="dDel">Eliminar</button>'}</div>`, () => {
+    const name = $('#dName').value.trim(); if (!name) return 'Escribe el nombre del documento.';
+    (d.imgs || []).filter(x => !imgs.some(y => y.id === x.id)).forEach(x => { blobDel('img', x.id, x.n); IDB.del(x.id); IMG.delete(x.id); });
+    const rec = Object.assign({}, d, { name, due: $('#dDue').value, cost: calcVal('#dCost'), notes: $('#dNotes').value.trim(), imgs }); delete rec.id;
+    vPut('vdoc', d.id, rec);
+  }, f => {
+    bindPhotos(f, '#dImg', '#dImgs', imgs);
+    const ren = f.querySelector('#dRen'); if (ren) ren.onclick = () => {
+      const cost = calcVal('#dCost'), base = $('#dDue').value && $('#dDue').value > today() ? $('#dDue').value : today(), due = addMonthsD(base, 12);
+      vPut('vdoc', d.id, Object.assign({}, store('vdoc')[d.id], { name: $('#dName').value.trim() || d.name, due, cost, imgs, hist: (d.hist || []).concat([{ date: today(), cost }]) })); closeSheet();
+      if (cost > 0) setTimeout(() => askExpense({ v, desc: `${d.name} ${v.name}`, amount: cost, date: today(), sub: v.subMant || defaultSubs().mant }), 30);
+      else toast('Renovado hasta ' + dLabel(due));
+    };
+    const del = f.querySelector('#dDel'); if (del) del.onclick = () => { (d.imgs || []).forEach(x => { blobDel('img', x.id, x.n); IDB.del(x.id); IMG.delete(x.id); }); op('rec.delete', { coll: 'vdoc', id: d.id }); closeSheet(); };
+  });
+}
+/* ---- detalle de un mantenimiento ---- */
+function showLog(id) {
+  const x = Object.assign({ id }, store('vlog')[id]), v = vGet(x.veh); if (!v) return;
+  const mov = x.movId && S.data.movs.find(m => m.id === x.movId);
+  openSheet(dLabel(x.date) + ' · ' + esc(v.name), `
+    <div class="row2"><span class="muted">${fmtKm(x.km)}${x.shop ? ' · ' + esc(x.shop) : ''}</span><b class="num" style="font-size:1.2rem">${money(x.total)}</b></div>
+    <div class="list">${(x.items || []).filter(i => i.on).map(i => `<div class="row2 lrow"><span><b>${esc(i.name)}</b> <span class="pill acc">${esc(i.action)}</span>${i.detail ? `<br><small class="muted">${esc(i.detail)}</small>` : ''}</span><span class="num">${i.cost ? money(i.cost) : ''}</span></div>`).join('')}${x.labor ? `<div class="row2 lrow"><span>Mano de obra</span><span class="num">${money(x.labor)}</span></div>` : ''}</div>
+    ${x.notes ? `<p class="note" style="margin:0">${esc(x.notes)}</p>` : ''}
+    ${(x.imgs || []).length ? `<div class="simgs" id="lImgs">${x.imgs.map(im => `<span class="sim"><img data-img="${im.id}" alt="Foto"></span>`).join('')}</div>` : ''}
+    <p class="note" style="margin:0">${mov ? `Registrado como gasto en ${esc(mov.acc)}.` : 'No está en tus gastos.'}</p>
+    <div class="btns"><button type="button" class="btn pri" id="lEdit">Editar</button>${!mov && x.total ? '<button type="button" class="btn" id="lExp">Registrar como gasto</button>' : ''}<button type="button" class="btn danger" id="lDel">Eliminar</button></div>
+    <div id="lDelC" hidden class="alert bad"><span></span><div><b>¿Eliminar este mantenimiento?</b>${mov ? `<label class="ag-pin" style="margin-top:6px"><input type="checkbox" id="lDelMov" checked> Borrar también el gasto de ${money(mov.amount)}</label>` : ''}</div><div class="acts"><button type="button" class="btn sm danger" id="lDelY">Eliminar</button></div></div>`, () => { }, f => {
+    const b = f.querySelector('#lImgs'); if (b) { hydrateImgs(b); b.onclick = e => { const im = e.target.closest('img'); if (im && im.src) viewPhoto(im.src); }; }
+    f.querySelector('#lEdit').onclick = () => { closeSheet(); editServ(v.id, x); };
+    const ex = f.querySelector('#lExp'); if (ex) ex.onclick = () => { closeSheet(); askExpense({ v, desc: `${v.name}: ${x.title || 'mantenimiento'}`, amount: x.total, date: x.date, sub: v.subMant || defaultSubs().mant, onDone: movId => vPut('vlog', id, Object.assign({}, store('vlog')[id], { movId })) }); };
+    f.querySelector('#lDel').onclick = () => { $('#lDelC').hidden = false; };
+    f.querySelector('#lDelY').onclick = () => { if (mov && $('#lDelMov') && $('#lDelMov').checked) op('mov.delete', { id: mov.id }); (x.imgs || []).forEach(im => { blobDel('img', im.id, im.n); IDB.del(im.id); IMG.delete(im.id); }); op('rec.delete', { coll: 'vlog', id }); closeSheet(); toast('Mantenimiento eliminado'); };
+  });
+}
+function vehFund(vid) {
+  const v = vGet(vid), name = 'Mantenimiento ' + v.name;
+  openSheet('Fondo de mantenimiento', `<p class="note" style="margin:0">Una meta para ir apartando dinero para piezas grandes (llantas, kit de arrastre, frenos) y no pagarlas de golpe.</p>
+    <label class="field"><span>Nombre</span><input id="fName" value="${esc(name)}"></label>
+    <div class="two"><label class="field"><span>Monto objetivo</span><input id="fTar" class="calc" type="text" inputmode="decimal" value="${Math.max(150, Math.round(sum(vTasks(vid), t => (Number(t.cost) || 0))))}"></label><label class="field"><span>Se guarda en la cuenta</span>${sel('fAcc', S.data.accounts.map(a => a.name), '', 'No vincular')}</label></div>
+    <button class="btn pri">Crear fondo</button>`, () => {
+    const n = $('#fName').value.trim(); if (!n) return 'Ponle un nombre.';
+    if (!S.data.goals.some(g => g.name === n)) op('goal.upsert', { name: n, purpose: 'Piezas y mantenimientos grandes de ' + v.name, target: calcVal('#fTar'), initial: 0, due: '', acc: $('#fAcc').value });
+    vSave(Object.assign({}, v, { fund: n })); toast('Fondo creado. Apórtale desde aquí o desde Metas.');
+  });
+}
+Object.assign(ACT, {
+  vehNew: () => editVeh(), vehEdit: el => editVeh(vGet(el.dataset.v)), vehSel: el => { S.ui.veh = el.dataset.v; render(); },
+  vehGo: el => { if (el.dataset.v) S.ui.veh = el.dataset.v; go('vehiculos'); },
+  vehKm: el => editKm(el.dataset.v || curVeh().id), vehServ: el => editServ(el.dataset.v || curVeh().id), vehFuel: el => editFuelRec(el.dataset.v || curVeh().id),
+  vehFuelEdit: el => { const x = Object.assign({ id: el.dataset.v }, store('fuel')[el.dataset.v]); editFuelRec(x.veh, x); },
+  vehTask: el => { const v = curVeh(); editTask(el.dataset.v ? Object.assign({ id: el.dataset.v }, store('vtask')[el.dataset.v]) : null, v.id); },
+  vehDoc: el => { const v = curVeh(); editDoc(v.id, el.dataset.v ? Object.assign({ id: el.dataset.v }, store('vdoc')[el.dataset.v]) : null); },
+  vehLog: el => showLog(el.dataset.v), vehHist: el => { S.ui.vHist = el.dataset.v; render(); },
+  vehTpl: el => loadTpl(vGet(el.dataset.v)), vehFund: el => vehFund(el.dataset.v)
+});
 
 /* ---------------- Arranque ---------------- */
 load();
