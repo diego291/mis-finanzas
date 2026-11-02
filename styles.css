@@ -736,3 +736,12 @@ body[data-design="c"] .next-step b { color: var(--cta-bg); }
 @media (max-width: 600px) { .img-bar .ib-l, .img-bar .ib-w { display: none; } .img-bar button { min-width: 28px; padding: 0 5px; } .img-h { width: 24px; height: 24px; } }
 .bl-newpg { flex-wrap: wrap; } .bl-newpg label.btn { cursor: pointer; flex-basis: 100%; justify-content: center; text-align: center; }
 @media print { .pp-body img[style*="width"] { max-height: none; } }
+
+.bl-pgw { position: relative; }
+.bl-pgw .bl-pg { padding-right: 34px; }
+.bl-pgdel { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); display: grid; place-items: center; cursor: pointer; opacity: 0; transition: opacity .15s; }
+.bl-pgdel svg { width: 16px; height: 16px; }
+.bl-pgw:hover .bl-pgdel, .bl-pgw .bl-pg.on + .bl-pgdel, .bl-pgdel:focus-visible { opacity: 1; }
+.bl-pgdel:hover { background: var(--surface); color: var(--neg, #d9624f); }
+@media (hover: none) { .bl-pgdel { opacity: .7; } }
+.ed-del { padding: 0 8px; } .ed-del svg { width: 16px; height: 16px; } .ed-del:hover { color: var(--neg, #d9624f); }

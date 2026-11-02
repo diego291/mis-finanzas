@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '2.0.2';
+const VERSION = '2.0.3';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -1194,7 +1194,17 @@ async function importFiles(files) {
   }
   if (last) { S.ui.pg = last; S.ui.blocPane = 'editor'; S.ui.blocQ = ''; render(); toast(n > 1 ? `${n} páginas importadas` : 'Página importada'); }
 }
+function pgBlank(id) { const p = pgGet(id); if (!p) return false; const d = document.createElement('div'); d.innerHTML = pgHtml(id); return !(p.title || '').trim() && !plain(d.innerHTML) && !d.querySelector('img,table,hr') && !(p.imgs || []).length; }
+function leavePage(next) { const cur = S.ui.pg; if (!cur || cur === next) return; if (edTimer || $('#pgEditor')) pgSaveNow(); if (pgBlank(cur)) delPage(cur); }
+function askDelPage(id) {
+  const p = pgGet(id); if (!p) return;
+  if (S.ui.pg === id && $('#pgEditor')) pgSaveNow();
+  const done = () => { delPage(id); if (S.ui.pg === id) { S.ui.pg = ''; S.ui.blocPane = 'pages'; } render(); toast('Página eliminada'); };
+  if (pgBlank(id)) return done();
+  openSheet('Eliminar página', `<div class="alert bad"><span></span><div><b>¿Eliminar “${esc(p.title || 'Sin título')}”?</b><p>Se borra también de tu hoja, con sus imágenes. No se puede deshacer.</p></div></div><button class="btn danger">Eliminar</button>`, () => { setTimeout(done, 0); });
+}
 function newPage(tplKey) {
+  leavePage();
   const sec = curSec(); if (!sec) return toast('Crea primero una sección');
   const [t, html] = TEMPLATES[tplKey] || TEMPLATES.blanco, id = 'p' + uid(), now = Date.now();
   recPut('pg', id, { sec, title: tplKey === 'blanco' ? '' : t, created: now, updated: now, bg: 'lineas', size: 15, pinned: false, imgs: [], snip: '' });
@@ -1219,7 +1229,7 @@ function vBloc() {
   const secObj = SECS(nb).find(s => s.id === sec);
   const pages = `<div class="bl-pages"><input class="ctl" id="blSearch" type="search" placeholder="Buscar en todo el bloc" value="${esc(S.ui.blocQ || '')}">
       <div class="bl-h">${q ? `Resultados (${all.length})` : esc(secObj ? secObj.name : '')}</div>
-      ${all.map(p => `<button type="button" class="bl-pg ${p.id === S.ui.pg ? 'on' : ''}" data-act="blPg" data-v="${p.id}" style="--c:${(SECS(nb).find(s => s.id === p.sec) || {}).color || '#8c958f'}"><b>${p.pinned ? '📌 ' : ''}${esc(p.title || 'Sin título')}</b><small>${new Date(p.updated || p.created).toLocaleDateString('es', { day: 'numeric', month: 'short' })}${p.imgs && p.imgs.length ? ` · ${p.imgs.length} foto${p.imgs.length > 1 ? 's' : ''}` : ''}${p.snip ? ' · ' + esc(p.snip.slice(0, 40)) : ''}</small></button>`).join('') || `<p class="note">${q ? 'Nada coincide.' : 'Sección vacía.'}</p>`}
+      ${all.map(p => `<div class="bl-pgw"><button type="button" class="bl-pg ${p.id === S.ui.pg ? 'on' : ''}" data-act="blPg" data-v="${p.id}" style="--c:${(SECS(nb).find(s => s.id === p.sec) || {}).color || '#8c958f'}"><b>${p.pinned ? '📌 ' : ''}${esc(p.title || 'Sin título')}</b><small>${new Date(p.updated || p.created).toLocaleDateString('es', { day: 'numeric', month: 'short' })}${p.imgs && p.imgs.length ? ` · ${p.imgs.length} foto${p.imgs.length > 1 ? 's' : ''}` : ''}${p.snip ? ' · ' + esc(p.snip.slice(0, 40)) : ''}</small></button><button type="button" class="bl-pgdel" data-act="blDelPg" data-v="${p.id}" title="Eliminar página" aria-label="Eliminar página"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button></div>`).join('') || `<p class="note">${q ? 'Nada coincide.' : 'Sección vacía.'}</p>`}
       ${q ? '' : `<div class="bl-newpg"><button type="button" class="btn sm pri" data-act="blNewPg" data-v="blanco">+ Página</button><select class="ctl" id="blTpl" aria-label="Nueva página desde plantilla"><option value="">Plantilla…</option>${Object.entries(TEMPLATES).filter(([k]) => k !== 'blanco').map(([k, [t]]) => `<option value="${k}">${t}</option>`).join('')}</select><label class="btn sm" title="Importar archivo .html, .txt o .md como página nueva">Importar<input type="file" id="blImport" accept=".html,.htm,.txt,.md,text/html,text/plain,text/markdown" multiple hidden></label></div>`}</div>`;
   const p = S.ui.pg && pgGet(S.ui.pg);
   const ed = p ? editorHTML(p) : `<div class="bl-empty"><p>Elige una página o crea una nueva.</p><div class="btns">${Object.entries(TEMPLATES).map(([k, [t]]) => `<button type="button" class="btn sm ${k === 'blanco' ? 'pri' : ''}" data-act="blNewPg" data-v="${k}">${t}</button>`).join('')}</div></div>`;
@@ -1247,7 +1257,7 @@ function editorHTML(p) {
       <span class="ed-sep"></span>
       ${tb('todo', ic('<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>') + '<span class="tb-t">Pendiente</span>', 'Convertir texto seleccionado en pendiente de la agenda', 'style="width:auto;padding:0 8px"')}
       <span class="ed-tblops" id="edTblOps" hidden>${tb('rowAdd', '+ fila', 'Agregar fila', 'style="width:auto;padding:0 6px"')}${tb('colAdd', '+ col', 'Agregar columna', 'style="width:auto;padding:0 6px"')}${tb('rowDel', '− fila', 'Quitar fila', 'style="width:auto;padding:0 6px"')}</span>
-      <span class="ed-right"><button type="button" class="btn sm" data-act="blPageMenu">Página</button><button type="button" class="btn sm pri" data-act="blExport">PDF</button></span>
+      <span class="ed-right"><button type="button" class="btn sm ed-del" data-act="blDelPg" data-v="${p.id}" title="Eliminar página" aria-label="Eliminar página"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button><button type="button" class="btn sm" data-act="blPageMenu">Página</button><button type="button" class="btn sm pri" data-act="blExport">PDF</button></span>
     </div>
     <div class="ed-scroll"><div class="ed-paper bg-${p.bg || 'lineas'}" style="--fs:${p.size || 15}px">
       <input id="pgTitle" class="ed-title" value="${esc(p.title || '')}" placeholder="Título de la página" autocomplete="off">
@@ -1979,11 +1989,12 @@ const ACT = {
   agToggle: el => { const n = S.data.notes.find(x => x.id === el.dataset.id); if (!n) return; const m = (S.noteMeta || {})[n.id] || {}; noteSave(Object.assign({}, n, { kind: kindOf(n), time: n.time || m.time || '', color: n.color || m.color || '', pinned: n.pinned || !!m.pinned, status: isDone(n) ? 'Pendiente' : 'Hecho' })); if (!isDone(n)) toast('Hecho'); },
   agTagF: el => { S.ui.agTag = el.dataset.v; render(); },
   agBackup: () => agBackup(),
-  blNb: el => { S.ui.nb = el.dataset.v; S.ui.sec = ''; S.ui.blocQ = ''; render(); },
-  blSec: el => { S.ui.sec = el.dataset.v; S.ui.blocQ = ''; S.ui.pg = ''; S.ui.blocPane = 'pages'; render(); },
-  blPg: el => { const p = pgGet(el.dataset.v); if (p) { const s = store('sec')[p.sec]; if (s) { S.ui.nb = s.nb; S.ui.sec = p.sec; } } S.ui.pg = el.dataset.v; S.ui.blocPane = 'editor'; render(); },
+  blDelPg: el => askDelPage(el.dataset.v),
+  blNb: el => { leavePage(); S.ui.pg = ''; S.ui.nb = el.dataset.v; S.ui.sec = ''; S.ui.blocQ = ''; render(); },
+  blSec: el => { leavePage(); S.ui.sec = el.dataset.v; S.ui.blocQ = ''; S.ui.pg = ''; S.ui.blocPane = 'pages'; render(); },
+  blPg: el => { leavePage(el.dataset.v); const p = pgGet(el.dataset.v); if (p) { const s = store('sec')[p.sec]; if (s) { S.ui.nb = s.nb; S.ui.sec = p.sec; } } S.ui.pg = el.dataset.v; S.ui.blocPane = 'editor'; render(); },
   blOpen: el => { const p = pgGet(el.dataset.v); if (p) { const s = store('sec')[p.sec]; if (s) { S.ui.nb = s.nb; S.ui.sec = p.sec; } S.ui.pg = p.id; S.ui.blocPane = 'editor'; } go('bloc'); },
-  blPane: el => { S.ui.blocPane = el.dataset.v; if (el.dataset.v !== 'editor') { if (edTimer) pgSaveNow(); } render(); },
+  blPane: el => { S.ui.blocPane = el.dataset.v; if (el.dataset.v !== 'editor') { leavePage(); if (S.ui.pg && !pgGet(S.ui.pg)) S.ui.pg = ''; } render(); },
   blNewNb: () => nameSheet('Nuevo cuaderno', '', NB_COLORS[NBS().length % NB_COLORS.length], (v, c) => { const id = 'n' + uid(), s = 's' + uid(); recPut('nb', id, { name: v, color: c, order: NBS().length + 1 }); recPut('sec', s, { nb: id, name: 'General', color: c, order: 1 }); S.ui.nb = id; S.ui.sec = s; S.ui.pg = ''; }),
   blNewSec: () => { const nb = NBS().find(n => n.id === curNb()); nameSheet('Nueva sección', '', NB_COLORS[SECS(nb.id).length % NB_COLORS.length], (v, c) => { const id = 's' + uid(); recPut('sec', id, { nb: nb.id, name: v, color: c, order: SECS(nb.id).length + 1 }); S.ui.sec = id; S.ui.pg = ''; S.ui.blocPane = 'pages'; }); },
   blNbMenu: el => { const n = NBS().find(x => x.id === el.dataset.v); nameSheet('Cuaderno', n.name, n.color, (v, c) => recPut('nb', n.id, Object.assign({}, store('nb')[n.id], { name: v, color: c })), NBS().length > 1 ? () => { SECS(n.id).forEach(s => delSection(s.id)); opq('rec.delete', { coll: 'nb', id: n.id }); S.ui.nb = ''; } : null); },
