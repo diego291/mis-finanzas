@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '1.7.0';
+const VERSION = '1.8.0';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -85,6 +85,7 @@ const ICON = {
   pagos: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18M8 15l2 2 4-4"/>',
   deudas: '<path d="M4 20V10l8-6 8 6v10M9 20v-6h6v6"/>',
   estadisticas: '<path d="M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-7"/>',
+  agenda: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18M7 14h4M7 17h7"/>',
   notas: '<path d="M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5"/>',
   revision: '<path d="M12 3l9 16H3zM12 10v4M12 17v.5"/>',
   ajustes: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
@@ -103,12 +104,12 @@ const S = {
 function load() {
   try {
     const raw = localStorage.getItem(LS);
-    if (raw) { const j = JSON.parse(raw); S.data = j.data; S.outbox = j.outbox || []; Object.assign(S.cfg, j.cfg || {}); }
+    if (raw) { const j = JSON.parse(raw); S.data = j.data; S.outbox = j.outbox || []; Object.assign(S.cfg, j.cfg || {}); S.noteMeta = j.noteMeta || {}; }
   } catch (e) { /* almacenamiento bloqueado: se trabaja en memoria */ }
   if (!S.data) S.data = window.__SEED__ ? JSON.parse(JSON.stringify(window.__SEED__)) : emptyData();
   normalize(S.data);
 }
-function save() { try { localStorage.setItem(LS, JSON.stringify({ data: S.data, outbox: S.outbox, cfg: S.cfg })); } catch (e) { } }
+function save() { try { localStorage.setItem(LS, JSON.stringify({ data: S.data, outbox: S.outbox, cfg: S.cfg, noteMeta: S.noteMeta || {} })); } catch (e) { } }
 function normalize(d) {
   ['accounts', 'goals', 'debts', 'fixed', 'budgets', 'cats', 'notes', 'movs'].forEach(k => d[k] = d[k] || []);
   d.lists = Object.assign(emptyData().lists, d.lists || {});
@@ -124,7 +125,7 @@ function normalize(d) {
   d.fixed.forEach(x => { x.name = str(x.name); x.sub = str(x.sub); x.acc = str(x.acc); x.freq = str(x.freq) || 'Mensual'; x.amount = Number(x.amount) || 0; x.day = Number(x.day) || 1; if (!Array.isArray(x.paid)) x.paid = Array(12).fill(false); });
   d.budgets.forEach(x => { x.cat = str(x.cat); x.amount = Number(x.amount) || 0; });
   d.cats.forEach(x => { x.sub = str(x.sub); x.cat = str(x.cat); x.type = str(x.type); });
-  d.notes.forEach(x => { ['date', 'tag', 'text', 'action', 'due', 'status'].forEach(k => x[k] = str(x[k])); });
+  d.notes.forEach(x => { ['date', 'tag', 'text', 'action', 'due', 'status', 'kind', 'time', 'color'].forEach(k => x[k] = str(x[k])); x.pinned = !!x.pinned; const m = (S.noteMeta || {})[x.id]; if (m && !x.kind) Object.assign(x, { kind: m.kind || '', time: x.time || m.time || '', color: x.color || m.color || '', pinned: x.pinned || !!m.pinned }); x.due = /^\d{4}-\d{2}-\d{2}/.test(x.due) ? x.due.slice(0, 10) : ''; });
   Object.keys(d.lists).forEach(k => { d.lists[k] = (d.lists[k] || []).map(str).filter(Boolean); });
   return d;
 }
@@ -186,6 +187,7 @@ async function sync(manual) {
     if (!j.ok) throw new Error(j.error || 'La hoja no respondió');
     if (!j.data || !Array.isArray(j.data.movs)) throw new Error('La hoja respondió sin datos');
     S.outbox = S.outbox.slice(sent.length);
+    S.agendaV1 = !(j.v >= 2) && S.data.notes.some(n => n.kind && n.kind !== 'nota');
     S.data = normalize(j.data);
     S.outbox.forEach(applyLocal);
     S.cfg.lastSync = Date.now(); S.syncErr = '';
@@ -372,16 +374,16 @@ function hbars(entries, total, ref) {
 
 /* ---------------- Navegación ---------------- */
 const VIEWS = [
-  ['inicio', 'Inicio', 'Día a día'], ['movimientos', 'Movimientos'], ['estados', 'Estados'], ['cuentas', 'Cuentas'], ['metas', 'Metas'],
+  ['inicio', 'Inicio', 'Día a día'], ['movimientos', 'Movimientos'], ['agenda', 'Agenda'], ['estados', 'Estados'], ['cuentas', 'Cuentas'], ['metas', 'Metas'],
   ['presupuesto', 'Presupuesto', 'Planear'], ['pagos', 'Pagos fijos'], ['deudas', 'Deudas'],
-  ['estadisticas', 'Estadísticas', 'Analizar'], ['revision', 'Revisión'], ['notas', 'Notas'], ['ajustes', 'Ajustes', 'App']
+  ['estadisticas', 'Estadísticas', 'Analizar'], ['revision', 'Revisión'], ['ajustes', 'Ajustes', 'App']
 ];
-const PRIMARY = ['inicio', 'movimientos', 'estados', 'metas'];
+const PRIMARY = ['inicio', 'movimientos', 'agenda', 'metas'];
 function renderNav() {
   const html = ['<div class="navbrand"><span class="mark">$</span><span>Mis Finanzas</span></div>'];
   VIEWS.forEach(([k, name, grp], i) => {
     if (grp) html.push(`<div class="grp">${grp}</div>`);
-    if (k === 'estados') html.push('<span class="slot" aria-hidden="true"></span>');
+    if (k === 'agenda') html.push('<span class="slot" aria-hidden="true"></span>');
     const n = k === 'revision' && S.data ? checks().filter(c => c.sev !== 'info').length : 0;
     html.push(`<a href="#${k}" data-v="${k}" class="${PRIMARY.includes(k) ? '' : 'sec'} ${S.ui.view === k ? 'on' : ''}">${svgI(k)}<span>${name}${n ? ` <span class="pill bad">${n}</span>` : ''}</span></a>`);
   });
@@ -391,7 +393,7 @@ function renderNav() {
 function go(v) { if (location.hash !== '#' + v) location.hash = v; else route(); }
 function route() {
   const v = (location.hash || '#inicio').slice(1);
-  S.ui.view = VIEWS.some(x => x[0] === v) ? v : 'inicio';
+  S.ui.view = v === 'notas' ? 'agenda' : VIEWS.some(x => x[0] === v) ? v : 'inicio';
   render(); window.scrollTo(0, 0);
 }
 
@@ -402,7 +404,7 @@ function render() {
   const tc = { a: '#14171a', b: '#0b2239', c: '#0f141b' }[S.cfg.design]; document.querySelector('meta[name=theme-color]')?.setAttribute('content', tc);
   { const [yy, mm] = S.ui.ym.split('-').map(Number); $('#mLabel').textContent = window.innerWidth < 600 ? `${MSHORT[mm - 1]} ${yy}` : ymLabel(S.ui.ym); }
   renderNav(); updatePill(); try { renderBell(); } catch (e) { console.error(e); }
-  const fn = { inicio: vInicio, estados: vEstados, movimientos: vMovs, cuentas: vCuentas, metas: vMetas, presupuesto: vPresupuesto, pagos: vPagos, deudas: vDeudas, estadisticas: vStats, revision: vRevision, notas: vNotas, ajustes: vAjustes }[S.ui.view];
+  const fn = { inicio: vInicio, estados: vEstados, movimientos: vMovs, cuentas: vCuentas, metas: vMetas, presupuesto: vPresupuesto, pagos: vPagos, deudas: vDeudas, estadisticas: vStats, revision: vRevision, notas: vAgenda, agenda: vAgenda, ajustes: vAjustes }[S.ui.view];
   try { $('#view').innerHTML = `<div class="wrap">${fn()}</div>`; S.lastError = ''; }
   catch (e) {
     console.error(e); S.lastError = (e && e.message) || String(e);
@@ -497,6 +499,7 @@ function vInicio() {
       <div class="hello"><div><p>${isNow ? `${wd[0].toUpperCase() + wd.slice(1)} ${d} de ${MONTHS[m - 1].toLowerCase()}` : ymLabel(ym)}</p><h1>${isNow ? greet + name : 'Resumen de ' + MONTHS[m - 1].toLowerCase()}</h1></div>${scopeSeg()}</div>
       ${walletCard(sp, isNow)}
       <div class="home-cards">
+        ${todayCard()}
         ${envelopeCard()}
         ${stagesCard(false)}
         <section class="card side-card"><header style="margin:0"><h2>Presupuesto</h2><a href="#presupuesto">Detalle</a></header>
@@ -867,6 +870,168 @@ function vRevision() {
   ${CHECKS.length ? CHECKS.map((c, i) => `<div class="alert ${c.sev === 'bad' ? 'bad' : c.sev === 'info' ? 'info' : ''}"><span></span><div><span class="pill ${lab[c.sev][1]}">${lab[c.sev][0]}</span> <b>${esc(c.title)}</b><p>${esc(c.detail)}</p></div><div class="acts">${(c.acts || []).map((a, j) => `<button class="btn sm ${j ? '' : 'pri'}" data-act="fix" data-i="${i}" data-j="${j}">${esc(a[0])}</button>`).join('')}</div></div>`).join('') : '<div class="card empty"><p>Todo en orden. No encontré errores en tus datos.</p></div>'}`;
 }
 
+/* ---- Agenda: Día, Pendientes y Notas (se respalda en la hoja "Notas") ---- */
+const AG_COLORS = { verde: '#3fae7f', ambar: '#d9a23b', azul: '#4b8fd6', rojo: '#d9624f', morado: '#8b7fd6', gris: '#8c958f' };
+const NOTE_BG = { verde: 'nb-verde', ambar: 'nb-ambar', azul: 'nb-azul', rojo: 'nb-rojo', morado: 'nb-morado', gris: '' };
+const WDAY_FULL = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const addDays = (ds, n) => { const d = new Date(ds + 'T12:00'); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+function kindOf(n) {
+  if (n.kind) return n.kind;
+  const meta = (S.noteMeta || {})[n.id]; if (meta && meta.kind) return meta.kind;
+  return (n.due || n.status === 'Pendiente' || n.status === 'En curso' || n.status === 'Hecho') && !n.time ? 'pendiente' : 'nota';
+}
+const isDone = n => n.status === 'Hecho';
+function noteSave(rec) {
+  S.noteMeta = S.noteMeta || {}; S.noteMeta[rec.id] = { kind: rec.kind, time: rec.time || '', color: rec.color || '', pinned: !!rec.pinned };
+  op('note.upsert', rec);
+}
+function agItemsOn(ds) {
+  const N = S.data.notes;
+  const ev = N.filter(n => kindOf(n) === 'evento' && n.due === ds).sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
+  const td = N.filter(n => kindOf(n) === 'pendiente' && (n.due === ds || (ds === today() && n.due && n.due < ds && !isDone(n))));
+  const ym = ymOf(ds), pays = S.data.fixed.filter(f => f.freq === 'Mensual').map(f => ({ f, s: fixedStatus(f, ym) })).filter(x => x.s.due === ds || (ds === today() && x.s.late));
+  return { ev, td, pays };
+}
+function agDot(ds) { const it = agItemsOn(ds); return it.ev.length + it.td.filter(n => !isDone(n)).length + it.pays.filter(x => !x.s.marked).length; }
+function agEventRow(n) {
+  const c = AG_COLORS[n.color] || AG_COLORS.verde;
+  return `<button type="button" class="ag-ev ${isDone(n) ? 'done' : ''}" data-act="agEdit" data-id="${esc(n.id)}" style="--c:${c}"><span class="ag-time">${esc(n.time || 'Todo el día')}</span><span class="ag-evb"><b>${esc(n.text)}</b>${n.action ? `<small>${esc(n.action)}</small>` : ''}${n.tag ? `<small class="ag-tag">${esc(n.tag)}</small>` : ''}</span></button>`;
+}
+function agTodoRow(n, showDue) {
+  const late = n.due && n.due < today() && !isDone(n);
+  return `<div class="ag-todo ${isDone(n) ? 'done' : ''}"><button type="button" class="ag-check" data-act="agToggle" data-id="${esc(n.id)}" aria-label="${isDone(n) ? 'Marcar como pendiente' : 'Marcar como hecho'}">${isDone(n) ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>' : ''}</button><button type="button" class="ag-todob" data-act="agEdit" data-id="${esc(n.id)}"><span>${esc(n.text)}</span>${(showDue && n.due) || late || n.tag || n.time ? `<small class="${late ? 'neg' : ''}">${late ? 'Vencido · ' : ''}${showDue && n.due ? agDueLabel(n.due) : ''}${n.time ? ' ' + esc(n.time) : ''}${n.tag ? ' · ' + esc(n.tag) : ''}</small>` : ''}</button></div>`;
+}
+function agPayRow({ f, s }) {
+  return `<div class="ag-todo pay ${s.marked ? 'done' : ''}"><span class="ag-check pay" aria-hidden="true">$</span><a class="ag-todob" href="#pagos"><span>Pagar ${esc(f.name)}</span><small class="${s.late ? 'neg' : ''}">${s.marked ? 'Pagado' : s.late ? 'Vencido' : 'Pago fijo'} · <b class="num">${money(f.amount)}</b></small></a>${s.marked ? '' : `<button type="button" class="btn sm" data-act="${s.found.length ? 'fixMark' : 'fixPay'}" data-n="${esc(f.name)}">${s.found.length ? 'Marcar' : 'Pagar'}</button>`}</div>`;
+}
+function agDueLabel(ds) {
+  const t = today(); if (ds === t) return 'Hoy'; if (ds === addDays(t, 1)) return 'Mañana'; if (ds === addDays(t, -1)) return 'Ayer';
+  const d = new Date(ds + 'T12:00'), diff = Math.round((d - new Date(t + 'T12:00')) / 864e5);
+  if (diff > 0 && diff < 7) return WDAY_FULL[d.getDay()][0].toUpperCase() + WDAY_FULL[d.getDay()].slice(1);
+  return dLabel(ds).replace(/ \d{4}$/, '');
+}
+function vAgenda() {
+  const tab = S.ui.agTab || 'dia';
+  const pend = S.outbox.filter(o => o.type.startsWith('note.')).length;
+  const status = !S.cfg.url ? `<span class="ag-sync warn">Solo en este equipo · <a href="#ajustes">conecta tu hoja</a> para respaldar</span>`
+    : S.agendaV1 ? `<span class="ag-sync warn">Actualiza el conector de tu hoja para respaldar horas, colores y fijadas en otros equipos</span>`
+    : pend ? `<span class="ag-sync">${pend} cambio${pend > 1 ? 's' : ''} por respaldar</span>`
+    : `<span class="ag-sync ok">Respaldado en tu hoja${S.cfg.lastSync ? ' · ' + ago(S.cfg.lastSync) : ''}</span>`;
+  const tabs = `<div class="ptabs">${[['dia', 'Día'], ['pend', 'Pendientes'], ['notas', 'Notas']].map(([k, l]) => `<button type="button" data-act="agTab" data-v="${k}" class="${tab === k ? 'on' : ''}">${l}</button>`).join('')}</div>`;
+  const hd = head('Agenda', status, `<button class="btn" data-act="agBackup">Descargar respaldo</button><button class="btn pri" data-act="agNew" data-v="${tab === 'notas' ? 'nota' : tab === 'pend' ? 'pendiente' : 'evento'}">+ ${tab === 'notas' ? 'Nota' : tab === 'pend' ? 'Pendiente' : 'Nuevo'}</button>`);
+  if (tab === 'pend') return hd + tabs + agPendView();
+  if (tab === 'notas') return hd + tabs + agNotesView();
+  return hd + tabs + agDayView();
+}
+function agDayView() {
+  const day = S.ui.agDay || today(), ws = weekStart(day);
+  const strip = Array.from({ length: 7 }, (_, i) => { const ds = addDays(ws, i), d = new Date(ds + 'T12:00'), n = agDot(ds); return `<button type="button" class="ag-d ${ds === day ? 'on' : ''} ${ds === today() ? 'today' : ''}" data-act="agDay" data-v="${ds}"><span>${WEEK[i]}</span><b>${d.getDate()}</b><i class="${n ? '' : 'none'}"></i></button>`; }).join('');
+  const it = agItemsOn(day), d = new Date(day + 'T12:00');
+  const noTime = it.td;
+  const empty = !it.ev.length && !noTime.length && !it.pays.length;
+  return `<div class="card ag-week"><div class="ag-wnav"><button type="button" class="linkbtn" data-act="agDay" data-v="${addDays(ws, -7)}">‹ Semana anterior</button><b>${MONTHS[d.getMonth()]} ${d.getFullYear()}</b>${day !== today() ? '<button type="button" class="linkbtn" data-act="agDay" data-v="">Hoy</button>' : ''}<button type="button" class="linkbtn" data-act="agDay" data-v="${addDays(ws, 7)}">Siguiente ›</button></div><div class="ag-strip">${strip}</div></div>
+  <div class="grid-2" style="align-items:start">
+    <section class="card"><header><h2>${WDAY_FULL[d.getDay()][0].toUpperCase() + WDAY_FULL[d.getDay()].slice(1)} ${d.getDate()} de ${MONTHS[d.getMonth()].toLowerCase()}</h2><button type="button" class="linkbtn" data-act="agNew" data-v="evento" data-d="${day}">+ Actividad</button></header>
+      ${it.ev.length ? `<div class="ag-evs">${it.ev.map(agEventRow).join('')}</div>` : `<p class="note">${empty ? 'Día libre. Agrega una actividad con hora o un pendiente.' : 'Sin actividades con hora.'}</p>`}
+    </section>
+    <section class="card"><header><h2>Pendientes y pagos</h2><button type="button" class="linkbtn" data-act="agNew" data-v="pendiente" data-d="${day}">+ Pendiente</button></header>
+      ${it.pays.length || noTime.length ? `<div class="ag-todos">${it.pays.map(agPayRow).join('')}${noTime.map(n => agTodoRow(n, false)).join('')}</div>` : '<p class="note">Nada pendiente para este día.</p>'}
+    </section>
+  </div>`;
+}
+function parseTodo(txt) {
+  let t = ' ' + txt.trim() + ' ', due = '', time = '';
+  const low = t.toLowerCase(), td = today();
+  const set = (re, v) => { const m = low.match(re); if (m) { due = v; t = t.slice(0, m.index) + ' ' + t.slice(m.index + m[0].length); return true; } return false; };
+  set(/\s(pasado mañana)\s/, addDays(td, 2)) || set(/\s(mañana|manana)\s/, addDays(td, 1)) || set(/\s(hoy)\s/, td);
+  if (!due) { WDAY_FULL.forEach((w, i) => { if (due) return; const re = new RegExp('\\s(el\\s)?' + w.replace('é', '[eé]').replace('á', '[aá]') + '\\s'); const cur = new Date(td + 'T12:00').getDay(); let k = (i - cur + 7) % 7; if (k === 0) k = 7; set(re, addDays(td, k)); }); }
+  if (!due) { const m = t.toLowerCase().match(/\s(el\s)?(\d{1,2})(\s(de\s)?(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre))?\s/); if (m) { const day = Number(m[2]); let mo = m[5] ? MONTHS.map(x => x.toLowerCase()).indexOf(m[5]) + 1 : new Date(td + 'T12:00').getMonth() + 1, yr = Number(td.slice(0, 4)); let ds = `${yr}-${pad(mo)}-${pad(day)}`; if (ds < td && !m[5]) { mo++; if (mo > 12) { mo = 1; yr++; } ds = `${yr}-${pad(mo)}-${pad(day)}`; } if (day >= 1 && day <= 31 && (m[1] || m[5])) { due = ds; t = t.replace(m[0], ' '); } } }
+  const tm = t.match(/\s(a las\s)?(\d{1,2})(:(\d{2}))?\s?(am|pm|a\.m\.|p\.m\.)?\s/i);
+  if (tm && (tm[1] || tm[3] || tm[5])) { let h = Number(tm[2]); const mi = tm[4] || '00', ap = (tm[5] || '').toLowerCase(); if (ap.startsWith('p') && h < 12) h += 12; if (ap.startsWith('a') && h === 12) h = 0; if (!ap && h < 7) h += 12; if (h < 24) { time = `${pad(h)}:${mi}`; t = t.replace(tm[0], ' '); } }
+  return { text: t.replace(/\s+/g, ' ').trim(), due, time };
+}
+function agPendView() {
+  const all = S.data.notes.filter(n => kindOf(n) === 'pendiente'), td = today(), wk = addDays(td, 7);
+  const open = all.filter(n => !isDone(n));
+  const g = { hoy: open.filter(n => n.due && n.due <= td), sem: open.filter(n => n.due && n.due > td && n.due <= wk), algun: open.filter(n => !n.due || n.due > wk) };
+  Object.values(g).forEach(L => L.sort((a, b) => (a.due || '9').localeCompare(b.due || '9') || (a.time || '').localeCompare(b.time || '')));
+  const done = all.filter(isDone).sort((a, b) => (b.due || b.date || '').localeCompare(a.due || a.date || '')).slice(0, 8);
+  const tot = all.filter(n => !n.due || n.due <= wk).length, ok = all.filter(n => isDone(n) && (!n.due || n.due <= wk)).length;
+  const pays = S.data.fixed.filter(f => f.freq === 'Mensual').map(f => ({ f, s: fixedStatus(f, ymOf(td)) })).filter(x => !x.s.marked && (x.s.late || x.s.due <= wk));
+  const sec = (title, cls, L, extra = '') => (L.length || extra) ? `<div class="ag-grp ${cls}">${title}</div><div class="ag-todos">${extra}${L.map(n => agTodoRow(n, true)).join('')}</div>` : '';
+  return `<section class="card ag-pend">
+    <div class="row2"><span class="muted">${ok} de ${tot} hechos</span><span class="num muted">${tot ? Math.round(ok / tot * 100) : 0}%</span></div>
+    <div class="bar good"><i style="width:${tot ? ok / tot * 100 : 0}%"></i></div>
+    <form id="agQuick" class="ag-quick"><input id="agQ" type="text" autocomplete="off" placeholder="Escribe y presiona Enter: pagar luz el viernes a las 5pm"><button class="btn pri" type="submit">Agregar</button></form>
+    <p class="note" id="agQhint"></p>
+    ${sec('Hoy', 'hoy', g.hoy, pays.filter(x => x.s.late || x.s.due <= td).map(agPayRow).join(''))}
+    ${sec('Esta semana', 'sem', g.sem, pays.filter(x => !x.s.late && x.s.due > td).map(agPayRow).join(''))}
+    ${sec('Algún día', 'algun', g.algun)}
+    ${!open.length && !pays.length ? '<div class="empty"><p>No tienes pendientes. Escribe arriba el primero.</p></div>' : ''}
+    ${done.length ? `<details class="ag-donebox"><summary>Hechos recientemente (${done.length})</summary><div class="ag-todos">${done.map(n => agTodoRow(n, true)).join('')}</div></details>` : ''}
+  </section>`;
+}
+function agNotesView() {
+  const q = (S.ui.agQ || '').toLowerCase(), tag = S.ui.agTag || '';
+  const notes = S.data.notes.filter(n => kindOf(n) === 'nota');
+  const tags = [...new Set(notes.map(n => n.tag).filter(Boolean))].sort();
+  const L = notes.filter(n => (!tag || n.tag === tag) && (!q || `${n.text} ${n.action} ${n.tag}`.toLowerCase().includes(q))).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const pinned = L.filter(n => n.pinned || (S.noteMeta || {})[n.id]?.pinned), rest = L.filter(n => !pinned.includes(n));
+  const card = n => `<button type="button" class="ag-note ${NOTE_BG[n.color] || ''}" data-act="agEdit" data-id="${esc(n.id)}"><b>${esc(n.text)}</b>${n.action ? `<span>${esc(n.action).replace(/\n/g, '<br>')}</span>` : ''}<small>${n.tag ? esc(n.tag) + ' · ' : ''}${dLabel(n.date).replace(/ \d{4}$/, '')}</small></button>`;
+  return `<div class="card"><div class="filters"><input class="ctl" id="agSearch" type="search" placeholder="Buscar en tus notas" value="${esc(S.ui.agQ || '')}" style="flex:2 1 220px"></div>
+    ${tags.length ? `<div class="chips" style="margin-top:10px;flex-wrap:wrap">${['', ...tags].map(t => `<button type="button" class="rchip ${t === tag ? 'on' : ''}" data-act="agTagF" data-v="${esc(t)}">${t ? esc(t) : 'Todas'}</button>`).join('')}</div>` : ''}</div>
+  ${pinned.length ? `<div class="ag-grp">Fijadas</div><div class="ag-notes">${pinned.map(card).join('')}</div>` : ''}
+  ${rest.length ? `${pinned.length ? '<div class="ag-grp">Otras</div>' : ''}<div class="ag-notes">${rest.map(card).join('')}</div>` : !pinned.length ? `<div class="card empty"><p>${q || tag ? 'No hay notas con ese filtro.' : 'Sin notas todavía. Apunta ideas, listas o lo que no quieras olvidar.'}</p><button class="btn pri" data-act="agNew" data-v="nota">Nueva nota</button></div>` : ''}`;
+}
+function editAgenda(n, kind, day) {
+  const isNew = !n;
+  const meta = n ? (S.noteMeta || {})[n.id] || {} : {};
+  n = Object.assign({ id: uid(), date: today(), tag: '', text: '', action: '', due: kind === 'nota' ? '' : (day || S.ui.agDay || today()), status: kind === 'nota' ? '' : 'Pendiente', kind: kind || 'evento', time: '', color: kind === 'nota' ? 'gris' : 'verde', pinned: false }, n ? { kind: kindOf(n), time: n.time || meta.time || '', color: n.color || meta.color || '', pinned: n.pinned || meta.pinned || false } : {}, n || {}, n ? { kind: kindOf(n), time: n.time || meta.time || '', color: n.color || meta.color || (kindOf(n) === 'nota' ? 'gris' : 'verde'), pinned: !!(n.pinned || meta.pinned) } : {});
+  const K = [['evento', 'Actividad'], ['pendiente', 'Pendiente'], ['nota', 'Nota']];
+  const tags = [...new Set(S.data.notes.map(x => x.tag).filter(Boolean))];
+  const body = `<div class="seg" id="agK">${K.map(([k, l]) => `<button type="button" data-k="${k}" class="${n.kind === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+    <label class="field"><span id="agTitleL">Título</span><input id="agTitle" value="${esc(n.text)}" required autofocus placeholder="Reparar laptop cliente"></label>
+    <div class="two" data-k="evento,pendiente"><label class="field"><span>Fecha</span><input id="agDue" type="date" value="${n.due || ''}"></label><label class="field"><span>Hora</span><input id="agTime" type="time" value="${n.time || ''}"></label></div>
+    <label class="field"><span id="agBodyL">Detalle</span><textarea id="agBody" rows="${n.kind === 'nota' ? 6 : 3}" placeholder="Notas, lista, dirección…">${esc(n.action)}</textarea></label>
+    <div class="two"><label class="field"><span>Etiqueta</span><input id="agTag" list="agTags" value="${esc(n.tag)}" placeholder="Negocio, U, Compras…"><datalist id="agTags">${tags.map(t => `<option value="${esc(t)}">`).join('')}</datalist></label>
+    <div class="field"><span>Color</span><div class="ag-colors" id="agColor">${Object.entries(AG_COLORS).map(([k, c]) => `<button type="button" data-c="${k}" class="${n.color === k ? 'on' : ''}" style="background:${c}" aria-label="${k}"></button>`).join('')}</div></div></div>
+    <label class="ag-pin" data-k="nota"><input type="checkbox" id="agPin" ${n.pinned ? 'checked' : ''}> Fijar arriba</label>
+    <label class="ag-pin" data-k="pendiente,evento"><input type="checkbox" id="agDone" ${isDone(n) ? 'checked' : ''}> Hecho</label>
+    <div class="btns" style="justify-content:space-between">${isNew ? '<span></span>' : '<button type="button" class="btn danger" id="agDel">Eliminar</button>'}<button class="btn pri">Guardar</button></div>
+    <div id="agDelC" hidden class="alert bad"><span></span><div><b>¿Eliminar?</b><p>Se borra también de tu hoja.</p></div><div class="acts"><button type="button" class="btn sm danger" id="agDelY">Eliminar</button></div></div>`;
+  openSheet(isNew ? 'Agregar a la agenda' : 'Editar', body, f => {
+    const k = f.querySelector('#agK .on').dataset.k, text = $('#agTitle').value.trim();
+    if (!text) return 'Escribe el título.';
+    if (k === 'evento' && !$('#agDue').value) return 'Elige la fecha de la actividad.';
+    const rec = { id: n.id, date: n.date || today(), tag: $('#agTag').value.trim(), text, action: $('#agBody').value.trim(), due: k === 'nota' ? '' : $('#agDue').value, status: k === 'nota' ? '' : ($('#agDone').checked ? 'Hecho' : 'Pendiente'), kind: k, time: k === 'nota' ? '' : $('#agTime').value, color: f.querySelector('#agColor .on')?.dataset.c || '', pinned: k === 'nota' && $('#agPin').checked };
+    noteSave(rec); toast(isNew ? 'Guardado en tu agenda' : 'Cambios guardados');
+  }, f => {
+    const sync = () => { const k = f.querySelector('#agK .on').dataset.k; f.querySelectorAll('[data-k]').forEach(el => { if (el.closest('#agK')) return; el.hidden = !el.dataset.k.split(',').includes(k); }); $('#agTitleL').textContent = k === 'nota' ? 'Título' : k === 'pendiente' ? '¿Qué tienes que hacer?' : 'Actividad'; $('#agBody').rows = k === 'nota' ? 6 : 3; };
+    f.querySelector('#agK').onclick = e => { const b = e.target.closest('button'); if (!b) return; f.querySelectorAll('#agK button').forEach(x => x.classList.toggle('on', x === b)); sync(); };
+    f.querySelector('#agColor').onclick = e => { const b = e.target.closest('button'); if (!b) return; f.querySelectorAll('#agColor button').forEach(x => x.classList.toggle('on', x === b)); };
+    $('#agDel')?.addEventListener('click', () => { $('#agDelC').hidden = false; });
+    $('#agDelY')?.addEventListener('click', () => { op('note.delete', { id: n.id }); closeSheet(); toast('Eliminado'); });
+    sync();
+  });
+}
+function todayCard() {
+  const it = agItemsOn(today());
+  const ev = it.ev.filter(n => !isDone(n)), td = it.td.filter(n => !isDone(n)), pays = it.pays.filter(x => !x.s.marked);
+  const upcoming = !ev.length && !td.length && !pays.length ? S.data.notes.filter(n => kindOf(n) !== 'nota' && !isDone(n) && n.due > today()).sort((a, b) => (a.due + (a.time || '')).localeCompare(b.due + (b.time || ''))).slice(0, 3) : [];
+  return `<section class="card side-card today-card"><header style="margin:0"><h2>Hoy en tu agenda</h2><a href="#agenda">Agenda</a></header>
+    ${ev.length || td.length || pays.length ? `<div class="ag-evs">${ev.map(agEventRow).join('')}</div><div class="ag-todos">${pays.map(agPayRow).join('')}${td.map(n => agTodoRow(n, false)).join('')}</div>`
+    : `<p class="note">Nada para hoy.${upcoming.length ? ' Lo que viene:' : ''}</p>${upcoming.length ? `<div class="ag-todos">${upcoming.map(n => agTodoRow(n, true)).join('')}</div>` : ''}`}
+    <form id="agQuickHome" class="ag-quick"><input id="agQH" type="text" autocomplete="off" placeholder="Anota un pendiente: llamar a cliente mañana"><button class="btn sm" type="submit">Agregar</button></form>
+  </section>`;
+}
+function agBackup() {
+  const notes = S.data.notes.map(n => Object.assign({}, n, { kind: kindOf(n) }));
+  const kinds = { evento: 'ACTIVIDADES', pendiente: 'PENDIENTES', nota: 'NOTAS' };
+  const txt = Object.entries(kinds).map(([k, t]) => `${t}\n` + notes.filter(n => n.kind === k).sort((a, b) => (a.due || a.date || '').localeCompare(b.due || b.date || '')).map(n => `- ${n.due ? n.due + (n.time ? ' ' + n.time : '') + ' · ' : ''}${isDone(n) ? '[hecho] ' : ''}${n.text}${n.tag ? ' #' + n.tag : ''}${n.action ? '\n    ' + n.action.replace(/\n/g, '\n    ') : ''}`).join('\n')).join('\n\n');
+  download(`agenda-${today()}.txt`, `Mis Finanzas · Agenda (${today()})\n\n` + txt + '\n', 'text/plain');
+  setTimeout(() => download(`agenda-${today()}.json`, JSON.stringify({ app: 'Mis Finanzas', tipo: 'agenda', exportado: new Date().toISOString(), notas: notes }, null, 1), 'application/json'), 400);
+}
+
 /* ---- Notas ---- */
 function vNotas() {
   const L = S.data.notes.slice().sort((a, b) => (a.status === 'Hecho') - (b.status === 'Hecho') || (b.date || '').localeCompare(a.date || ''));
@@ -1215,6 +1380,13 @@ const ACT = {
   clearAcc: () => { S.ui.fAcc = ''; render(); },
   envOff: () => { S.cfg.envelope = Object.assign({}, S.cfg.envelope, { on: false }); save(); render(); },
   envelope: () => { const env = envelopeState(); if (!env) return go('ajustes'); if (!catMap()[ENV_SUB]) op('cat.add', { sub: ENV_SUB, cat: 'Otros gastos', type: 'Gasto' }); const [y, m, d] = env.ws.split('-').map(Number); op('mov.upsert', { id: uid(), date: today(), type: 'Gasto', acc: env.acc, sub: ENV_SUB, desc: `Sobre semana del ${d} ${MSHORT[m - 1].toLowerCase()}`, amount: env.amount, scope: 'Personal', method: 'Efectivo', notes: '', to: '', goal: '', debt: '' }); toast('Sobre de la semana registrado'); },
+  agTab: el => { S.ui.agTab = el.dataset.v; render(); },
+  agDay: el => { S.ui.agDay = el.dataset.v; render(); },
+  agNew: el => editAgenda(null, el.dataset.v, el.dataset.d),
+  agEdit: el => editAgenda(S.data.notes.find(n => n.id === el.dataset.id)),
+  agToggle: el => { const n = S.data.notes.find(x => x.id === el.dataset.id); if (!n) return; const m = (S.noteMeta || {})[n.id] || {}; noteSave(Object.assign({}, n, { kind: kindOf(n), time: n.time || m.time || '', color: n.color || m.color || '', pinned: n.pinned || !!m.pinned, status: isDone(n) ? 'Pendiente' : 'Hecho' })); if (!isDone(n)) toast('Hecho'); },
+  agTagF: el => { S.ui.agTag = el.dataset.v; render(); },
+  agBackup: () => agBackup(),
   homeDay: el => { S.ui.homeDay = el.dataset.v; render(); },
   newMovOn: el => editMov(null, { date: el.dataset.v }),
   stPeriod: el => { S.ui.stPeriod = el.dataset.v; render(); },
@@ -1272,6 +1444,8 @@ document.addEventListener('input', e => { if (e.target === calcTarget) calcPrevi
 document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('calc') && isExpr(e.target.value)) { const z = calc(e.target.value); if (isFinite(z)) { e.preventDefault(); e.target.value = String(r2(z)); e.target.dispatchEvent(new Event('input', { bubbles: true })); calcPreview(); } } });
 document.addEventListener('input', e => {
   const id = e.target.id;
+  if (id === 'agSearch') { S.ui.agQ = e.target.value; clearTimeout(window._agT); window._agT = setTimeout(() => { const pos = e.target.selectionStart; render(); const q = $('#agSearch'); if (q) { q.focus(); q.setSelectionRange(pos, pos); } }, 250); }
+  if (id === 'agQ' || id === 'agQH') { const h = $('#agQhint'); if (h) { const p = parseTodo(e.target.value); h.textContent = e.target.value.trim() ? `Se guardará: “${p.text}”${p.due ? ' · ' + agDueLabel(p.due) : ' · sin fecha'}${p.time ? ' · ' + p.time : ''}` : ''; } }
   if (id === 'fq') { S.ui.q = e.target.value; clearTimeout(window._qT); window._qT = setTimeout(() => { const pos = e.target.selectionStart; render(); const q = $('#fq'); q.focus(); q.setSelectionRange(pos, pos); }, 250); }
 });
 document.addEventListener('change', e => {
@@ -1284,6 +1458,7 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('submit', e => {
   if (e.target.id === 'connForm') { e.preventDefault(); S.cfg.url = $('#cUrl').value.trim(); S.cfg.token = $('#cTok').value.trim(); S.syncErr = ''; save(); sync(true); }
+  if (e.target.id === 'agQuick' || e.target.id === 'agQuickHome') { e.preventDefault(); const inp = e.target.querySelector('input'); const p = parseTodo(inp.value); if (!p.text) return toast('Escribe el pendiente'); noteSave({ id: uid(), date: today(), tag: '', text: p.text, action: '', due: p.due, status: 'Pendiente', kind: 'pendiente', time: p.time, color: 'verde', pinned: false }); toast(p.due ? `Pendiente para ${agDueLabel(p.due).toLowerCase()}${p.time ? ' a las ' + p.time : ''}` : 'Pendiente agregado'); setTimeout(() => { const n = $('#' + inp.id); n && n.focus(); }, 30); return; }
   if (e.target.id === 'envForm') { e.preventDefault(); const amt = $('#eAmt').value.trim() ? calcVal('#eAmt') : r2($('#eAmt').placeholder); if (!(amt > 0)) return toast('Escribe el monto por semana'); S.cfg.envelope = { on: true, amount: amt, acc: $('#eAcc').value }; save(); render(); toast('Sobre semanal activado'); }
   if (e.target.id === 'anaForm') { e.preventDefault(); S.cfg.emergencyMonths = Number($('#aEm').value) || 6; S.cfg.name = $('#aName').value.trim(); S.cfg.needs = [...e.target.querySelectorAll('input[name=need]:checked')].map(i => i.value); save(); render(); toast('Guardado'); }
   if (e.target.id === 'catForm') { e.preventDefault(); const sub = $('#nSub').value.trim(), cat = $('#nCat').value.trim(); if (!sub || !cat) return; if (catMap()[sub]) return toast('Esa subcategoría ya existe'); op('cat.add', { sub, cat, type: $('#nType').value }); toast('Subcategoría agregada'); }

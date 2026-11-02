@@ -17,7 +17,8 @@ const DEU = { sheet: 'Deudas', first: 6, last: 15 };                            
 const PAG = { sheet: 'Pagos fijos', first: 6, last: 30 };                           // A..F datos, G..R meses
 const PRE = { sheet: 'Presupuesto', first: 6, last: 45 };                           // A categoría (fórmula), B monto
 const CAT = { sheet: 'Categorias', first: 5, last: 400 };                           // A sub, B categoría, C tipo; E gasto, G ingreso, K métodos, M ámbitos, O tipos de cuenta
-const NOT = { sheet: 'Notas', first: 6, last: 305, idCol: 7 };                      // A..F, G = ID de la app
+const NOT = { sheet: 'Notas', first: 6, last: 1005, idCol: 7, extra: 4 };          // A..F, G = ID de la app, H tipo, I hora, J color, K fijada
+const API_VERSION = 2;
 
 const TZ = 'America/El_Salvador';
 
@@ -42,7 +43,7 @@ function doPost(e) {
       catch (err) { results.push({ opId: op.opId, ok: false, error: String(err.message || err) }); }
     });
     SpreadsheetApp.flush();
-    return json_({ ok: true, results: results, serverTime: Date.now(), data: snapshot_(ss) });
+    return json_({ ok: true, v: API_VERSION, results: results, serverTime: Date.now(), data: snapshot_(ss) });
   } finally {
     lock.releaseLock();
   }
@@ -57,6 +58,7 @@ function configurar() {
   ss.getSheetByName(MOV.sheet).getRange(4, MOV.idCol).setValue('ID app').setFontColor('#999999');
   ss.getSheetByName(MET.sheet).getRange(5, MET.accCol).setValue('Cuenta vinculada (app)');
   ss.getSheetByName(NOT.sheet).getRange(5, NOT.idCol).setValue('ID app').setFontColor('#999999');
+  ensureNoteHeaders_(ss.getSheetByName(NOT.sheet));
   ensureListValue_(ss, 13, 'Negocio');   // Ámbito: Personal, Compartido, Negocio
   assignIds_(ss);
   Logger.log('Tu código de acceso es: ' + token);
@@ -127,9 +129,11 @@ function applyOp_(ss, op) {
       let r = findById_(sh, NOT, d.id) || firstEmpty_(sh, NOT, [1, 3, NOT.idCol]);
       sh.getRange(r, 1, 1, 6).setValues([[date_(d.date), d.tag || '', d.text || '', d.action || '', date_(d.due), d.status || '']]);
       sh.getRange(r, NOT.idCol).setValue(d.id);
+      ensureNoteHeaders_(sh);
+      sh.getRange(r, NOT.idCol + 1, 1, NOT.extra).setValues([[d.kind || '', d.time ? "'" + d.time : '', d.color || '', d.pinned ? 'Sí' : '']]);
       return;
     }
-    case 'note.delete': { const sh = ss.getSheetByName(NOT.sheet); const r = findById_(sh, NOT, d.id); if (r) { sh.getRange(r, 1, 1, 6).clearContent(); sh.getRange(r, NOT.idCol).clearContent(); } return; }
+    case 'note.delete': { const sh = ss.getSheetByName(NOT.sheet); const r = findById_(sh, NOT, d.id); if (r) { sh.getRange(r, 1, 1, 6).clearContent(); sh.getRange(r, NOT.idCol, 1, 1 + NOT.extra).clearContent(); } return; }
     default: throw new Error('Operación desconocida: ' + op.type);
   }
 }
@@ -209,7 +213,7 @@ function snapshot_(ss) {
   const catRows = read(CAT, 15);
   const cats = catRows.filter(r => r[0] !== '').map(r => ({ sub: r[0], cat: r[1], type: r[2] }));
   const list = col => catRows.map(r => r[col]).filter(v => v !== '' && !String(v).startsWith('No editar'));
-  const notes = read(NOT, NOT.idCol).filter(r => r[2] !== '').map(r => ({ id: r[6], date: fmt_(r[0]), tag: r[1], text: r[2], action: r[3], due: fmt_(r[4]), status: r[5] }));
+  const notes = read(NOT, NOT.idCol + NOT.extra).filter(r => r[2] !== '').map(r => ({ id: r[6], date: fmt_(r[0]), tag: r[1], text: r[2], action: r[3], due: fmt_(r[4]), status: r[5], kind: r[7] || '', time: r[8] instanceof Date ? Utilities.formatDate(r[8], TZ, 'HH:mm') : String(r[8] || ''), color: r[9] || '', pinned: r[10] === 'Sí' || r[10] === true }));
 
   return {
     accounts, goals, debts, fixed, budgets, cats, notes, movs,
@@ -231,6 +235,11 @@ function assignIds_(ss) {
     });
     if (changed) sh.getRange(T.first, T.idCol, n, 1).setValues(ids);
   });
+}
+
+function ensureNoteHeaders_(sh) {
+  const h = sh.getRange(5, NOT.idCol + 1, 1, NOT.extra);
+  if (h.getValues()[0][0] === '') h.setValues([['Tipo (app)', 'Hora', 'Color', 'Fijada']]).setFontColor('#999999');
 }
 
 function findById_(sh, T, id) {

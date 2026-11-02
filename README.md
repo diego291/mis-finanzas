@@ -86,3 +86,11 @@ Si no subes el número en `sw.js`, los equipos seguirán usando la versión guar
 - El repositorio es solo código. `.gitignore` bloquea `.xlsx` y copias `.json`.
 - La URL del conector y tu código se guardan solo en cada equipo, nunca en GitHub.
 - Si crees que alguien vio tu código: borra la propiedad `TOKEN` (Configuración del proyecto → Propiedades del script), ejecuta `configurar` de nuevo y pega el código nuevo en tus equipos.
+
+## Actualizar el conector de tu hoja (cuando la app lo pida)
+
+Algunas versiones guardan datos nuevos en la hoja (por ejemplo, la Agenda usa las columnas H a K de **Notas**: tipo, hora, color y fijada).
+
+1. Abre tu hoja → **Extensiones → Apps Script**.
+2. Reemplaza todo `Código.gs` con `apps-script/Code.gs` de este repositorio y guarda.
+3. **Implementar → Administrar implementaciones → lápiz → Versión: Nueva versión → Implementar.** La URL no cambia.
