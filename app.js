@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '3.0.2';
+const VERSION = '3.0.3';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -3298,11 +3298,11 @@ const isMobileW = () => window.innerWidth < 700;
 
 /* materias: "AOL - Defensa Fase 3" -> código AOL con color fijo */
 const COURSE_COLORS = ['#1e88e5', '#8e24aa', '#e65100', '#00897b', '#c2185b', '#5e35b1', '#6d8b00', '#d81b60', '#0277bd', '#bf360c', '#2e7d32', '#ad1457'];
-function courseOf(title) { const m = String(title || '').match(/^\s*([A-ZÁÉÍÓÚÑ]{2,6})\s*[-–:]\s*(.+)$/); if (!m) return null; return { code: m[1], rest: m[2].replace(/^\d+\s*[-–:]\s*/, '').trim() }; }
+function courseOf(title) { const m = String(title || '').match(/^\s*([A-ZÁÉÍÓÚÑ]{2,6})(?:\s+\d+)?\s*[-–:]\s*(.+)$/); if (!m) return null; return { code: m[1], rest: m[2].replace(/^\d+\s*[-–:]\s*/, '').trim() }; }
 const courseColor = code => { const c = ((store('agcal').cfg || {}).courses || {})[code]; if (c) return c; const L = calCourses(), i = L.indexOf(code); if (i >= 0) return COURSE_COLORS[i % COURSE_COLORS.length]; let h = 0; for (const ch of code) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return COURSE_COLORS[h % COURSE_COLORS.length]; };
 const calDone = id => !!store('caldone')[id];
 function calCourses() { const set = {}; ((S.data.calendar || {}).events || []).forEach(e => { const c = courseOf(e.title); if (c) set[c.code] = (set[c.code] || 0) + 1; }); return Object.keys(set).sort(); }
-const chipLabel = x => x.code ? `<span class="ccode" style="--cc:${x.color}">${esc(x.code)}</span>${esc(x.short)}` : esc(x.title);
+const chipLabel = x => esc(x.title);
 const adSort = (a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0) || (a.code || '~').localeCompare(b.code || '~') || a.title.localeCompare(b.title);
 /* todo lo que se ve en el calendario, en un solo formato */
 function calItems(from, to) {
@@ -3310,8 +3310,7 @@ function calItems(from, to) {
   if (calReady()) (S.data.calendar.events || []).forEach(e => {
     const d0 = e.start.slice(0, 10), d1 = e.allDay ? addDays(e.end.slice(0, 10), -1) : e.end.slice(0, 10);
     if (d1 < from || d0 > to) return; const cat = calCatOf(e.color), co = courseOf(e.title);
-    if (hid.includes(co && !e.color ? 'Materia ' + co.code : cat.name)) return;
-    if (co && hid.includes('Materia ' + co.code)) return;
+    if (hid.includes(cat.name)) return;
     out.push({ key: 'g:' + e.id, src: 'g', ev: e, title: e.title, code: co ? co.code : '', short: co ? co.rest : e.title, d0, d1: d1 < d0 ? d0 : d1, allDay: e.allDay, s: e.allDay ? null : tm(e.start.slice(11)), e: e.allDay ? null : tm(e.end.slice(11)) + (e.end.slice(0, 10) > d0 ? 1440 * Math.min(1, daysTo(e.end.slice(0, 10)) - daysTo(d0)) : 0), color: co && !e.color ? courseColor(co.code) : GCOL[e.color || ''], recur: !!(e.sid || e.rrule), loc: e.loc, done: calDone(e.id) });
   });
   if (!hid.includes('De la app')) {
@@ -3345,8 +3344,7 @@ function calView() {
     : !calReady() ? `<div class="alert"><span></span><div><b>Falta dar permiso a Google Calendar</b><p>${S.data.calendar && S.data.calendar.error && S.data.calendar.error !== 'sin-permiso' ? esc(S.data.calendar.error) + '. ' : ''}En Apps Script: pega el appsscript.json de <b>Copiar permisos</b>, guarda y ejecuta <b>activarTodo</b>. Si aún falla: <b>Servicios + → Google Calendar API → Agregar</b>.</p></div><div class="acts"><button class="btn sm pri" data-act="copyMan">Copiar permisos</button><button class="btn sm" data-act="syncNow">Ya lo hice</button></div></div>` : '';
   const bar = `<div class="cal-bar"><button type="button" class="btn sm" data-act="calNav" data-v="0">Hoy</button><button type="button" class="btn sm ic" data-act="calNav" data-v="-1" aria-label="Anterior">‹</button><button type="button" class="btn sm ic" data-act="calNav" data-v="1" aria-label="Siguiente">›</button><b class="cal-title">${title}</b>
     <div class="seg cal-seg">${[['dia', 'Día'], ['semana', isMobileW() ? '3 días' : 'Semana'], ['mes', 'Mes'], ['lista', 'Lista']].map(([k, l]) => `<button type="button" data-act="calView" data-v="${k}" class="${v === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
-    <div class="cal-cats">${calCats().map(c => `<button type="button" class="ccat ${hid.includes(c.name) ? 'off' : ''}" data-act="calCat" data-v="${esc(c.name)}" style="--cc:${GCOL[c.color || '']}"><i></i>${esc(c.name)}</button>`).join('')}<button type="button" class="ccat ${hid.includes('De la app') ? 'off' : ''}" data-act="calCat" data-v="De la app" style="--cc:#5f6b76"><i></i>Pendientes, pagos y mantenimientos</button><button type="button" class="linkbtn" data-act="calCats" style="font-size:.8rem">Editar</button></div>
-    ${calCourses().length ? `<div class="cal-cats cal-courses"><small class="muted">Materias</small>${calCourses().map(c => `<button type="button" class="ccat ${hid.includes('Materia ' + c) ? 'off' : ''}" data-act="calCat" data-v="Materia ${esc(c)}" style="--cc:${courseColor(c)}"><i></i>${esc(c)}</button>`).join('')}</div>` : ''}`;
+    <div class="cal-cats">${calCats().map(c => `<button type="button" class="ccat ${hid.includes(c.name) ? 'off' : ''}" data-act="calCat" data-v="${esc(c.name)}" style="--cc:${GCOL[c.color || '']}"><i></i>${esc(c.name)}</button>`).join('')}<button type="button" class="ccat ${hid.includes('De la app') ? 'off' : ''}" data-act="calCat" data-v="De la app" style="--cc:#5f6b76"><i></i>Pendientes, pagos y mantenimientos</button><button type="button" class="linkbtn" data-act="calCats" style="font-size:.8rem">Editar</button></div>`;
   let body;
   if (v === 'mes') body = calMonth(base);
   else if (v === 'lista') body = calList(base);
@@ -3358,14 +3356,45 @@ function calGrid(start, n) {
   const items = calItems(start, end), allDay = items.filter(x => x.allDay), timed = items.filter(x => !x.allDay);
   const nowM = new Date().getHours() * 60 + new Date().getMinutes();
   const head = `<div class="cg-head" style="--n:${n}"><span></span>${dates.map(d => { const x = new Date(d + 'T12:00'); return `<button type="button" class="cg-dh ${d === today() ? 'td' : ''}" data-act="calGo" data-v="${d}"><small>${WEEK[(x.getDay() + 6) % 7].toUpperCase()}</small><b>${x.getDate()}</b></button>`; }).join('')}</div>`;
-  const adRows = dates.map(d => allDay.filter(x => x.d0 <= d && x.d1 >= d).sort(adSort));
-  const open = !!S.ui.calAdOpen, max = open ? 99 : n === 1 ? 6 : 3, hasMore = adRows.some(r => r.length > max);
-  const ad = adRows.some(r => r.length) ? `<div class="cg-ad ${open ? 'open' : ''}" style="--n:${n}"><div class="cg-adl"><small class="muted">todo el día</small>${hasMore || open ? `<button type="button" class="cad-tg" data-act="calAdToggle" aria-label="${open ? 'Contraer' : 'Ver todo'}">${open ? '▲' : '▼'}</button>` : ''}</div>${adRows.map(r => `<div class="cg-adc ${n === 1 ? 'one' : ''}">${r.slice(0, max).map(x => `<button type="button" class="cchip ${x.code ? 'co' : ''} ${x.done ? 'done' : ''}" style="--cc:${x.color}" data-act="calOpen" data-k="${esc(x.key)}" title="${esc(x.title)}">${chipLabel(x)}</button>`).join('')}${r.length > max ? `<button type="button" class="cmore" data-act="calAdToggle">+${r.length - max} más</button>` : ''}</div>`).join('')}</div>` : '';
+  const AL = weekLanes(dates, allDay); AL.forEach(it => { it.da = dates[0]; it.dz = dates[n - 1]; });
+  const open = !!S.ui.calAdOpen, max = open ? 99 : 3, nl = AL.length ? Math.max(...AL.map(it => it.lane)) + 1 : 0, show = Math.min(nl, max);
+  const hidden = dates.map((d, i) => AL.filter(it => it.lane >= max && it.c0 <= i && it.c1 >= i).length);
+  const ad = nl ? `<div class="cg-ad2" style="--n:${n}"><div class="cg-adl"><small class="muted">todo el día</small>${nl > 3 ? `<button type="button" class="cad-tg" data-act="calAdToggle" aria-label="${open ? 'Contraer' : 'Ver todo'}">${open ? '▲' : '▼'}</button>` : ''}</div><div class="cg-adb" style="height:${show * 24 + (hidden.some(Boolean) ? 18 : 0) + 6}px">${AL.filter(it => it.lane < max).map(it => barHTML(it, n, 3 + it.lane * 24)).join('')}${hidden.map((h, i) => h ? `<button type="button" class="cmore abs" style="left:calc(${i / n * 100}% + 4px);top:${3 + show * 24}px" data-act="calAdToggle">+${h} más</button>` : '').join('')}</div></div>` : '';
   const cols = dates.map(d => { const L = layoutDay(timed.filter(x => x.d0 === d).map(x => Object.assign({}, x)));
     return `<div class="cg-col ${d === today() ? 'td' : ''}" data-d="${d}">${L.map(x => { const h = Math.max(18, (Math.min(x.e, 1440) - x.s) / 60 * HOUR_H), w = 100 / x._n; return `<div class="cev ${x.src} ${x.done ? 'done' : ''} ${h < 34 ? 'sm' : ''}" style="--cc:${x.color};top:${x.s / 60 * HOUR_H}px;height:${h}px;left:calc(${x._c * w}% + 1px);width:calc(${w}% - 3px)" data-act="calOpen" data-k="${esc(x.key)}" ${x.src === 'g' && x.ev.owner !== false ? 'data-drag="1"' : ''}><b>${esc(x.title)}</b><small>${shortT(x.s)}${h >= 34 ? '–' + shortT(x.e) : ''}${x.recur ? ' ↻' : ''}${x.loc && h > 50 ? ' · ' + esc(x.loc) : ''}</small>${x.src === 'g' ? '<i class="cres"></i>' : ''}</div>`; }).join('')}${d === today() ? `<div class="cnow" style="top:${nowM / 60 * HOUR_H}px"></div>` : ''}</div>`; }).join('');
   return `<div class="cg">${head}${ad}<div class="cg-scroll" id="cgScroll"><div class="cg-body" style="--n:${n};height:${24 * HOUR_H}px"><div class="cg-hours">${Array.from({ length: 24 }, (_, h) => `<span style="top:${h * HOUR_H}px">${h ? (h % 12 || 12) + (h < 12 ? ' a. m.' : ' p. m.') : ''}</span>`).join('')}</div>${cols}</div></div></div>`;
 }
+/* barras continuas para eventos de varios días: cada semana se reparte en carriles */
+function weekLanes(dates, items) {
+  const a = dates[0], z = dates[dates.length - 1];
+  const L = items.filter(x => x.d1 >= a && x.d0 <= z).map(x => ({ x, c0: Math.max(0, daysTo(x.d0) - daysTo(a)), c1: Math.min(dates.length - 1, daysTo(x.d1) - daysTo(a)) }))
+    .sort((p, q) => (p.x.done ? 1 : 0) - (q.x.done ? 1 : 0) || p.c0 - q.c0 || (q.c1 - q.c0) - (p.c1 - p.c0) || (p.x.allDay ? 0 : 1) - (q.x.allDay ? 0 : 1) || (p.x.s || 0) - (q.x.s || 0) || adSort(p.x, q.x));
+  const lanes = [];
+  L.forEach(it => { let k = lanes.findIndex(end => end < it.c0); if (k < 0) { k = lanes.length; lanes.push(-1); } lanes[k] = it.c1; it.lane = k; });
+  return L;
+}
+function barHTML(it, n, top) {
+  const x = it.x, multi = it.c1 > it.c0 || x.allDay, w = (it.c1 - it.c0 + 1) / n * 100;
+  return `<button type="button" class="cbar ${multi ? 'fill' : 'tl'} ${x.done ? 'done' : ''} ${x.d0 < it.da ? 'cl' : ''} ${x.d1 > it.dz ? 'cr' : ''}" style="--cc:${x.color};left:calc(${it.c0 / n * 100}% + 2px);width:calc(${w}% - 4px);top:${top}px" data-act="calOpen" data-k="${esc(x.key)}" title="${esc(x.title)}">${multi ? '' : `<i></i><span class="ct">${shortT(x.s)}</span>`}<span class="cn">${esc(x.title)}</span></button>`;
+}
+function calDayPop(d) {
+  const items = calItems(d, d).sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0) || (a.allDay ? -1 : a.s) - (b.allDay ? -1 : b.s) || adSort(a, b)), x = new Date(d + 'T12:00');
+  openSheet(`${WDAY_FULL[x.getDay()][0].toUpperCase() + WDAY_FULL[x.getDay()].slice(1)} ${x.getDate()} de ${MONTHS[x.getMonth()].toLowerCase()}`, `<div class="cl-items">${items.map(i => `<button type="button" class="cl-it ${i.done ? 'done' : ''}" data-act="calOpen" data-k="${esc(i.key)}"><i style="background:${i.color}"></i><span class="cl-t">${i.allDay ? (i.d0 !== i.d1 ? 'Varios días' : 'Todo el día') : fmtT(hm(i.s))}</span><span class="cl-n">${esc(i.title)}</span></button>`).join('') || '<p class="note">Nada este día.</p>'}</div><div class="btns"><button type="button" class="btn pri" id="dpNew">+ Evento este día</button><button type="button" class="btn" id="dpDay">Ver el día</button></div>`, () => { }, f => {
+    f.querySelector('#dpNew').onclick = () => { closeSheet(); calEdit(null, { start: `${d}T09:00`, end: `${d}T10:00` }); };
+    f.querySelector('#dpDay').onclick = () => { closeSheet(); S.ui.calDate = d; S.ui.calView = 'dia'; render(); };
+  });
+}
 function calMonth(base) {
+  const ym = base.slice(0, 7), gs = weekStart(ym + '-01'), mob = isMobileW(), LH = mob ? 18 : 21, MAXL = mob ? 3 : 4;
+  const last = addDays(addM(ym, 1) + '-01', -1), weeks = []; for (let st = gs; st <= last; st = addDays(st, 7)) weeks.push(Array.from({ length: 7 }, (_, i) => addDays(st, i)));
+  const all = calItems(weeks[0][0], weeks[weeks.length - 1][6]);
+  return `<div class="cm2"><div class="cm-h">${WEEK.map(w => `<span>${w}</span>`).join('')}</div>${weeks.map(ds => {
+    const L = weekLanes(ds, all); L.forEach(it => { it.da = ds[0]; it.dz = ds[6]; });
+    const shown = L.filter(it => it.lane < MAXL), hiddenPerDay = ds.map((d, i) => L.filter(it => it.lane >= MAXL && it.c0 <= i && it.c1 >= i).length);
+    return `<div class="cm-w" style="--rows:${MAXL};--lh:${LH}px">${ds.map((d, i) => `<div class="cm-c ${d.slice(0, 7) !== ym ? 'out' : ''} ${d === today() ? 'td' : ''} ${i >= 5 ? 'we' : ''}" data-act="calNewDay" data-v="${d}"><button type="button" class="cm-n" data-act="calPop" data-v="${d}">${Number(d.slice(8))}</button>${hiddenPerDay[i] ? `<button type="button" class="cmore" data-act="calPop" data-v="${d}">+${hiddenPerDay[i]}${mob ? '' : ' más'}</button>` : ''}</div>`).join('')}
+      <div class="cm-bars">${shown.map(it => barHTML(it, 7, 28 + it.lane * (LH + 2))).join('')}</div></div>`; }).join('')}</div>`;
+}
+function calMonthOld(base) {
   const ym = base.slice(0, 7), first = ym + '-01', gs = weekStart(first), cells = Array.from({ length: 42 }, (_, i) => addDays(gs, i));
   const rows = cells.slice(35).every(d => d.slice(0, 7) !== ym) ? 5 : 6, C = cells.slice(0, rows * 7);
   const items = calItems(C[0], C[C.length - 1]);
@@ -3376,7 +3405,7 @@ function calList(base) {
   const to = addDays(base, 60), items = calItems(base, to), days = {};
   items.forEach(x => { for (let d = x.d0 < base ? base : x.d0; d <= x.d1 && d <= to; d = addDays(d, 1)) (days[d] = days[d] || []).push(x); });
   const keys = Object.keys(days).sort();
-  return keys.length ? `<div class="cl">${keys.map(d => { const x = new Date(d + 'T12:00'); return `<div class="cl-day ${d === today() ? 'td' : ''}"><button type="button" class="cl-dh" data-act="calGo" data-v="${d}"><b>${x.getDate()}</b><small>${WEEK[(x.getDay() + 6) % 7]} · ${MSHORT[x.getMonth()]}</small></button><div class="cl-items">${days[d].sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0) || (a.allDay ? -1 : a.s) - (b.allDay ? -1 : b.s) || adSort(a, b)).map(i => `<button type="button" class="cl-it ${i.done ? 'done' : ''}" data-act="calOpen" data-k="${esc(i.key)}"><i style="background:${i.color}"></i><span class="cl-t">${i.allDay ? 'Todo el día' : fmtT(hm(i.s)) + ' – ' + fmtT(hm(i.e))}</span><span class="cl-n">${i.code ? `<span class="ccode" style="--cc:${i.color}">${esc(i.code)}</span>${esc(i.short)}` : esc(i.title)}${i.recur ? ' ↻' : ''}${i.loc ? `<small>${esc(i.loc)}</small>` : ''}</span></button>`).join('')}</div></div>`; }).join('')}</div>` : '<p class="note">Nada en los próximos 60 días.</p>';
+  return keys.length ? `<div class="cl">${keys.map(d => { const x = new Date(d + 'T12:00'); return `<div class="cl-day ${d === today() ? 'td' : ''}"><button type="button" class="cl-dh" data-act="calGo" data-v="${d}"><b>${x.getDate()}</b><small>${WEEK[(x.getDay() + 6) % 7]} · ${MSHORT[x.getMonth()]}</small></button><div class="cl-items">${days[d].sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0) || (a.allDay ? -1 : a.s) - (b.allDay ? -1 : b.s) || adSort(a, b)).map(i => `<button type="button" class="cl-it ${i.done ? 'done' : ''}" data-act="calOpen" data-k="${esc(i.key)}"><i style="background:${i.color}"></i><span class="cl-t">${i.allDay ? 'Todo el día' : fmtT(hm(i.s)) + ' – ' + fmtT(hm(i.e))}</span><span class="cl-n">${esc(i.title)}${i.recur ? ' ↻' : ''}${i.loc ? `<small>${esc(i.loc)}</small>` : ''}</span></button>`).join('')}</div></div>`; }).join('')}</div>` : '<p class="note">Nada en los próximos 60 días.</p>';
 }
 
 /* abrir lo que se tocó */
@@ -3452,7 +3481,7 @@ function calEdit(e, preset) {
 function calToggleDone(id) { if (calDone(id)) op('rec.delete', { coll: 'caldone', id }); else op('rec.upsert', { coll: 'caldone', id, data: { t: Date.now() } }); toast(calDone(id) ? 'Marcado como hecho' : 'Pendiente otra vez'); }
 function calViewOnly(e) {
   const co = courseOf(e.title), d0 = e.start.slice(0, 10), x = new Date(d0 + 'T12:00');
-  openSheet(co ? `<span class="ccode" style="--cc:${courseColor(co.code)}">${esc(co.code)}</span> ${esc(co.rest)}` : esc(e.title), `
+  openSheet(esc(e.title), `
     <p class="muted" style="margin:0">${WDAY_FULL[x.getDay()]} ${x.getDate()} de ${MONTHS[x.getMonth()].toLowerCase()}${e.allDay ? '' : ' · ' + fmtT(e.start.slice(11)) + ' – ' + fmtT(e.end.slice(11))}</p>
     ${e.desc ? `<div class="cv-desc">${esc(e.desc).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>').replace(/\n/g, '<br>')}</div>` : ''}
     ${e.loc ? `<p style="margin:0">📍 ${esc(e.loc)}</p>` : ''}
@@ -3534,11 +3563,11 @@ Object.assign(ACT, {
   calView: el => { S.ui.calView = el.dataset.v; try { localStorage.setItem('mf.calView', el.dataset.v); } catch (e) { } render(); },
   calNav: el => { const k = Number(el.dataset.v), v = S.ui.calView || 'semana', b = S.ui.calDate || today(); if (!k) S.ui.calDate = today(); else if (v === 'mes') S.ui.calDate = addM(b.slice(0, 7), k) + '-01'; else S.ui.calDate = addDays(b, k * (v === 'dia' ? 1 : v === 'lista' ? 30 : isMobileW() ? 3 : 7)); render(); },
   calGo: el => { S.ui.calDate = el.dataset.v; S.ui.calView = 'dia'; render(); },
-  calNewDay: (el, ev) => { if (ev && ev.target !== el) return; calEdit(null, { allDay: false, start: `${el.dataset.v}T09:00`, end: `${el.dataset.v}T10:00` }); },
+  calNewDay: el => calDayPop(el.dataset.v),
   calOpen: el => calOpen(el.dataset.k), calNew: () => { const d = S.ui.calDate || today(); calEdit(null, { start: `${d}T${hm(Math.min(22 * 60, Math.ceil((new Date().getHours() * 60 + new Date().getMinutes()) / 30) * 30 + 30))}`, end: `${d}T${hm(Math.min(23 * 60, Math.ceil((new Date().getHours() * 60 + new Date().getMinutes()) / 30) * 30 + 90))}` }); },
   calCat: el => { let h = calHidden(); const n = el.dataset.v; h = h.includes(n) ? h.filter(x => x !== n) : h.concat(n); try { localStorage.setItem('mf.calHidden', JSON.stringify(h)); } catch (e) { } render(); },
   calCats: () => calCatsEdit(),
-  calAdToggle: () => { S.ui.calAdOpen = !S.ui.calAdOpen; render(); },
+  calAdToggle: () => { S.ui.calAdOpen = !S.ui.calAdOpen; render(); }, calPop: el => calDayPop(el.dataset.v),
   calEditG: el => { const e = (S.data.calendar.events || []).find(x => x.id === el.dataset.id); if (e) calEdit(e); }
 });
 try { const v = localStorage.getItem('mf.calView'); if (v) S.ui.calView = v; } catch (e) { }
