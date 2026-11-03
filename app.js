@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '3.0.3';
+const VERSION = '3.0.4';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -1716,12 +1716,16 @@ function pinnedPagesCard() {
 
 /* ---- panel rápido de agenda (barra superior) ---- */
 function agPanelHTML() {
-  const td = today(), ws = weekStart(td), it = agItemsOn(td), d = new Date(td + 'T12:00');
-  const strip = Array.from({ length: 7 }, (_, i) => { const ds = addDays(ws, i); return `<button type="button" class="agp-d ${ds === td ? 'on' : ''}" data-act="agpDay" data-v="${ds}"><span>${WEEK[i][0]}</span><b>${new Date(ds + 'T12:00').getDate()}</b>${agDot(ds) ? '<i></i>' : ''}</button>`; }).join('');
-  const any = it.ev.length || it.td.length || it.pays.length;
-  return `<div class="agp-head"><b>Hoy · ${WDAY_FULL[d.getDay()]} ${d.getDate()}</b><a href="#agenda" data-act="agpClose">Abrir agenda ›</a></div>
-    <div class="agp-strip">${strip}</div>
-    ${any ? `<div class="ag-evs">${it.ev.map(agEventRow).join('')}</div><div class="ag-todos">${it.pays.filter(x => !x.s.marked).map(agPayRow).join('')}${it.td.map(n => agTodoRow(n, false)).join('')}</div>` : '<p class="note">Nada para hoy.</p>'}
+  const td = today(), sel = S.ui.agpSel || td, ws = weekStart(S.ui.agpWeek || sel), it = agItemsOn(sel), d = new Date(sel + 'T12:00');
+  const strip = Array.from({ length: 7 }, (_, i) => { const ds = addDays(ws, i), n = agDot(ds); return `<button type="button" class="agp-d ${ds === sel ? 'on' : ''} ${ds === td ? 'today' : ''}" data-act="agpDay" data-v="${ds}"><span>${WEEK[i][0]}</span><b>${new Date(ds + 'T12:00').getDate()}</b>${n ? '<i></i>' : ''}</button>`; }).join('');
+  const dn = daysTo(sel), lab = dn === 0 ? 'Hoy' : dn === 1 ? 'Mañana' : dn === -1 ? 'Ayer' : '';
+  const ad = it.ev.filter(n => !n.time), tl = it.ev.filter(n => n.time);
+  const row = n => { const c = n.gcol || AG_COLORS[n.color] || AG_COLORS.verde; return `<button type="button" class="agp-it ${isDone(n) ? 'done' : ''}" data-act="${n.gid ? 'calEditG' : 'agEdit'}" data-id="${esc(n.gid || n.id)}" title="${esc(n.text)}"><i style="background:${c}"></i>${n.time ? `<span class="agp-t">${fmtTime(n.time)}</span>` : ''}<span class="agp-n">${esc(n.text)}</span></button>`; };
+  const pays = it.pays.filter(x => !x.s.marked);
+  const any = it.ev.length || it.td.length || pays.length;
+  return `<div class="agp-head"><b>${lab ? lab + ' · ' : ''}${WDAY_FULL[d.getDay()]} ${d.getDate()}${lab ? '' : ' ' + MSHORT[d.getMonth()].toLowerCase()}</b><a href="#agenda" data-act="agpOpen" data-v="${sel}">Abrir día ›</a></div>
+    <div class="agp-strip"><button type="button" class="agp-nav" data-act="agpWeek" data-v="-7" aria-label="Semana anterior">‹</button>${strip}<button type="button" class="agp-nav" data-act="agpWeek" data-v="7" aria-label="Semana siguiente">›</button></div>
+    <div class="agp-body">${any ? `${tl.length ? `<div class="agp-sec">${tl.map(row).join('')}</div>` : ''}${ad.length ? `<div class="agp-sec"><small class="agp-h">Todo el día · ${ad.length}</small>${ad.map(row).join('')}</div>` : ''}${pays.length || it.td.length ? `<div class="ag-todos">${pays.map(agPayRow).join('')}${it.td.map(n => agTodoRow(n, false)).join('')}</div>` : ''}` : `<p class="note">Nada para ${lab ? lab.toLowerCase() : 'este día'}.</p>`}</div>
     <form id="agpQuick" class="ag-quick"><input id="agpQ" type="text" autocomplete="off" placeholder="Anota algo: llamar a cliente mañana 3pm"><button class="btn sm pri" type="submit">+</button></form>`;
 }
 function agPanelCount() { const it = agItemsOn(today()); return it.ev.filter(n => !isDone(n)).length + it.td.filter(n => !isDone(n)).length + it.pays.filter(x => !x.s.marked).length; }
@@ -2135,7 +2139,9 @@ const ACT = {
   blNewPg: el => newPage(el.dataset.v),
   blPageMenu: () => pageMenu(),
   blExport: () => exportDialog(),
-  agpDay: el => { S.ui.agDay = el.dataset.v; S.ui.agTab = 'dia'; $('#agPanel').hidden = true; go('agenda'); },
+  agpDay: el => { S.ui.agpSel = el.dataset.v; setTimeout(() => { const p = $('#agPanel'); if (p) p.innerHTML = agPanelHTML(); }, 0); },
+  agpWeek: el => { S.ui.agpWeek = addDays(weekStart(S.ui.agpWeek || S.ui.agpSel || today()), Number(el.dataset.v)); setTimeout(() => { const p = $('#agPanel'); if (p) p.innerHTML = agPanelHTML(); }, 0); },
+  agpOpen: el => { S.ui.agTab = 'dia'; S.ui.calView = 'dia'; S.ui.calDate = el.dataset.v; $('#agPanel').hidden = true; go('agenda'); },
   agpClose: () => { $('#agPanel').hidden = true; },
   homeDay: el => { S.ui.homeDay = el.dataset.v; render(); },
   newMovOn: el => editMov(null, { date: el.dataset.v }),
@@ -2231,7 +2237,7 @@ function followMonth(force) {
   if (now !== S.ui.seenYm || force) { S.ui.seenYm = now; if (S.ui.ym !== now) { S.ui.ym = now; S.ui.homeDay = ''; S.ui.calDay = ''; render(); } }
 }
 setInterval(() => followMonth(false), 60000);
-$('#agBtn').onclick = e => { e.stopPropagation(); const p = $('#agPanel'); p.hidden = !p.hidden; if (!p.hidden) p.innerHTML = agPanelHTML(); $('#notifs').hidden = true; if (TP.open && TP.mode === 'drop') { TP.open = false; tapeRender(); } };
+$('#agBtn').onclick = e => { e.stopPropagation(); const p = $('#agPanel'); p.hidden = !p.hidden; if (!p.hidden) { S.ui.agpSel = today(); S.ui.agpWeek = ''; p.innerHTML = agPanelHTML(); } $('#notifs').hidden = true; if (TP.open && TP.mode === 'drop') { TP.open = false; tapeRender(); } };
 $('#blocBtn').onclick = () => { $('#agPanel').hidden = true; go('bloc'); };
 document.addEventListener('click', e => { const p = $('#agPanel'); if (p && !p.hidden && !e.target.closest('#agPanel') && !e.target.closest('#agBtn') && $('#sheetBg').hidden) p.hidden = true; });
 document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && S.ui.view === 'bloc') { e.preventDefault(); pgSaveNow(); toast('Guardado'); } });
@@ -3578,7 +3584,7 @@ function labelTables(root) {
     const hr = t.querySelector('thead tr:last-child'); if (!hr) return;
     const H = [...hr.children].map(th => th.textContent.trim());
     t.closest('.tbl-wrap').classList.toggle('wide', H.length > 9); [...hr.children].forEach(th => { if (th.textContent.trim().length <= 2 && th.textContent.trim()) th.classList.add('mo'); });
-    t.querySelectorAll('tbody tr, tfoot tr').forEach(tr => { let i = 0; [...tr.children].forEach(td => { const span = Number(td.getAttribute('colspan')) || 1; const lab = H[i] || ''; td.setAttribute('data-label', span > 1 ? '' : lab); if (lab.length > 0 && lab.length <= 2) td.classList.add('mo'); i += span; }); });
+    t.querySelectorAll('tbody tr, tfoot tr').forEach(tr => { const vals = [...tr.children].slice(1).filter(td => td.textContent.trim() || td.querySelector('.bar,button,a,.pill')); tr.dataset.n = vals.filter(td => !td.querySelector('.bar') && !/^\s*$/.test(td.textContent)).length; [...tr.children].slice(1).forEach(td => { if (!td.textContent.trim() && !td.querySelector('.bar,button,a,.pill,i')) td.classList.add('empty'); }); let i = 0; [...tr.children].forEach(td => { const span = Number(td.getAttribute('colspan')) || 1; const lab = H[i] || ''; td.setAttribute('data-label', span > 1 ? '' : lab); if (lab.length > 0 && lab.length <= 2) td.classList.add('mo'); i += span; }); });
   });
 }
 /* ---------------- Arranque ---------------- */
