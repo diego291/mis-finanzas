@@ -1105,3 +1105,11 @@ body[data-design="c"] .next-step b { color: var(--cta-bg); }
 .cal-courses > small { font-size: .74rem; font-weight: 700; margin-right: 2px; }
 .cv-desc { font-size: .9rem; line-height: 1.5; background: var(--surface-2); padding: 10px 12px; border-radius: 10px; overflow-wrap: anywhere; }
 .sheet h2 .ccode { font-size: .75rem; }
+.nslot { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.nslot-n { width: 22px; height: 22px; border-radius: 50%; background: var(--surface-2); display: grid; place-items: center; font-size: .75rem; font-weight: 800; flex: none; }
+.nslot-ic svg { width: 22px; height: 22px; color: var(--accent); display: block; }
+.nslot .nsel { flex: 1; min-width: 0; min-height: 38px; }
+.nmv { width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2); color: var(--fg); cursor: pointer; flex: none; } .nmv:disabled { opacity: .3; }
+.nprev { display: flex; justify-content: space-around; align-items: center; background: var(--nav-bg, #14171a); color: #cfd6d2; border-radius: 18px; padding: 8px 4px; }
+.nprev span { display: grid; justify-items: center; gap: 2px; font-size: .62rem; min-width: 48px; } .nprev svg { width: 20px; height: 20px; }
+.nprev .nprev-fab { width: 42px; height: 42px; min-width: 0; border-radius: 13px; background: var(--fab-bg, #c7f0db); color: var(--fab-fg, #14171a); place-items: center; font-size: 1.4rem; font-weight: 700; }

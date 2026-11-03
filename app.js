@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '3.0.1';
+const VERSION = '3.0.2';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -465,12 +465,28 @@ function renderNav() {
   const mob = `<div class="mfavs">${favs.slice(0, 2).map(link).join('')}<span class="slot" aria-hidden="true"></span>${favs.slice(2, 4).map(link).join('')}<a href="#" class="more" data-act="more">${svgI('mas')}<span class="nl">Más</span>${moreN ? `<span class="nb">${moreN}</span>` : ''}</a></div>`;
   $('#nav').innerHTML = `<div class="navbrand"><span class="mark">$</span><span>Mis Finanzas</span></div><div class="ngroups">${groups}</div><div class="nfoot">${link('ajustes')}</div>${mob}`;
 }
+function navCustomize() {
+  const all = NAV_GROUPS.flatMap(g => g[2]).concat(['ajustes']);
+  let cur = navFavs().slice(); while (cur.length < 4) cur.push(all.find(k => !cur.includes(k)));
+  const slot = (k, i) => `<div class="nslot" data-i="${i}"><span class="nslot-n">${i + 1}</span><span class="nslot-ic">${svgI(k)}</span><select class="ctl nsel">${all.map(x => `<option value="${x}" ${x === k ? 'selected' : ''}>${navName(x)}</option>`).join('')}</select><button type="button" class="nmv" data-mv="-1" ${i ? '' : 'disabled'} aria-label="Subir">▲</button><button type="button" class="nmv" data-mv="1" ${i < 3 ? '' : 'disabled'} aria-label="Bajar">▼</button></div>`;
+  const prev = () => `<div class="nprev">${cur.slice(0, 2).map(k => `<span>${svgI(k)}<small>${navName(k)}</small></span>`).join('')}<span class="nprev-fab">+</span>${cur.slice(2).map(k => `<span>${svgI(k)}<small>${navName(k)}</small></span>`).join('')}<span>${svgI('mas')}<small>Más</small></span></div>`;
+  openSheet('Personalizar barra de abajo', `<p class="note" style="margin:0">Elige qué sale en cada lugar y en qué orden. Los lugares 1 y 2 van a la izquierda del +, y el 3 y 4 a la derecha.</p><div id="nPrev">${prev()}</div><div id="nSlots">${cur.map(slot).join('')}</div><div class="btns"><button class="btn pri">Guardar</button><button type="button" class="btn" id="nReset">Volver a la original</button></div>`, f => {
+    if (new Set(cur).size < 4) return 'Cada lugar debe tener una sección distinta.';
+    S.cfg.favs = cur.slice(); save(); renderNav(); toast('Barra actualizada');
+  }, f => {
+    const draw = () => { f.querySelector('#nSlots').innerHTML = cur.map(slot).join(''); f.querySelector('#nPrev').innerHTML = prev(); };
+    f.addEventListener('change', e => { const el = e.target.closest('.nslot'); if (!el) return; const i = Number(el.dataset.i), v = e.target.value, j = cur.indexOf(v); if (j >= 0 && j !== i) cur[j] = cur[i]; cur[i] = v; draw(); });
+    f.addEventListener('click', e => { const b = e.target.closest('.nmv'); if (!b) return; const i = Number(b.closest('.nslot').dataset.i), j = i + Number(b.dataset.mv); if (j < 0 || j > 3) return; [cur[i], cur[j]] = [cur[j], cur[i]]; draw(); });
+    f.querySelector('#nReset').onclick = () => { cur = FAV_DEFAULT.slice(); draw(); };
+  });
+}
 function navLauncher() {
   const favs = navFavs();
   const tile = k => `<div class="lt ${S.ui.view === k ? 'on' : ''}" data-k="${k}" data-name="${esc(navName(k).toLowerCase())}"><a href="#${k}" data-act="close">${svgI(k)}<span>${navName(k)}</span></a><button type="button" class="lstar ${favs.includes(k) ? 'on' : ''}" data-fav="${k}" aria-label="${favs.includes(k) ? 'Quitar de' : 'Agregar a'} la barra">★</button></div>`;
   openSheet('Todas las secciones', `<input class="ctl" id="lSearch" type="search" placeholder="Buscar sección…" autocomplete="off">
     ${NAV_GROUPS.concat([['app', 'App', ['ajustes']]]).map(([g, label, items]) => `<div class="lgrp"><div class="lgh">${label}</div><div class="lgrid">${items.map(tile).join('')}</div></div>`).join('')}
-    <p class="note" style="margin:0">Toca ★ para elegir las 4 secciones de tu barra de abajo (tienes ${favs.length}).</p>`, () => { }, f => {
+    <p class="note" style="margin:0">Toca ★ para elegir las 4 secciones de tu barra de abajo (tienes ${favs.length}).</p><button type="button" class="btn" id="lCustom">Personalizar barra y orden</button>`, () => { }, f => {
+    f.querySelector('#lCustom').onclick = () => { closeSheet(); navCustomize(); };
     f.querySelector('#lSearch').addEventListener('input', e => { const q = e.target.value.trim().toLowerCase(); f.querySelectorAll('.lt').forEach(t => t.hidden = q && !t.dataset.name.includes(q)); f.querySelectorAll('.lgrp').forEach(g => g.hidden = ![...g.querySelectorAll('.lt')].some(t => !t.hidden)); });
     f.addEventListener('click', e => {
       const b = e.target.closest('[data-fav]'); if (!b) return; e.preventDefault();
@@ -1748,7 +1764,7 @@ function vAjustes() {
   <section class="card"><header><h2>Respaldo</h2></header><p class="muted" style="margin:0 0 12px;font-size:.86rem">Tu hoja ya es el respaldo principal. Esto descarga una copia de lo que tiene la app en este equipo.</p>
     <div class="btns"><button class="btn" data-act="exportJson">Descargar copia (.json)</button><button class="btn" data-act="copyJson">Copiar copia</button>${c.url ? '' : '<label class="btn">Importar copia<input type="file" id="impFile" accept="application/json" hidden></label>'}</div></section>
   <section class="card"><header><h2>Aplicación</h2><span class="muted num">v${VERSION}</span></header>
-    <div class="btns">${S.installEvt ? '<button class="btn pri" data-act="install">Instalar app</button>' : ''}<button class="btn" data-act="checkUpdate">Buscar actualización</button><button class="btn danger" data-act="resetLocal">Borrar datos de este equipo</button></div>
+    <div class="btns">${S.installEvt ? '<button class="btn pri" data-act="install">Instalar app</button>' : ''}<button class="btn" data-act="navCustom">Personalizar barra de abajo</button><button class="btn" data-act="checkUpdate">Buscar actualización</button><button class="btn danger" data-act="resetLocal">Borrar datos de este equipo</button></div>
     <p class="muted" style="font-size:.82rem;margin:12px 0 0">En iPhone: abre en Safari, toca Compartir y luego “Agregar a inicio”. En Android: menú de Chrome → “Instalar app”.</p>
     <div id="resetConfirm" hidden style="margin-top:12px" class="alert bad"><span></span><div><b>¿Borrar los datos de este equipo?</b><p>No toca tu hoja. ${S.outbox.length ? `Perderás ${S.outbox.length} cambio(s) sin enviar.` : ''}</p></div><div class="acts"><button class="btn sm danger" data-act="resetYes">Borrar</button></div></div></section>`;
 }
@@ -2130,7 +2146,7 @@ const ACT = {
   go: el => go(el.dataset.v), syncNow: () => sync(true),
   disconnect: () => { S.cfg.url = ''; S.cfg.token = ''; save(); render(); toast('Hoja desconectada. Los datos siguen en este equipo.'); },
   startLocal: () => { S.data = normalize(emptyData()); save(); render(); },
-  more: () => navLauncher(),
+  more: () => navLauncher(), navCustom: () => navCustomize(),
   navGrp: el => { const g = el.dataset.v; let c = navClosed(); c = c.includes(g) ? c.filter(x => x !== g) : c.concat(g); try { localStorage.setItem('mf.navClosed', JSON.stringify(c)); } catch (e) { } renderNav(); },
   csv: () => { const L = filteredMovs(); const cols = ['date', 'type', 'acc', 'sub', 'cat', 'desc', 'amount', 'to', 'tag', 'scope', 'method', 'notes']; const head = ['Fecha', 'Tipo', 'Cuenta', 'Subcategoría', 'Categoría', 'Descripción', 'Monto', 'Cuenta destino', 'Meta / Deuda', 'Ámbito', 'Método', 'Notas']; download('movimientos.csv', '﻿' + [head, ...L.map(m => cols.map(c => c === 'cat' ? mcat(m) : m[c]))].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n'), 'text/csv'); },
   exportJson: () => download(`mis-finanzas-${today()}.json`, JSON.stringify({ app: 'Mis Finanzas', version: VERSION, exported: new Date().toISOString(), data: S.data, outbox: S.outbox }, null, 1), 'application/json'),
