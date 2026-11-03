@@ -1169,3 +1169,17 @@ body[data-design="c"] .next-step b { color: var(--cta-bg); }
 .agp-t { font-family: var(--f-num); font-size: .76rem; color: var(--muted); flex: none; }
 .agp-n { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
 .agp-it.done .agp-n { text-decoration: line-through; color: var(--muted); }
+
+/* presupuesto en cuadrícula */
+.bgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap: 10px; }
+.btile { display: grid; gap: 7px; text-align: left; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); color: var(--fg); padding: 12px 14px; cursor: pointer; font: inherit; transition: border-color .15s, transform .1s; }
+.btile:hover { border-color: var(--accent); } .btile:active { transform: scale(.99); }
+.btile.over { border-color: color-mix(in srgb, var(--neg) 55%, var(--line)); }
+.bt-h { display: flex; justify-content: space-between; align-items: center; gap: 6px; } .bt-h b { font-size: .92rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bt-n { display: flex; align-items: baseline; gap: 6px; } .bt-n .num { font-size: 1.25rem; font-weight: 700; } .bt-n small { color: var(--muted); font-size: .78rem; }
+.btile.over .bt-n .num { color: var(--neg); }
+.bt-f { color: var(--muted); font-size: .76rem; } .bt-f b { color: var(--fg); }
+.btile .bar { height: 6px; }
+.bidle { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.bidle .chip { border-style: solid; color: var(--fg); } .bidle .chip small { color: var(--muted); }
+@media (max-width: 600px) { .bgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .btile { padding: 10px; } .bt-n .num { font-size: 1.05rem; } .bt-h .pill { display: none; } }

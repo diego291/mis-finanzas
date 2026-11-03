@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '3.0.4';
+const VERSION = '3.0.5';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -843,10 +843,17 @@ function vPresupuesto() {
   const inc = cur.inc || 1;
   return `${head('Presupuesto', `Comparado con ${ymLabel(ym)}. Toca un monto para cambiarlo; se guarda en tu hoja.`)}
   <div class="kpis"><div class="kpi"><span class="label">Presupuestado</span><span class="v">${money(tb)}</span></div><div class="kpi"><span class="label">Gastado en esas categorías</span><span class="v">${money(ts)}</span></div><div class="kpi"><span class="label">Disponible</span><span class="v ${tb - ts < 0 ? 'neg' : 'pos'}">${money(tb - ts)}</span></div><div class="kpi"><span class="label">Sin presupuesto</span><span class="v">${money(cur.exp - ts)}</span><span class="d">gastos en categorías sin monto</span></div></div>
-  <div class="grid-2">
-  <section class="card tbl-wrap"><table><thead><tr><th>Categoría</th><th class="r">Presupuesto</th><th class="r">Gastado</th><th style="width:28%">Uso</th><th class="r">Prom. ${y}</th></tr></thead><tbody>
-  ${rows.map(r => { const p = r.b ? r.sp / r.b : null; return `<tr><td>${esc(r.c)}</td><td class="r"><button class="linkbtn num" data-act="budget" data-c="${esc(r.c)}">${r.b ? money(r.b) : 'Definir'}</button></td><td class="r ${p > 1 ? 'neg' : ''}">${r.sp ? money(r.sp) : '—'}</td><td>${r.b ? `<div class="bar ${p > 1 ? 'over' : p >= .85 ? 'near' : 'good'}"><i style="width:${Math.min(100, p * 100)}%"></i></div>` : r.sp ? '<span class="pill mid">Sin monto</span>' : ''}</td><td class="r muted">${r.avg ? money(r.avg) : '—'}</td></tr>`; }).join('')}
-  </tbody></table></section>
+  ${(() => {
+    const st = r => { const p = r.b ? r.sp / r.b : null; return p == null ? (r.sp ? 'nob' : 'idle') : p > 1 ? 'over' : p >= .85 ? 'near' : 'good'; };
+    const act = rows.filter(r => r.b || r.sp).sort((a, b) => (b.b ? b.sp / b.b : -1) - (a.b ? a.sp / a.b : -1) || b.sp - a.sp), idle = rows.filter(r => !r.b && !r.sp);
+    const tile = r => { const k = st(r), p = r.b ? r.sp / r.b : 0; return `<button type="button" class="btile ${k}" data-act="budget" data-c="${esc(r.c)}"><div class="bt-h"><b>${esc(r.c)}</b>${r.b ? `<span class="pill ${k === 'over' ? 'bad' : k === 'near' ? 'mid' : 'ok'}">${pct(p)}</span>` : '<span class="pill mid">Sin monto</span>'}</div>
+      <div class="bt-n"><span class="num">${money(r.sp)}</span><small>${r.b ? 'de ' + money(r.b) : 'gastado'}</small></div>
+      <div class="bar ${k === 'over' ? 'over' : k === 'near' ? 'near' : 'good'}"><i style="width:${r.b ? Math.min(100, p * 100) : 0}%"></i></div>
+      <small class="bt-f">${r.b ? (r.b - r.sp >= 0 ? `Quedan <b>${money(r.b - r.sp)}</b>` : `<b class="neg">Te pasaste ${money(r.sp - r.b)}</b>`) : 'Toca para ponerle monto'}${r.avg ? ` · prom. ${money(r.avg).replace('.00', '')}` : ''}</small></button>`; };
+    return `<section class="card"><header><h2>Por categoría</h2><small class="muted">Toca una para cambiar su monto</small></header><div class="bgrid">${act.map(tile).join('')}</div>
+      ${idle.length ? `<div class="bidle"><small class="muted">Sin presupuesto ni gastos este mes:</small>${idle.map(r => `<button type="button" class="chip" data-act="budget" data-c="${esc(r.c)}">${esc(r.c)}${r.avg ? ` <small>prom. ${money(r.avg).replace('.00', '')}</small>` : ''}</button>`).join('')}</div>` : ''}</section>
+  <div class="grid-2">`;
+  })()}
   <section class="card" style="display:grid;gap:12px;align-content:start"><header style="margin:0"><h2>Regla 50 / 30 / 20</h2></header>
     <p class="muted" style="margin:0;font-size:.86rem">De lo que entra: 50% necesidades, 30% gustos, 20% ahorro. Con tus ingresos de ${money(cur.inc)}:</p>
     ${[['Necesidades', needs, .5], ['Gustos y otros', wants, .3], ['Ahorro (lo que sobra)', cur.inc - cur.exp, .2]].map(([n, v, t]) => `<div class="hbar"><span>${n} <small class="muted">ideal ${money(cur.inc * t)}</small></span><b class="${(n.startsWith('Ahorro') ? v < cur.inc * t : v > cur.inc * t) ? 'neg' : 'pos'}">${money(v)} <small class="muted">${pct(v / inc)}</small></b><div class="bar ${(n.startsWith('Ahorro') ? v >= cur.inc * t : v <= cur.inc * t) ? 'good' : 'over'}"><i style="width:${Math.max(0, Math.min(100, v / inc * 100))}%"></i></div></div>`).join('')}
