@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '2.7.0';
+const VERSION = '2.8.0';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -1700,7 +1700,7 @@ function vAjustes() {
     <label class="field"><span>Código de acceso (lo muestra la función configurar)</span><input id="cTok" type="password" value="${esc(c.token)}" required autocomplete="off"></label>
     <div class="err-msg" id="cErr">${esc(S.syncErr)}</div>
     <div class="btns"><button class="btn pri" type="submit">${c.url ? 'Guardar y sincronizar' : 'Conectar'}</button>${c.url ? '<button class="btn" type="button" data-act="syncNow">Sincronizar ahora</button><button class="btn danger" type="button" data-act="disconnect">Desconectar</button>' : ''}</div></form>
-    ${c.url && c.serverV && c.serverV < 3 ? `<div class="alert" style="margin-top:12px"><span></span><div><b>Actualiza el conector de tu hoja (una sola vez)</b><p>Tu hoja tiene el conector v${c.serverV}. Con la versión 3 la agenda completa y tus ajustes se respaldan y se comparten entre tus equipos, y las mejoras futuras ya no necesitarán este paso.</p></div><div class="acts"><a class="btn sm" href="https://github.com/diego291/mis-finanzas/blob/main/apps-script/Code.gs" target="_blank" rel="noopener">Ver código</a></div></div>` : c.url && c.serverV >= 3 ? '<p class="muted" style="font-size:.82rem;margin:12px 0 0">Conector v3: tus ajustes se comparten entre tus equipos.</p>' : ''}
+    ${c.url ? connectorBox() : ''}
     <p class="muted" style="font-size:.82rem;margin:12px 0 0">La hoja es la fuente de verdad: lo que cambies directo en Sheets también aparece aquí. ${S.outbox.length ? `<b>${S.outbox.length} cambio(s) esperan para enviarse.</b>` : ''}</p></section>
   ${notifCard()}
   <section class="card"><header><h2>Personal y análisis</h2></header><form class="form" id="anaForm"><label class="field"><span>Tu nombre (para el saludo)</span><input id="aName" value="${esc(c.name)}" placeholder="Diego"></label><label class="field"><span>Meses de gastos para el fondo de emergencia</span><input id="aEm" type="number" min="1" max="12" value="${c.emergencyMonths}"></label>
@@ -2859,10 +2859,7 @@ function notifCfg() { const c = (((S.data || {}).store || {}).notif || {}).cfg; 
 function notifCard() {
   const v = S.cfg.serverV || 0, saved = (((S.data || {}).store || {}).notif || {}).cfg;
   if (!S.cfg.url) return `<section class="card"><header><h2>Avisos y notificaciones</h2></header><p class="muted" style="margin:0">Conecta tu hoja primero: ella es la que manda los avisos aunque tengas la app cerrada.</p></section>`;
-  if (v < 5) return `<section class="card"><header><h2>Avisos y notificaciones</h2><span class="pill mid">Falta actualizar la hoja</span></header>
-    <p class="muted" style="margin:0 0 10px">Para mandarte correos y avisos al teléfono a la hora que programes, tu hoja necesita el conector v5 (tienes el v${v || '?'}). Es la última vez que lo pegas para esto.</p>
-    <ol class="steps"><li>Toca <b>Copiar código nuevo</b>.</li><li>En tu hoja: <b>Extensiones → Apps Script</b>. Borra todo el contenido de <b>Code.gs</b>, pega y guarda (💾).</li><li>Arriba, en la lista de funciones, elige <b>activarAvisos</b> y toca <b>Ejecutar</b>. Acepta los permisos (enviar correo, conectarse a internet, ejecutarse a horas programadas). Si Google dice “Google no verificó esta app”, toca <b>Configuración avanzada → Ir a (tu proyecto)</b>: es tu propio código. Te llegará un correo de confirmación.</li><li><b>Implementar → Administrar implementaciones → ✏️ Editar → Versión: Nueva versión → Implementar.</b> La URL no cambia.</li><li>Vuelve aquí y toca <b>Ya lo hice</b>.</li></ol>
-    <div class="btns"><button class="btn pri" data-act="copyGs">Copiar código nuevo</button><button class="btn" data-act="syncNow">Ya lo hice</button><a class="btn" href="https://github.com/diego291/mis-finanzas/blob/main/apps-script/Code.gs" target="_blank" rel="noopener">Ver el código</a></div></section>`;
+  if (v < 5) return `<section class="card"><header><h2>Avisos y notificaciones</h2><span class="pill mid">Falta actualizar la hoja</span></header><p class="muted" style="margin:0">Para mandarte avisos a la hora que programes, tu hoja necesita el conector nuevo. Sigue los pasos de “Conectar mi hoja de Google”, arriba: es la última vez que pegas código.</p></section>`;
   const c = notifCfg() || notifDefaults(), isDraft = !!S.ui.notifDraft || !saved;
   const chk = (name, val, on, lab) => `<label class="nchk"><input type="checkbox" data-n="${name}" value="${val}" ${on ? 'checked' : ''}><span>${lab}</span></label>`;
   return `<section class="card notif" id="notifCard"><header><h2>Avisos y notificaciones</h2>${saved && !saved.off ? '<span class="pill ok">Activos</span>' : saved && saved.off ? '<span class="pill">Pausados</span>' : '<span class="pill mid">Sin configurar</span>'}</header>
@@ -3211,6 +3208,26 @@ Object.assign(ACT, {
   mTaskNew: el => editMTask(null, el.dataset.v), mTask: el => editMTask(Object.assign({ id: el.dataset.v }, store('mtask')[el.dataset.v])), mDone: el => mDone(el.dataset.v),
   mTab2: el => { S.ui.mTab2 = el.dataset.v; render(); }, mMonth: el => { S.ui.mMonth = S.ui.mMonth === el.dataset.v ? '' : el.dataset.v; S.ui.mTab2 = 'agenda'; render(); },
   mFund: el => mFund(Number(el.dataset.v) || 0), mGo: () => go('mantenimientos')
+});
+
+/* ---------------- Conector de la hoja: configuración única de la auto-actualización ---------------- */
+function connectorBox() {
+  const v = S.cfg.serverV || 0;
+  if (v >= 6) return `<div class="conn-ok"><span class="pill ok">Conector v${v} · se actualiza solo</span><p class="muted" style="margin:6px 0 0;font-size:.82rem">Cuando haya mejoras, tu hoja las instala sola (revisa cada hora). Tus ajustes se comparten entre tus equipos.</p><div class="btns" style="margin-top:8px"><button type="button" class="btn sm" data-act="selfUpdate">Actualizar la hoja ahora</button></div></div>`;
+  return `<div class="conn-setup"><b>Última vez que pegas código (5 minutos)</b><p class="muted" style="margin:4px 0 10px;font-size:.86rem">Tu hoja tiene el conector v${v || '?'}. Con estos pasos se actualiza sola de aquí en adelante: avisos al correo y al teléfono, mantenimientos y todo lo nuevo, sin que vuelvas a tocar Apps Script.</p>
+    <ol class="steps">
+      <li>Abre <a href="https://script.google.com/home/usersettings" target="_blank" rel="noopener">la configuración de Apps Script</a> y enciende <b>API de Google Apps Script</b>.</li>
+      <li>En tu hoja: <b>Extensiones → Apps Script</b>. A la izquierda toca <b>⚙️ Configuración del proyecto</b> y marca <b>Mostrar el archivo de manifiesto "appsscript.json" en el editor</b>.</li>
+      <li>Vuelve al editor (<b>&lt; &gt;</b>). Abre <b>Code.gs</b>, borra todo, toca <b>Copiar código</b> aquí y pégalo.</li>
+      <li>Abre <b>appsscript.json</b>, borra todo, toca <b>Copiar permisos</b> aquí y pégalo. Guarda (💾).</li>
+      <li>Arriba elige la función <b>activarTodo</b> y toca <b>Ejecutar</b>. Acepta los permisos. Si sale "Google no verificó esta app": <b>Configuración avanzada → Ir a (tu proyecto)</b>, es tu propio código.</li>
+      <li>Listo: activarTodo publica la versión nueva sola, no necesitas Implementar. Vuelve aquí y toca <b>Ya lo hice</b>.</li>
+    </ol>
+    <div class="btns" style="margin-top:10px"><button type="button" class="btn pri" data-act="copyGs">Copiar código</button><button type="button" class="btn" data-act="copyMan">Copiar permisos</button><button type="button" class="btn" data-act="syncNow">Ya lo hice</button></div></div>`;
+}
+Object.assign(ACT, {
+  copyMan: async () => { try { const t = await (await fetch('apps-script/appsscript.json', { cache: 'no-store' })).text(); await navigator.clipboard.writeText(t); toast('Permisos copiados. Pégalos en appsscript.json'); } catch (e) { toast('No pude copiarlos aquí. Ábrelos en GitHub: apps-script/appsscript.json'); } },
+  selfUpdate: () => { op('self.update', {}); sync(true); toast('Pidiéndole a tu hoja que se actualice…'); }
 });
 
 /* ---------------- Arranque ---------------- */

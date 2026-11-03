@@ -14,6 +14,10 @@
  *
  * Versión 5: avisos programados por correo (tu Gmail) y como notificación de la propia
  * app Mis Finanzas en tu teléfono (sin instalar nada más).
+ *
+ * Versión 6: se actualiza sola. Cada hora revisa si hay un Code.gs nuevo en tu repositorio
+ * de GitHub (diego291/mis-finanzas), lo copia aquí y publica la nueva versión de la app web.
+ * Configuración única: ver README → "Conector que se actualiza solo".
  * Después de pegar este código: elige la función "activarAvisos" arriba, toca Ejecutar
  * y acepta los permisos. Luego Implementar → Administrar implementaciones → Editar →
  * Versión: Nueva versión → Implementar.
@@ -28,7 +32,7 @@ const PAG = { sheet: 'Pagos fijos', first: 6, last: 30 };                       
 const PRE = { sheet: 'Presupuesto', first: 6, last: 45 };                           // A categoría (fórmula), B monto
 const CAT = { sheet: 'Categorias', first: 5, last: 400 };                           // A sub, B categoría, C tipo; E gasto, G ingreso, K métodos, M ámbitos, O tipos de cuenta
 const NOT = { sheet: 'Notas', first: 6, last: 1005, idCol: 7, extra: 4 };          // A..F, G = ID de la app, H tipo, I hora, J color, K fijada
-const API_VERSION = 5;
+const API_VERSION = 6;
 const APP = { sheet: 'AppData' };                                                  // almacén genérico: Colección | ID | Datos (JSON) | Actualizado
 
 const TZ = 'America/El_Salvador';
@@ -156,6 +160,7 @@ function applyOp_(ss, op) {
     case 'notif.install': return instalarDisparador_();
     case 'notif.test': return notifTest_(ss, d);
     case 'notif.send': return notifSendNow_(ss, d);
+    case 'self.update': { const r = autoActualizar_(true); if (r.error) throw new Error(r.error); return r.msg; }
     default: throw new Error('Operación desconocida: ' + op.type);
   }
 }
@@ -358,6 +363,7 @@ function notifCfg_(ss) { const sh = appSheet_(ss), r = findRec_(sh, 'notif', 'cf
 function revisarAvisos() {
   const lock = LockService.getScriptLock(); if (!lock.tryLock(30000)) return;
   try {
+    try { autoActualizar_(false); } catch (e) { Logger.log('Actualización: ' + e); }
     const ss = SpreadsheetApp.getActive(), cfg = notifCfg_(ss);
     if (!cfg || cfg.off) return;
     const props = PropertiesService.getScriptProperties();
@@ -623,3 +629,64 @@ function bytesToBig_(b) { let x = bi_(0); for (let i = 0; i < b.length; i++) x =
 function bigToBytes_(x, n) { const out = []; for (let i = 0; i < n; i++) { out.unshift(Number(x & bi_(255))); x >>= bi_(8); } return out; }
 function b64u_(bytes) { return Utilities.base64EncodeWebSafe(bytes.map(b => b > 127 ? b - 256 : b)).replace(/=+$/, ''); }
 function b64uDecode_(s) { s = String(s).replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return Utilities.base64Decode(s).map(b => b & 255); }
+
+
+// =====================================================================
+//  Conector que se actualiza solo (v6)
+//  Copia el Code.gs y el appsscript.json de tu repositorio de GitHub y publica una versión nueva
+//  de la misma implementación (la URL no cambia). Requiere activar la "API de Google Apps Script"
+//  en https://script.google.com/home/usersettings (una sola vez).
+// =====================================================================
+const REPO_RAW = 'https://raw.githubusercontent.com/diego291/mis-finanzas/main/apps-script/';
+
+/** Ejecútala UNA vez desde el editor después de pegar este código y el appsscript.json. */
+function activarTodo() {
+  instalarDisparador_();
+  const r = autoActualizar_(true);
+  Logger.log(r.error ? 'Falta algo: ' + r.error : 'Listo: ' + r.msg + ' Desde ahora la hoja se actualiza sola cada hora.');
+  if (r.error) throw new Error(r.error);
+}
+/** Por si quieres forzar una actualización a mano. */
+function actualizarConector() { const r = autoActualizar_(true); Logger.log(r.error || r.msg); }
+
+function autoActualizar_(force) {
+  const props = PropertiesService.getScriptProperties();
+  if (!force && Date.now() - Number(props.getProperty('UPD_LAST') || 0) < 55 * 60e3) return { msg: 'Revisado hace poco' };
+  props.setProperty('UPD_LAST', String(Date.now()));
+  const id = ScriptApp.getScriptId(), api = 'https://script.googleapis.com/v1/projects/' + id;
+  const h = { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() };
+  const call = (method, url, body) => {
+    const r = UrlFetchApp.fetch(url, { method: method, headers: h, contentType: 'application/json', muteHttpExceptions: true, payload: body ? JSON.stringify(body) : undefined });
+    const code = r.getResponseCode(), txt = r.getContentText();
+    if (code >= 300) {
+      if (/has not (been used|enabled)|SERVICE_DISABLED|User has not enabled the Apps Script API/i.test(txt)) throw new Error('Activa la API de Google Apps Script en https://script.google.com/home/usersettings y vuelve a intentar.');
+      if (code === 403) throw new Error('Faltan permisos: pega también el appsscript.json y ejecuta activarTodo para aceptarlos.');
+      throw new Error('Google respondió ' + code + ': ' + txt.slice(0, 200));
+    }
+    return txt ? JSON.parse(txt) : {};
+  };
+  try {
+    const gcode = UrlFetchApp.fetch(REPO_RAW + 'Code.gs?t=' + Date.now(), { muteHttpExceptions: true }), gman = UrlFetchApp.fetch(REPO_RAW + 'appsscript.json?t=' + Date.now(), { muteHttpExceptions: true });
+    if (gcode.getResponseCode() !== 200) throw new Error('No pude leer el código en GitHub (' + gcode.getResponseCode() + ')');
+    const code = gcode.getContentText(), man = gman.getResponseCode() === 200 ? gman.getContentText() : null;
+    const vNew = Number((code.match(/const API_VERSION = (\d+);/) || [])[1] || 0);
+    if (!/function doPost\(/.test(code) || !/function autoActualizar_\(/.test(code) || code.length < 8000 || vNew < API_VERSION) throw new Error('El código de GitHub no parece válido; no lo apliqué.');
+    if (man) JSON.parse(man);
+    const cur = call('get', api + '/content');
+    const files = (cur.files || []).map(f => ({ name: f.name, type: f.type, source: f.source }));
+    const fCode = files.find(f => f.type === 'SERVER_JS' && /function doPost\(/.test(f.source)) || files.find(f => f.name === 'Code');
+    const fMan = files.find(f => f.name === 'appsscript');
+    const same = fCode && fCode.source === code && (!man || (fMan && fMan.source.replace(/\s/g, '') === man.replace(/\s/g, '')));
+    if (same && !force) { props.setProperty('UPD_OK', String(Date.now())); return { msg: 'Ya tienes la última versión (v' + API_VERSION + ').' }; }
+    if (!same) {
+      if (fCode) fCode.source = code; else files.push({ name: 'Code', type: 'SERVER_JS', source: code });
+      if (man) { if (fMan) fMan.source = man; else files.push({ name: 'appsscript', type: 'JSON', source: man }); }
+      call('put', api + '/content', { files: files });
+    }
+    const ver = call('post', api + '/versions', { description: 'Mis Finanzas v' + vNew + ' (auto ' + Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm') + ')' });
+    const deps = (call('get', api + '/deployments').deployments || []).filter(d => d.deploymentConfig && d.deploymentConfig.versionNumber && (d.entryPoints || []).some(e => e.entryPointType === 'WEB_APP'));
+    deps.forEach(d => call('put', api + '/deployments/' + d.deploymentId, { deploymentConfig: { scriptId: id, versionNumber: ver.versionNumber, manifestFileName: 'appsscript', description: d.deploymentConfig.description || 'Mis Finanzas' } }));
+    props.setProperty('UPD_OK', String(Date.now()));
+    return { msg: 'Conector actualizado a v' + vNew + ' (versión ' + ver.versionNumber + ', ' + deps.length + ' implementación' + (deps.length === 1 ? '' : 'es') + ').' };
+  } catch (e) { return { error: String(e.message || e) }; }
+}

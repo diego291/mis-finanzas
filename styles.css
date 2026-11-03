@@ -955,3 +955,5 @@ body[data-design="c"] .next-step b { color: var(--cta-bg); }
 .mth-h b, .mth-h small { display: block; } .mth-h span:last-child { min-width: 0; }
 .mth-f { border-top: 1px solid var(--line); padding-top: 8px; }
 @media (max-width: 600px) { .mkpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } .mkpis .kpi { padding: 12px 10px; } .mkpis .kpi .v { font-size: 1rem; } .mkpis .label { font-size: .72rem; } }
+.conn-setup, .conn-ok { margin-top: 14px; padding: 14px 16px; border-radius: 14px; background: var(--surface-2); }
+.conn-setup .steps a { color: var(--accent); }
