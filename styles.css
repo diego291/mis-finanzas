@@ -836,3 +836,27 @@ body[data-design="c"] .next-step b { color: var(--cta-bg); }
 .pbtns { display: flex; gap: 8px; flex-wrap: wrap; }
 .mi-cam { display: inline-flex; vertical-align: -2px; margin-right: 5px; color: var(--accent); }
 .mi-cam svg { width: 14px; height: 14px; }
+
+/* íconos y colores de cuentas */
+.acc-ic { --ac: var(--accent); width: 30px; height: 30px; border-radius: 9px; display: inline-grid; place-items: center; flex: none; color: var(--ac); background: color-mix(in srgb, var(--ac) 18%, transparent); }
+.acc-ic svg { width: 18px; height: 18px; }
+.acc-ic.sm { width: 22px; height: 22px; border-radius: 7px; } .acc-ic.sm svg { width: 14px; height: 14px; }
+.acc-ic.lg { width: 48px; height: 48px; border-radius: 14px; } .acc-ic.lg svg { width: 28px; height: 28px; }
+.w-acc { align-items: center; } .w-acc .acc-ic { background: color-mix(in srgb, var(--ac) 28%, transparent); color: color-mix(in srgb, var(--ac) 70%, #fff); }
+.w-acc { box-shadow: inset 3px 0 0 var(--ac, transparent); }
+.arow-n { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+.arow { align-items: center; }
+.rchip.accchip { gap: 7px; padding-left: 7px; }
+.rchip.accchip.on { border-color: var(--ac); color: var(--fg); background: color-mix(in srgb, var(--ac) 16%, var(--surface-2)); }
+.acc-prev { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: var(--surface-2); }
+.acc-prev b { display: block; } .acc-prev small { color: var(--muted); font-size: .8rem; }
+.acc-icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 6px; }
+.acc-icons button { height: 44px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-2); color: var(--muted); display: grid; place-items: center; cursor: pointer; }
+.acc-icons button .acc-ic { background: none; color: inherit; }
+.acc-icons button.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.acc-colors { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.acc-colors button { width: 32px; height: 32px; border-radius: 50%; border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--line); cursor: pointer; }
+.acc-colors button.on { box-shadow: 0 0 0 2px var(--fg); }
+.acc-custom { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; color: var(--muted); cursor: pointer; }
+.acc-custom input { width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; }
+.acc-custom input::-webkit-color-swatch-wrapper { padding: 0; } .acc-custom input::-webkit-color-swatch { border: 0; border-radius: 50%; } .acc-custom input::-moz-color-swatch { border: 0; border-radius: 50%; }

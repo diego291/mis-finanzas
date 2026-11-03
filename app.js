@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '2.2.0';
+const VERSION = '2.3.0';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -96,6 +96,39 @@ const ICON = {
 };
 const CAM_I = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>', GAL_I = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>';
 const svgI = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICON[k]}</svg>`;
+
+
+/* ---------------- Íconos y colores de las cuentas (hoja AppData, colección accstyle) ---------------- */
+const ACC_ICONS = {
+  cash: ['Efectivo', '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 9v.01M18 15v.01"/>'],
+  bank: ['Banco', '<path d="M3 10l9-6 9 6M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18"/>'],
+  card: ['Tarjeta', '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/>'],
+  wallet: ['Billetera', '<path d="M4 7a2 2 0 0 1 2-2h12v4M4 7v11a2 2 0 0 0 2 2h14V9H6a2 2 0 0 1-2-2zM16 14.5h.01"/>'],
+  phone: ['Digital', '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>'],
+  piggy: ['Ahorro', '<path d="M5 11a6 5 0 0 1 11-3h2l1-2v4a5 5 0 0 1 1 3v2h-2l-1 3h-3v-2h-4v2H7l-1-3a5 5 0 0 1-1-4zM14 10h.01"/>'],
+  heart: ['Pareja', '<path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/>'],
+  home: ['Casa', '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>'],
+  work: ['Negocio', '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5h6v2M3 12h18"/>'],
+  tool: ['Servicio técnico', '<path d="M14 6a4 4 0 0 0 5 5l-9 9a2 2 0 0 1-3-3l9-9a4 4 0 0 0-2-2z"/>'],
+  moto: ['Moto', '<circle cx="5.5" cy="16.5" r="3.5"/><circle cx="18.5" cy="16.5" r="3.5"/><path d="M5.5 16.5l4-6h5l4 6M9.5 10.5L8 7H5.5M14.5 10.5l2-3.5H19"/>'],
+  chart: ['Inversión', '<path d="M4 20V4M4 20h16M7 15l4-4 3 3 5-6"/>'],
+  shield: ['Emergencias', '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>'],
+  gift: ['Regalos', '<rect x="3" y="8" width="18" height="13" rx="1"/><path d="M12 8v13M3 12h18M12 8c-2-4-6-3-5 0M12 8c2-4 6-3 5 0"/>'],
+  plane: ['Viajes', '<path d="M10 14l-6-2 1-2 7 1 4-6h2l-2 7 5 1v2l-5 1 2 7h-2l-4-6-7 1z"/>'],
+  school: ['Estudios', '<path d="M2 9l10-5 10 5-10 5zM6 11v5c3 2 9 2 12 0v-5"/>'],
+  star: ['Favorita', '<path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z"/>'],
+  coin: ['Monedas', '<circle cx="12" cy="12" r="8"/><path d="M12 7v10M15 9.5c-.5-1-1.6-1.5-3-1.5-2 0-3 1-3 2s1 1.7 3 2 3 1 3 2-1 2-3 2c-1.4 0-2.5-.5-3-1.5"/>']
+};
+const ACC_COLORS = ['#2e9e6e', '#2c6fb7', '#e0a526', '#d9624f', '#8e5bd6', '#d6537e', '#1aa3a3', '#7a8a3a', '#c06a2b', '#5f6b76'];
+const ACC_DEF = { 'Efectivo': ['cash', 0], 'Banco': ['bank', 1], 'Ahorro': ['piggy', 5], 'Tarjeta de crédito': ['card', 3], 'Billetera digital': ['phone', 6], 'Fondo': ['shield', 4], 'Inversión': ['chart', 2] };
+function accStyle(name) {
+  const st = (((S.data || {}).store || {}).accstyle || {})[name];
+  const a = (S.data.accounts || []).find(x => x.name === name) || {};
+  const d = ACC_DEF[a.type] || ['wallet', 9];
+  return { icon: (st && ACC_ICONS[st.icon] ? st.icon : d[0]), color: (st && st.color) || ACC_COLORS[d[1]] };
+}
+const accIco = (k, c, cls = '') => `<span class="acc-ic ${cls}" style="--ac:${c}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${(ACC_ICONS[k] || ACC_ICONS.wallet)[1]}</svg></span>`;
+const accBadge = (name, cls) => { if (!name) return ''; const s = accStyle(name); return accIco(s.icon, s.color, cls); };
 
 /* ---------------- Estado ---------------- */
 const S = {
@@ -584,7 +617,7 @@ function walletCard(sp, isNow) {
     <div class="w-top"><span>Tienes en tus cuentas</span><a href="#cuentas">Ver cuentas</a></div>
     <div class="w-big ${G.W.inAcc < 0 ? 'neg' : ''}">${money(G.W.inAcc)}</div>
     <div class="w-sub">${G.W.inGoals ? `En metas ${money(G.W.inGoals)} · ` : ''}Deudas ${money(G.liab)} · Patrimonio ${money(G.total)}</div>
-    <div class="w-accs">${accs.map(x => `<button type="button" class="w-acc ${x.v < 0 ? 'neg' : ''}" data-act="accGo" data-n="${esc(x.a.name)}"><span>${esc(x.a.name)}</span><b>${money(x.v)}</b></button>`).join('')}${zero ? `<a class="w-acc dim" href="#cuentas"><span>${zero} en cero</span></a>` : ''}</div>
+    <div class="w-accs">${accs.map(x => `<button type="button" class="w-acc ${x.v < 0 ? 'neg' : ''}" data-act="accGo" data-n="${esc(x.a.name)}" style="--ac:${accStyle(x.a.name).color}">${accBadge(x.a.name, 'sm')}<span>${esc(x.a.name)}</span><b>${money(x.v)}</b></button>`).join('')}${zero ? `<a class="w-acc dim" href="#cuentas"><span>${zero} en cero</span></a>` : ''}</div>
     ${spend}
   </section>`;
 }
@@ -696,7 +729,7 @@ function vMovs() {
 }
 function accountsBlock(G) {
   return `<div class="trio"><div><span>Activos</span><b class="pos">${money(G.assets)}</b></div><div><span>Pasivos</span><b class="neg">${money(G.liab)}</b></div><div><span>Total</span><b>${money(G.total)}</b></div></div>
-  <div class="card"><div class="agroups">${G.keys.map(k => { const g = G.groups[k]; return `<div class="agroup"><div class="ahead"><span>${esc(k)}</span><b class="num">${money(sum(g, x => x.v))}</b></div>${g.map(x => `<button type="button" class="arow" data-act="accGo" data-n="${esc(x.a.name)}"><span>${esc(x.a.name)}</span><b class="num ${x.v < 0 ? 'neg' : ''}">${money(x.v)}</b></button>`).join('')}</div>`; }).join('')}
+  <div class="card"><div class="agroups">${G.keys.map(k => { const g = G.groups[k]; return `<div class="agroup"><div class="ahead"><span>${esc(k)}</span><b class="num">${money(sum(g, x => x.v))}</b></div>${g.map(x => `<button type="button" class="arow" data-act="accGo" data-n="${esc(x.a.name)}"><span class="arow-n">${accBadge(x.a.name)}${esc(x.a.name)}</span><b class="num ${x.v < 0 ? 'neg' : ''}">${money(x.v)}</b></button>`).join('')}</div>`; }).join('')}
   ${G.W.inGoals ? `<div class="agroup"><div class="ahead"><span>Metas (fuera de cuentas)</span><b class="num">${money(G.W.inGoals)}</b></div></div>` : ''}
   ${S.data.debts.length ? `<div class="agroup"><div class="ahead"><span>Deudas</span><b class="num neg">${money(G.W.debts)}</b></div>${S.data.debts.map(d => `<a class="arow" href="#deudas"><span>${esc(d.name)}</span><b class="num neg">${money(debtInfo(d).pending)}</b></a>`).join('')}</div>` : ''}
   </div></div>`;
@@ -725,7 +758,7 @@ function vCuentas() {
   ${accountsBlock(accGroups())}
   <h2 style="margin-top:8px">Detalle y edición</h2>
   <div class="card tbl-wrap"><table><thead><tr><th>Cuenta</th><th>Tipo</th><th class="r">Saldo inicial</th><th class="r">Neto ${MSHORT[Number(ym.slice(5)) - 1]}</th><th class="r">Saldo actual</th><th></th></tr></thead><tbody>
-  ${S.data.accounts.map(a => { const b = W.bal[a.name] || 0, n = net[a.name] || 0; const l = linked(a.name); return `<tr><td><b>${esc(a.name)}</b>${l.length ? `<br><small class="muted">Meta: ${esc(l.join(', '))}</small>` : ''}</td><td>${esc(a.type)}</td><td class="r">${money(a.initial)}</td><td class="r ${n < 0 ? 'neg' : n > 0 ? 'pos' : 'muted'}">${n ? money(n, true) : '—'}</td><td class="r ${b < 0 ? 'neg' : ''}"><b>${money(b)}</b></td><td><button class="linkbtn" data-act="editAcc" data-n="${esc(a.name)}">Editar</button></td></tr>`; }).join('')}
+  ${S.data.accounts.map(a => { const b = W.bal[a.name] || 0, n = net[a.name] || 0; const l = linked(a.name); return `<tr><td><span class="arow-n">${accBadge(a.name)}<b>${esc(a.name)}</b></span>${l.length ? `<br><small class="muted">Meta: ${esc(l.join(', '))}</small>` : ''}</td><td>${esc(a.type)}</td><td class="r">${money(a.initial)}</td><td class="r ${n < 0 ? 'neg' : n > 0 ? 'pos' : 'muted'}">${n ? money(n, true) : '—'}</td><td class="r ${b < 0 ? 'neg' : ''}"><b>${money(b)}</b></td><td><button class="linkbtn" data-act="editAcc" data-n="${esc(a.name)}">Editar</button></td></tr>`; }).join('')}
   </tbody><tfoot><tr><td colspan="4">Total en cuentas</td><td class="r">${money(W.inAcc)}</td><td></td></tr></tfoot></table></div>`;
 }
 
@@ -1800,7 +1833,7 @@ function editMov(m, preset, opts = {}) {
     if (st.type.includes('meta') && !st.goal) return 'Elige la meta';
     return '';
   };
-  const chipRow = (list, cur, act) => `<div class="reg-chips">${list.map(n => `<button type="button" class="rchip ${n === cur ? 'on' : ''}" data-r="${act}" data-v="${esc(n)}">${esc(n)}</button>`).join('')}</div>`;
+  const chipRow = (list, cur, act) => `<div class="reg-chips">${list.map(n => { const ac = act === 'acc' || act === 'to'; return `<button type="button" class="rchip ${ac ? 'accchip' : ''} ${n === cur ? 'on' : ''}" data-r="${act}" data-v="${esc(n)}" ${ac ? `style="--ac:${accStyle(n).color}"` : ''}>${ac ? accBadge(n, 'sm') : ''}${esc(n)}</button>`; }).join('')}</div>`;
   const paint = () => {
     const n = r2(calc(st.amt) || 0), k = kind(), err = valid(), ex = isExpr(st.amt);
     const sign = st.type === 'Gasto' || st.type === 'Aporte a meta' ? '−' : st.type === 'Ingreso' || st.type === 'Retiro de meta' ? '+' : '';
@@ -1908,13 +1941,28 @@ function editMov(m, preset, opts = {}) {
 }
 function editAcc(a) {
   const isNew = !a; a = a || { name: '', type: 'Banco', initial: 0 };
-  openSheet(isNew ? 'Nueva cuenta' : 'Editar cuenta', `<label class="field"><span>Nombre</span><input id="aName" value="${esc(a.name)}" required autofocus></label><div class="two"><label class="field"><span>Tipo</span>${sel('aType', S.data.lists.accTypes, a.type)}</label><label class="field"><span>Saldo inicial</span><input id="aIni" class="calc" type="text" inputmode="decimal" autocomplete="off" value="${a.initial}"></label></div>
+  const cur = isNew ? { icon: (ACC_DEF['Banco'])[0], color: ACC_COLORS[1], auto: true } : Object.assign({ auto: !(((S.data.store || {}).accstyle || {})[a.name]) }, accStyle(a.name));
+  const canStyle = !(S.cfg.url && S.cfg.serverV && S.cfg.serverV < 3);
+  openSheet(isNew ? 'Nueva cuenta' : 'Editar cuenta', `<div class="acc-prev" id="aPrev"></div>
+  <label class="field"><span>Nombre</span><input id="aName" value="${esc(a.name)}" required ${isNew ? 'autofocus' : ''}></label><div class="two"><label class="field"><span>Tipo</span>${sel('aType', S.data.lists.accTypes, a.type)}</label><label class="field"><span>Saldo inicial</span><input id="aIni" class="calc" type="text" inputmode="decimal" autocomplete="off" value="${a.initial}"></label></div>
+  ${canStyle ? `<div class="field"><span>Ícono</span><div class="acc-icons" id="aIcons">${Object.entries(ACC_ICONS).map(([k, [lab]]) => `<button type="button" data-k="${k}" title="${lab}" aria-label="${lab}" class="${k === cur.icon ? 'on' : ''}">${accIco(k, 'currentColor')}</button>`).join('')}</div></div>
+  <div class="field"><span>Color</span><div class="acc-colors" id="aColors">${ACC_COLORS.map(c => `<button type="button" data-c="${c}" style="background:${c}" class="${c === cur.color ? 'on' : ''}" aria-label="Color ${c}"></button>`).join('')}<label class="acc-custom" title="Otro color"><input type="color" id="aColor" value="${cur.color}"><span>Otro</span></label></div></div>` : '<p class="note" style="margin:0">Actualiza el conector de tu hoja (Ajustes) para poner íconos y colores a las cuentas.</p>'}
   ${isNew ? '' : '<p class="muted" style="margin:0;font-size:.82rem">Si cambias el nombre, también se actualiza en todos tus movimientos de la hoja.</p>'}
   <div class="btns" style="justify-content:space-between">${isNew ? '<span></span>' : '<button type="button" class="btn danger" id="aDel">Eliminar</button>'}<button class="btn pri">Guardar</button></div>`, () => {
     const name = $('#aName').value.trim(); if (!name) return 'Escribe el nombre.';
     if (name !== a.name && S.data.accounts.some(x => x.name === name)) return 'Ya existe una cuenta con ese nombre.';
     op('acc.upsert', { oldName: isNew ? '' : a.name, name, type: $('#aType').value, initial: calcVal('#aIni') });
-  }, () => $('#aDel')?.addEventListener('click', () => { if (S.data.movs.some(m => m.acc === a.name || m.to === a.name)) { $('#fErr').textContent = 'Esta cuenta tiene movimientos. Cámbialos de cuenta antes de eliminarla.'; return; } op('acc.delete', { name: a.name }); closeSheet(); }));
+    if (canStyle && !cur.auto) { recPut('accstyle', name, { icon: cur.icon, color: cur.color }); if (!isNew && name !== a.name && ((S.data.store || {}).accstyle || {})[a.name]) opq('rec.delete', { coll: 'accstyle', id: a.name }); render(); }
+  }, f => {
+    const prev = () => { const n = $('#aName').value.trim() || 'Nueva cuenta'; $('#aPrev').innerHTML = `${accIco(cur.icon, cur.color, 'lg')}<div><b>${esc(n)}</b><small>${esc($('#aType').value)}</small></div>`; };
+    f.addEventListener('input', prev);
+    f.querySelector('#aType').addEventListener('change', () => { if (cur.auto) { const d = ACC_DEF[$('#aType').value] || ['wallet', 9]; cur.icon = d[0]; cur.color = ACC_COLORS[d[1]]; f.querySelectorAll('#aIcons button').forEach(b => b.classList.toggle('on', b.dataset.k === cur.icon)); f.querySelectorAll('#aColors button').forEach(b => b.classList.toggle('on', b.dataset.c === cur.color)); } prev(); });
+    const ic = f.querySelector('#aIcons'); if (ic) ic.onclick = e => { const b = e.target.closest('button'); if (!b) return; cur.icon = b.dataset.k; cur.auto = false; ic.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); prev(); };
+    const co = f.querySelector('#aColors'); if (co) co.onclick = e => { const b = e.target.closest('button'); if (!b) return; cur.color = b.dataset.c; cur.auto = false; co.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); $('#aColor').value = cur.color; prev(); };
+    const cc = f.querySelector('#aColor'); if (cc) cc.addEventListener('input', () => { cur.color = cc.value; cur.auto = false; co.querySelectorAll('button').forEach(x => x.classList.remove('on')); prev(); });
+    prev();
+    $('#aDel')?.addEventListener('click', () => { if (S.data.movs.some(m => m.acc === a.name || m.to === a.name)) { $('#fErr').textContent = 'Esta cuenta tiene movimientos. Cámbialos de cuenta antes de eliminarla.'; return; } op('acc.delete', { name: a.name }); if (((S.data.store || {}).accstyle || {})[a.name]) opq('rec.delete', { coll: 'accstyle', id: a.name }); closeSheet(); });
+  });
 }
 function editGoal(g) {
   const isNew = !g; g = g || { name: '', purpose: '', target: '', initial: 0, due: '', acc: '' };
