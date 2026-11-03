@@ -481,7 +481,17 @@ function digest_(D, content, today, allPend) {
         const s = v.name + ': ' + d.name + ' ' + (n < 0 ? 'venció' : n === 0 ? 'vence hoy' : 'vence en ' + n + ' días'); L.push({ h: esc_(s), t: s, bad: n <= 0 }); if (n <= 0) urgent = true;
       });
     });
-    add('Vehículos', L);
+    Object.keys(st.mtask || {}).map(k => st.mtask[k]).filter(t => t && t.next && !t.off).forEach(t => {
+      const n = daysBetween_(today, t.next); if (n > 3) return; const th = (st.thing || {})[t.thing] || {};
+      const s = (th.name ? th.name + ': ' : '') + t.name + ' · ' + (n < 0 ? 'vencido' : n === 0 ? 'hoy' : n === 1 ? 'mañana' : 'en ' + n + ' días') + (t.cost ? ' · ≈ $' + money_(t.cost) : '');
+      L.push({ h: esc_(s), t: s, bad: n < 0 }); if (n < 0) urgent = true;
+    });
+    Object.keys(st.vappt || {}).map(k => st.vappt[k]).filter(a => a && !a.done && a.date).forEach(a => {
+      const n = daysBetween_(today, a.date); if (n > 1) return; const v = V[a.veh] || {};
+      const s = (v.name || 'Vehículo') + ': mantenimiento ' + (n < 0 ? 'programado el ' + fechaCorta_(a.date) + ' (¿ya lo hiciste?)' : n === 0 ? 'hoy' : 'mañana') + (a.time ? ' ' + a.time : '') + (a.shop ? ' en ' + a.shop : '') + (a.cost ? ' · ≈ $' + money_(a.cost) : '');
+      L.push({ h: esc_(s), t: s, bad: n < 0 });
+    });
+    add('Mantenimientos y vehículos', L);
   }
   if (content.indexOf('dinero') >= 0) {
     const M = D.movs.filter(m => m.date.slice(0, 7) === ym), dim = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5)), 0).getDate(), left = dim - day + 1;

@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '2.6.0';
+const VERSION = '2.7.0';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -92,6 +92,7 @@ const ICON = {
   ajustes: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   estados: '<path d="M5 3h14v18H5zM9 8h6M9 12h6M9 16h3"/>',
   vehiculos: '<circle cx="5.5" cy="16.5" r="3.5"/><circle cx="18.5" cy="16.5" r="3.5"/><path d="M5.5 16.5l4-6h5l4 6M9.5 10.5L8 7H5.5M14.5 10.5l2-3.5H19"/>',
+  mantenimientos: '<path d="M14 6a4 4 0 0 0 5 5l-9 9a2 2 0 0 1-3-3l9-9a4 4 0 0 0-2-2z"/><path d="M4 4l3 3"/>',
   mas: '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>'
 };
 const CAM_I = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>', GAL_I = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>';
@@ -432,7 +433,7 @@ function hbars(entries, total, ref) {
 
 /* ---------------- Navegación ---------------- */
 const VIEWS = [
-  ['inicio', 'Inicio', 'Día a día'], ['movimientos', 'Movimientos'], ['agenda', 'Agenda'], ['bloc', 'Bloc de notas'], ['vehiculos', 'Vehículos'], ['estados', 'Estados'], ['cuentas', 'Cuentas'], ['metas', 'Metas'],
+  ['inicio', 'Inicio', 'Día a día'], ['movimientos', 'Movimientos'], ['agenda', 'Agenda'], ['bloc', 'Bloc de notas'], ['vehiculos', 'Vehículos'], ['mantenimientos', 'Mantenimientos'], ['estados', 'Estados'], ['cuentas', 'Cuentas'], ['metas', 'Metas'],
   ['presupuesto', 'Presupuesto', 'Planear'], ['pagos', 'Pagos fijos'], ['deudas', 'Deudas'],
   ['estadisticas', 'Estadísticas', 'Analizar'], ['revision', 'Revisión'], ['ajustes', 'Ajustes', 'App']
 ];
@@ -467,7 +468,7 @@ function render() {
   const ae = document.activeElement;
   if (S.ui.view === 'bloc' && $('#pgEditor') && ae && ($('#pgEditor').contains(ae) || ae.id === 'pgTitle' || ae.closest('#edBar')) && $('#pgEditor').dataset.pg === S.ui.pg) return;
   if (typeof edTimer !== 'undefined' && edTimer) pgSaveNow();
-  const fn = { inicio: vInicio, estados: vEstados, movimientos: vMovs, cuentas: vCuentas, metas: vMetas, presupuesto: vPresupuesto, pagos: vPagos, deudas: vDeudas, estadisticas: vStats, revision: vRevision, notas: vAgenda, agenda: vAgenda, bloc: vBloc, vehiculos: vVehiculos, ajustes: vAjustes }[S.ui.view];
+  const fn = { inicio: vInicio, estados: vEstados, movimientos: vMovs, cuentas: vCuentas, metas: vMetas, presupuesto: vPresupuesto, pagos: vPagos, deudas: vDeudas, estadisticas: vStats, revision: vRevision, notas: vAgenda, agenda: vAgenda, bloc: vBloc, vehiculos: vVehiculos, mantenimientos: vMant, ajustes: vAjustes }[S.ui.view];
   try { $('#view').innerHTML = `<div class="wrap">${fn()}</div>`; S.lastError = ''; if (S.ui.view === 'bloc') { const ed = $('#pgEditor'); if (ed) { ed.dataset.pg = S.ui.pg; edBind(); } } }
   catch (e) {
     console.error(e); S.lastError = (e && e.message) || String(e);
@@ -565,6 +566,7 @@ function vInicio() {
         ${todayCard()}
         ${pinnedPagesCard()}
         ${vehCard()}
+        ${mantCard()}
         ${envelopeCard()}
         ${stagesCard(false)}
         <section class="card side-card"><header style="margin:0"><h2>Presupuesto</h2><a href="#presupuesto">Detalle</a></header>
@@ -661,7 +663,7 @@ function notifications() {
   const dc = daysSince(lastCountDate);
   if (hasCash && (dc == null || dc >= 3)) out.push({ sev: 'mid', text: dc == null ? 'Cuadra tu efectivo por primera vez' : `Cuadra tu efectivo: el último cuadre fue hace ${dc} días`, act: 'cash' });
   const env = envelopeState(); if (env && !env.done) out.push({ sev: 'info', text: `Registra tu sobre de la semana · <b class="num">${money(env.amount)}</b>`, act: 'envelope' });
-  try { out.push(...vehNotifs()); } catch (e) { console.error(e); }
+  try { out.push(...vehNotifs()); out.push(...mantNotifs()); } catch (e) { console.error(e); }
   const n = checks().filter(c => c.sev !== 'info').length; if (n) out.push({ sev: 'mid', text: `${n} dato${n > 1 ? 's' : ''} por revisar`, href: '#revision' });
   if (!S.cfg.url && !window.__SEED__) out.unshift({ sev: 'info', text: 'Conecta tu hoja de Google', href: '#ajustes' });
   if (S.installEvt) out.push({ sev: 'info', text: 'Instala la app en este equipo', act: 'install' });
@@ -2477,6 +2479,7 @@ function vVehiculos() {
     <button type="button" class="vh-km" data-act="vehKm" data-v="${v.id}"><span class="num">${fmtKm(v.km)}</span><small>${v.kmDate ? 'anotado ' + (daysTo(v.kmDate) === 0 ? 'hoy' : dLabel(v.kmDate)) : 'toca para anotar'} · actualizar</small></button>
     <div class="vh-acts"><button class="btn pri" data-act="vehServ" data-v="${v.id}">${gsvg('work')}Mantenimiento</button><button class="btn" data-act="vehFuel" data-v="${v.id}">${gsvg('fuel')}Gasolina</button></div>
   </section>
+  ${apptCard(v)}
   <div class="kpis veh-kpis"><div class="kpi"><span class="label">Gastado en ${MONTHS[Number(ym.slice(5)) - 1].toLowerCase()}</span><span class="v">${money(m.total)}</span><span class="d">Mant. ${money(m.mant)} · Gasolina ${money(m.fuel)}</span></div>
     <div class="kpi"><span class="label">Costo por km</span><span class="v">${ck ? '$' + ck.perKm.toFixed(3) : '—'}</span><span class="d">${ck ? `${fmtKm(ck.kmRun)} en ${ck.days} días · gasolina $${ck.fuelKm.toFixed(3)}/km` : 'Necesito al menos dos lecturas de km'}</span></div>
     <div class="kpi"><span class="label">Rendimiento</span><span class="v ${ef && ef.drop ? 'neg' : ''}">${ef ? ef.last.toFixed(1) + ' km/gal' : '—'}</span><span class="d">${ef ? `promedio ${ef.avg.toFixed(1)}${ef.drop ? ' · bajó, revisa' : ''}` : 'Registra dos cargas con tanque lleno'}</span></div></div>
@@ -2593,13 +2596,14 @@ function editKm(vid) {
 }
 
 /* ---- registrar mantenimiento ---- */
-function editServ(vid, log) {
+function editServ(vid, log, appt) {
   const v = vGet(vid), isNew = !log, T = sortedTasks(v);
   log = Object.assign({ id: 'l' + uid(), veh: vid, date: today(), km: v.km || '', shop: '', items: [], labor: '', notes: '', imgs: [], title: '' }, log ? JSON.parse(JSON.stringify(log)) : {});
   const rows = [];
   const fromTask = new Set(log.items.map(i => i.task).filter(Boolean));
   log.items.forEach(i => rows.push(Object.assign({}, i)));
   T.forEach(({ t, s }) => { if (!fromTask.has(t.id)) rows.push({ task: t.id, name: t.name, action: t.action || 'Cambiado', cost: '', detail: '', on: false, sev: s.sev, label: s.label }); });
+  if (appt) { rows.forEach(r => { if (r.task && (appt.tasks || []).includes(r.task)) { r.on = true; r.cost = r.cost || (store('vtask')[r.task] || {}).cost || ''; } }); (appt.extras || []).forEach(n => rows.push({ name: n, action: 'Reparado', cost: '', detail: '', on: true })); log.shop = log.shop || appt.shop || ''; if (appt.date && appt.date < today()) log.date = today(); }
   const rowHTML = (r, i) => `<div class="srow ${r.on ? 'on' : ''} ${r.task && !r.on && !['bad', 'mid'].includes(r.sev) && isNew ? 'later' : ''}" data-i="${i}" data-task="${esc(r.task || '')}" data-name="${esc(r.task ? r.name : '')}">
     <label class="sr-main"><input type="checkbox" ${r.on ? 'checked' : ''}><span class="sr-name">${r.task ? esc(r.name) : `<input class="sr-nm" value="${esc(r.name)}" placeholder="Pieza o arreglo">`}${r.task && r.sev && (r.sev === 'bad' || r.sev === 'mid') ? ` <span class="pill ${r.sev}">${esc(r.label)}</span>` : ''}</span><input class="calc sr-cost" type="text" inputmode="decimal" placeholder="$0" value="${r.cost || ''}"></label>
     <div class="sr-more"><div class="seg sr-act">${ACTIONS.map(a => `<button type="button" class="${(r.action || 'Cambiado') === a ? 'on' : ''}">${a}</button>`).join('')}</div><div class="sr-two"><input class="sr-det" placeholder="Marca, medida o detalle (opcional)" value="${esc(r.detail || '')}"><input class="sr-shop" list="sShops" placeholder="Comprado en (opcional)" value="${esc(r.shop || '')}"></div></div></div>`;
@@ -2613,6 +2617,7 @@ function editServ(vid, log) {
     <div class="simgs" id="sImgs"></div>
     <label class="field"><span>Notas</span><textarea id="sNotes" rows="2" placeholder="Garantía, recomendaciones del mecánico…">${esc(log.notes)}</textarea></label>
     <div class="stotal"><span>Total</span><b class="num" id="sTot">$0.00</b></div>
+    ${appt && appt.cost ? `<p class="note" style="margin:0">Lo habías calculado en ≈ ${money(appt.cost)}.</p>` : ''}
     <p class="note" id="sBud" style="margin:0"></p>
     <button class="btn pri">Guardar mantenimiento</button>`, f => {
     const items = readRows(f);
@@ -2622,7 +2627,7 @@ function editServ(vid, log) {
     const rec = Object.assign({}, log, { date, km, shop: $('#sShop').value.trim(), items: items.filter(i => i.on || !i.task).filter(i => i.on || i.name), labor: calcVal('#sLabor'), notes: $('#sNotes').value.trim(), total, imgs: f._imgs, title: items.filter(i => i.on).map(i => i.name).slice(0, 3).join(', ') + (items.filter(i => i.on).length > 3 ? '…' : '') });
     (log.imgs || []).filter(x => !f._imgs.some(y => y.id === x.id)).forEach(x => { blobDel('img', x.id, x.n); IDB.del(x.id); IMG.delete(x.id); });
     const id = rec.id; delete rec.id;
-    vPut('vlog', id, rec);
+    vPut('vlog', id, rec); if (appt) apptClose(appt);
     rec.items.filter(i => i.on && i.task).forEach(i => { const t = store('vtask')[i.task]; if (!t) return; if (!t.lastDate || date >= t.lastDate) vPut('vtask', i.task, Object.assign({}, t, { lastKm: km || t.lastKm, lastDate: date })); });
     if (km && km >= (Number(v.km) || 0)) vSave(Object.assign({}, vGet(v.id), { km, kmDate: date >= (v.kmDate || '') ? date : v.kmDate }));
     const newShop = rec.shop && !SHOPS().some(x => x.name.toLowerCase() === rec.shop.toLowerCase()) ? rec.shop : '';
@@ -2842,7 +2847,7 @@ function viewShop(id) {
 Object.assign(ACT, { shopEdit: el => editShop(el.dataset.v ? Object.assign({ id: el.dataset.v }, store('vshop')[el.dataset.v]) : null), shopView: el => viewShop(el.dataset.v) });
 
 /* ---------------- Avisos programados: correo + teléfono (ntfy), los envía la hoja (conector v4) ---------------- */
-const NOTIF_CONTENT = [['agenda', 'Pendientes y agenda'], ['pagos', 'Pagos fijos'], ['veh', 'Moto y documentos'], ['dinero', 'Dinero del día']];
+const NOTIF_CONTENT = [['agenda', 'Pendientes y agenda'], ['pagos', 'Pagos fijos'], ['veh', 'Mantenimientos y moto'], ['dinero', 'Dinero del día']];
 const DAYS_L = [[1, 'L'], [2, 'M'], [3, 'M'], [4, 'J'], [5, 'V'], [6, 'S'], [7, 'D']];
 function notifDefaults() {
   return { email: '', appUrl: location.origin + location.pathname.replace(/index\.html$/, ''),
@@ -2953,6 +2958,260 @@ async function pushOff(id) {
 }
 Object.assign(ACT, { pushOn: () => pushOn(), pushOff: () => pushOff(), pushRm: el => pushOff(el.dataset.v) });
 pushConf();
+
+/* ---------------- Mantenimientos programados: vehículos (citas) y "Mis cosas" ---------------- */
+/* --- citas de mantenimiento de vehículos (colección vappt) --- */
+const VAPPTS = vid => Object.entries(store('vappt')).map(([id, x]) => Object.assign({ id }, x)).filter(x => !x.done && (!vid || x.veh === vid)).sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')));
+function apptCard(v) {
+  const L = VAPPTS(v.id);
+  if (!L.length) return `<section class="card appt-empty"><div><b>¿Ya sabes cuándo le toca?</b><small class="muted">Programa el próximo mantenimiento con fecha, taller y precio aproximado. Te aviso ese día.</small></div><button class="btn" data-act="apptNew" data-v="${v.id}">${gsvg('work')}Programar</button></section>`;
+  return L.map(a => { const n = daysTo(a.date); const T = (a.tasks || []).map(id => (store('vtask')[id] || {}).name).filter(Boolean).concat(a.extras || []);
+    return `<section class="card appt ${n < 0 ? 'late' : n <= 1 ? 'soon' : ''}"><div class="ap-date"><b>${Number(a.date.slice(8))}</b><span>${MSHORT[Number(a.date.slice(5, 7)) - 1]}</span></div>
+    <div class="ap-main"><b>Mantenimiento programado${n === 0 ? ' · hoy' : n === 1 ? ' · mañana' : n < 0 ? ' · pasó la fecha' : ` · en ${n} días`}</b><small class="muted">${esc([a.time ? fmtTime(a.time) : '', a.shop].filter(Boolean).join(' · '))}</small><small>${esc(T.join(', ') || 'Sin tareas elegidas')}</small></div>
+    <div class="ap-side"><span class="num">≈ ${money(a.cost || 0)}</span><div class="btns"><button class="btn sm pri" data-act="apptDone" data-v="${a.id}">Ya lo hice</button><button class="btn sm" data-act="apptEdit" data-v="${a.id}">Editar</button></div></div></section>`; }).join('');
+}
+const fmtTime = t => { const [h, m] = String(t).split(':').map(Number); return `${((h + 11) % 12) + 1}:${pad(m || 0)} ${h < 12 ? 'a. m.' : 'p. m.'}`; };
+function editAppt(vid, a) {
+  const v = vGet(vid), isNew = !a, T = sortedTasks(v);
+  a = Object.assign({ id: 'a' + uid(), veh: vid, date: '', time: '', shop: '', tasks: T.filter(x => x.s.sev === 'bad' || x.s.sev === 'mid').map(x => x.t.id), extras: [], cost: '', costTouched: false, notes: '', remind: true }, a || {});
+  if (!a.date) { const d = new Date(); d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7)); a.date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+  openSheet(isNew ? 'Programar mantenimiento · ' + esc(v.name) : 'Editar mantenimiento programado', `
+    <div class="two"><label class="field"><span>Fecha</span><input id="apDate" type="date" value="${a.date}" required></label><label class="field"><span>Hora (opcional)</span><input id="apTime" type="time" value="${esc(a.time || '')}"></label></div>
+    <label class="field"><span>Taller</span><input id="apShop" list="apShops" value="${esc(a.shop)}" placeholder="Taller Don Luis"><datalist id="apShops">${shopNames().map(s => `<option value="${esc(s)}">`).join('')}</datalist></label>
+    <div class="field"><span>Qué se le va a hacer</span><div class="aptasks">${T.map(({ t, s }) => `<label class="aptask"><input type="checkbox" value="${t.id}" data-cost="${Number(t.cost) || 0}" ${(a.tasks || []).includes(t.id) ? 'checked' : ''}><span>${esc(t.name)}</span>${s.sev === 'bad' || s.sev === 'mid' ? `<span class="pill ${s.sev}">${esc(s.label)}</span>` : ''}${t.cost ? `<small class="num muted">≈ ${money(t.cost)}</small>` : ''}</label>`).join('') || '<p class="note" style="margin:0">Este vehículo no tiene plan. Escribe abajo lo que le vas a hacer.</p>'}</div></div>
+    <label class="field"><span>Otras cosas (separadas por coma)</span><input id="apExtra" value="${esc((a.extras || []).join(', '))}" placeholder="Revisar ruido en el freno, cambiar manecilla"></label>
+    <label class="field"><span>Precio aproximado</span><input id="apCost" class="calc" type="text" inputmode="decimal" value="${a.cost || ''}"></label>
+    <p class="note" id="apInfo" style="margin:0"></p>
+    <label class="field"><span>Notas</span><input id="apNotes" value="${esc(a.notes || '')}" placeholder="Llevar la factura anterior, preguntar por garantía…"></label>
+    <label class="ag-pin"><input type="checkbox" id="apRem" ${a.remind !== false ? 'checked' : ''}> Agregarlo a mi agenda y avisarme</label>
+    <div class="btns"><button class="btn pri">${isNew ? 'Programar' : 'Guardar'}</button>${isNew ? '' : '<button type="button" class="btn danger" id="apDel">Cancelar cita</button>'}</div>`, f => {
+    const date = $('#apDate').value; if (!date) return 'Elige la fecha.';
+    const tasks = [...f.querySelectorAll('.aptask input:checked')].map(x => x.value), extras = $('#apExtra').value.split(',').map(x => x.trim()).filter(Boolean);
+    if (!tasks.length && !extras.length) return 'Marca o escribe al menos una cosa que le vas a hacer.';
+    const rec = Object.assign({}, a, { date, time: $('#apTime').value, shop: $('#apShop').value.trim(), tasks, extras, cost: calcVal('#apCost'), costTouched: f._touched || a.costTouched, notes: $('#apNotes').value.trim(), remind: $('#apRem').checked });
+    const names = tasks.map(id => (store('vtask')[id] || {}).name).filter(Boolean).concat(extras);
+    if (rec.remind) { const nid = rec.noteId || uid(); rec.noteId = nid; noteSave({ id: nid, date: today(), tag: 'Vehículos', text: `${v.name}: mantenimiento${rec.shop ? ' en ' + rec.shop : ''}`, action: `${names.join(', ')}${rec.cost ? ' · ≈ ' + money(rec.cost) : ''}`, due: date, status: 'Pendiente', kind: rec.time ? 'evento' : 'pendiente', time: rec.time, color: 'azul', pinned: false }); }
+    else if (rec.noteId) { op('note.delete', { id: rec.noteId }); rec.noteId = ''; }
+    const id = rec.id; delete rec.id; vPut('vappt', id, rec);
+    const b = v.budMant > 0 ? vMonth(v, ymOf(date)).mant + (rec.cost || 0) : 0;
+    toast(`Programado para el ${dLabel(date)}${b > v.budMant && v.budMant ? `. Ojo: con esto pasas tu presupuesto de mantenimiento de ese mes (${money(b)} de ${money(v.budMant)})` : ''}`);
+  }, f => {
+    const sumT = () => { const s = sum([...f.querySelectorAll('.aptask input:checked')], x => Number(x.dataset.cost) || 0); if (!f._touched && !a.costTouched) $('#apCost').value = s ? r2(s) : ''; const c = calcVal('#apCost'); const ym = ymOf($('#apDate').value || today()); $('#apInfo').textContent = v.budMant > 0 && c ? `Presupuesto de mantenimiento de ${MONTHS[Number(ym.slice(5)) - 1].toLowerCase()}: ${money(vMonth(v, ym).mant + c)} de ${money(v.budMant)} con esto.` : (s ? '' : 'Pon un precio en cada tarea del plan y lo sumo solo.'); };
+    f.addEventListener('change', e => { if (e.target.closest('.aptask') || e.target.id === 'apDate') sumT(); });
+    f.querySelector('#apCost').addEventListener('input', () => { f._touched = true; sumT(); });
+    sumT();
+    const d = f.querySelector('#apDel'); if (d) d.onclick = () => { if (a.noteId) op('note.delete', { id: a.noteId }); op('rec.delete', { coll: 'vappt', id: a.id }); closeSheet(); toast('Cita cancelada'); };
+  });
+}
+function apptDone(id) {
+  const a = Object.assign({ id }, store('vappt')[id]); if (!a.veh) return;
+  editServ(a.veh, null, a);
+}
+function apptClose(a) { if (!a || !a.id) return; const rec = Object.assign({}, store('vappt')[a.id], { done: true }); vPut('vappt', a.id, rec); if (a.noteId) { const n = S.data.notes.find(x => x.id === a.noteId); if (n) noteSave(Object.assign({}, n, { status: 'Hecho' })); } }
+
+/* --- Mis cosas: cualquier cosa con mantenimientos programados (colecciones thing, mtask, mlog) --- */
+const THING_ICONS = {
+  casa: ['Casa', '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>'],
+  aire: ['Aire acondicionado', '<rect x="3" y="5" width="18" height="8" rx="2"/><path d="M7 10h10M8 17c0 1.5 1 2 2 2M12 16v4M16 17c0 1.5-1 2-2 2"/>'],
+  laptop: ['Laptop / PC', '<rect x="5" y="5" width="14" height="10" rx="1.5"/><path d="M3 19h18"/>'],
+  celular: ['Celular', '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>'],
+  refri: ['Refrigeradora', '<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M6 10h12M9 6v2M9 13v3"/>'],
+  lavadora: ['Lavadora', '<rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="13" r="4.5"/><path d="M7 6h2"/>'],
+  tv: ['Televisor', '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/>'],
+  impresora: ['Impresora', '<path d="M7 8V3h10v5M7 17H4v-7h16v7h-3M7 14h10v7H7z"/>'],
+  agua: ['Agua / filtro', '<path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z"/>'],
+  herramienta: ['Herramienta', '<path d="M14 6a4 4 0 0 0 5 5l-9 9a2 2 0 0 1-3-3l9-9a4 4 0 0 0-2-2z"/>'],
+  planta: ['Jardín', '<path d="M12 21v-8M12 13c-4 0-6-3-6-7 4 0 6 3 6 7zM12 11c0-4 2-7 6-7 0 4-2 7-6 7z"/>'],
+  mascota: ['Mascota', '<circle cx="6" cy="10" r="1.8"/><circle cx="10" cy="6" r="1.8"/><circle cx="14" cy="6" r="1.8"/><circle cx="18" cy="10" r="1.8"/><path d="M8 17c0-3 2-5 4-5s4 2 4 5-2 3-4 3-4 0-4-3z"/>'],
+  salud: ['Salud', '<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/>'],
+  otro: ['Otro', '<circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/>']
+};
+const tIco = (k, c, cls = '') => `<span class="acc-ic ${cls}" style="--ac:${c || ACC_COLORS[1]}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${(THING_ICONS[k] || THING_ICONS.otro)[1]}</svg></span>`;
+const UNITS = [['d', 'días'], ['w', 'semanas'], ['m', 'meses'], ['y', 'años']];
+const THINGS = () => Object.entries(store('thing')).map(([id, x]) => Object.assign({ id }, x)).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+const MTASKS = th => Object.entries(store('mtask')).map(([id, x]) => Object.assign({ id }, x)).filter(x => !th || x.thing === th);
+const MLOGS = th => Object.entries(store('mlog')).map(([id, x]) => Object.assign({ id }, x)).filter(x => !th || x.thing === th).sort((a, b) => b.date.localeCompare(a.date));
+function stepDate(d, n, u) { if (!d || !n) return ''; if (u === 'd' || u === 'w') { const x = new Date(d + 'T12:00'); x.setDate(x.getDate() + n * (u === 'w' ? 7 : 1)); return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`; } return addMonthsD(d, u === 'y' ? n * 12 : n); }
+const everyLabel = t => { if (!t.every) return 'una sola vez'; const u = (UNITS.find(x => x[0] === t.unit) || UNITS[2])[1]; return t.every === 1 ? 'cada ' + { días: 'día', semanas: 'semana', meses: 'mes', años: 'año' }[u] : `cada ${t.every} ${u}`; };
+function mState(t) { if (!t.next) return { sev: 'new', label: 'Sin fecha', dd: null }; const dd = daysTo(t.next); return { dd, sev: dd < 0 ? 'bad' : dd <= 7 ? 'mid' : 'ok', label: dd < 0 ? `Vencido · ${dLabel(t.next).replace(/ \d{4}$/, '')}` : dd === 0 ? 'Hoy' : dd === 1 ? 'Mañana' : dd <= 30 ? `En ${dd} días` : dLabel(t.next) }; }
+function mantFund() { const n = (store('mcfg').main || {}).fund; return n ? S.data.goals.find(g => g.name === n) : null; }
+
+/* lo que viene: cosas + citas de vehículos + plan de vehículos con precio, para la agenda y la gráfica */
+function mantUpcoming(months = 12) {
+  const end = addMonthsD(today(), months), out = [];
+  MTASKS().forEach(t => { if (!t.next || t.off) return; const th = store('thing')[t.thing] || {}; let d = t.next, guard = 0; while (d && d <= end && guard++ < 60) { out.push({ kind: 'thing', id: t.id, date: d, name: t.name, of: th.name || '', icon: th.icon, color: th.color, cost: Number(t.cost) || 0, first: guard === 1, t }); if (!t.every) break; d = stepDate(d, t.every, t.unit); } });
+  VAPPTS().forEach(a => { const v = vGet(a.veh); if (!v) return; out.push({ kind: 'appt', id: a.id, date: a.date, name: 'Mantenimiento programado', of: v.name, vtype: v.type, cost: Number(a.cost) || 0, first: true, a }); });
+  VEHS().forEach(v => { const rate = vRate(v), booked = new Set(VAPPTS(v.id).flatMap(a => a.tasks || [])); sortedTasks(v).forEach(({ t, s }) => {
+    if (!(Number(t.cost) > 0) || s.never || booked.has(t.id)) return;
+    let d = s.dueDate || ''; if (s.remKm != null && rate > 0) { const kd = addDaysD(today(), Math.max(0, Math.round(s.remKm / rate))); if (!d || kd < d) d = kd; }
+    if (!d) return; const stepM = t.everyMonths || (t.everyKm && rate ? Math.max(1, Math.round(t.everyKm / rate / 30.4)) : 0); let guard = 0;
+    while (d <= end && guard++ < 24) { out.push({ kind: 'vtask', id: t.id, veh: v.id, date: d < today() ? today() : d, late: d < today(), name: t.name, of: v.name, vtype: v.type, cost: Number(t.cost) || 0, first: guard === 1, est: true }); if (!stepM) break; d = addMonthsD(d < today() ? today() : d, stepM); }
+  }); });
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+const addDaysD = (d, k) => { const x = new Date(d + 'T12:00'); x.setDate(x.getDate() + k); return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`; };
+
+function vMant() {
+  if (vehBlocked()) return `${head('Mantenimientos')}<div class="alert"><span></span><div><b>Actualiza el conector de tu hoja</b><p>Los mantenimientos se guardan en la hoja AppData (conector v3 o mayor). Ajustes te dice cómo.</p></div><div class="acts"><a class="btn sm" href="#ajustes">Ir a Ajustes</a></div></div>`;
+  const U = mantUpcoming(12), ym = ymOf(today()), tab = S.ui.mTab2 || 'agenda';
+  const inM = k => sum(U.filter(x => k === 0 ? ymOf(x.date) <= ym : ymOf(x.date) === addM(ym, k)), x => x.cost);
+  const m1 = inM(0), m3 = inM(0) + inM(1) + inM(2), y1 = sum(U, x => x.cost), perMonth = Math.ceil(y1 / 12 / 5) * 5;
+  const bars = Array.from({ length: 12 }, (_, k) => ({ k, ym: addM(ym, k), v: inM(k) })), mx = Math.max(1, ...bars.map(b => b.v));
+  const fund = mantFund(), fs = fund ? goalSaved(fund) : 0;
+  const things = THINGS();
+  const empty = !things.length && !VEHS().length;
+  const planner = `<section class="card side-card mplan"><header style="margin:0"><h2>Próximos 12 meses</h2><span class="num" style="font-weight:700">≈ ${money(y1)}</span></header>
+    <div class="mbars">${bars.map(b => `<button type="button" class="mbar ${S.ui.mMonth === b.ym ? 'on' : ''}" data-act="mMonth" data-v="${b.ym}" title="${ymLabel(b.ym)}: ${money(b.v)}"><i style="height:${Math.max(b.v ? 6 : 2, b.v / mx * 100)}%"></i><span>${MSHORT[Number(b.ym.slice(5)) - 1][0]}</span></button>`).join('')}</div>
+    ${y1 ? `<div class="mfund"><div><b>Aparta ${money(perMonth)} al mes</b><small>${fund ? `Fondo “${esc(fund.name)}”: ${money(fs)}${fund.target ? ' de ' + money(fund.target) : ''}` : 'Así ningún mantenimiento te agarra desprevenido.'}</small></div>${fund ? `<button class="btn sm" data-act="goalIn" data-n="${esc(fund.name)}">Aportar</button>` : `<button class="btn sm pri" data-act="mFund" data-v="${perMonth}">Crear fondo</button>`}</div>` : '<p class="note" style="margin:0">Pon un precio aproximado a tus mantenimientos y aquí ves cuánto te van a costar mes a mes.</p>'}
+  </section>`;
+  const sel = S.ui.mMonth && bars.some(b => b.ym === S.ui.mMonth) ? S.ui.mMonth : '';
+  const L = sel ? U.filter(x => ymOf(x.date) === sel) : U.filter(x => x.first || ymOf(x.date) <= addM(ym, 2));
+  const groups = {}; L.forEach(x => { const k = x.late || x.date < today() ? 'late' : ymOf(x.date); (groups[k] = groups[k] || []).push(x); });
+  const itemHTML = x => { const st = x.kind === 'thing' ? mState(Object.assign({}, x.t, { next: x.date })) : null, n = daysTo(x.date);
+    const ic = x.kind === 'thing' ? tIco(x.icon, x.color) : `<span class="acc-ic" style="--ac:${ACC_COLORS[0]}">${vsvg(x.vtype)}</span>`;
+    const act = x.kind === 'thing' ? (x.first ? `data-act="mDone" data-v="${x.id}"` : '') : x.kind === 'appt' ? `data-act="apptDone" data-v="${x.id}"` : '';
+    return `<div class="mitem ${x.first ? '' : 'proj'}">${x.first && x.kind !== 'vtask' ? `<button type="button" class="mchk" ${act} aria-label="Marcar como hecho"></button>` : '<span class="mchk ghost"></span>'}${ic}
+      <button type="button" class="mtxt" data-act="${x.kind === 'thing' ? 'mTask' : x.kind === 'appt' ? 'apptEdit' : 'vehGo'}" data-v="${x.kind === 'vtask' ? x.veh : x.id}"><b>${esc(x.name)}</b><small>${esc(x.of)} · ${x.kind === 'thing' ? everyLabel(x.t) : x.kind === 'appt' ? (x.a.shop || 'cita') : 'según el plan'} · ${x.late || n < 0 ? 'tocaba ' : ''}${dLabel(x.date).replace(/ \d{4}$/, '')}${x.est ? ' (estimado)' : ''}</small></button>
+      <span class="mcost num">${x.cost ? '≈ ' + money(x.cost) : ''}</span></div>`; };
+  const agenda = Object.keys(groups).sort((a, b) => a === 'late' ? -1 : b === 'late' ? 1 : a.localeCompare(b)).map(k => `<div class="mgroup"><div class="mgh ${k === 'late' ? 'neg' : ''}"><span>${k === 'late' ? 'Vencido' : k === ym ? 'Este mes' : ymLabel(k)}</span><span class="num">${money(sum(groups[k], x => x.cost))}</span></div>${groups[k].map(itemHTML).join('')}</div>`).join('') || `<p class="note">${sel ? 'Nada programado en ' + ymLabel(sel).toLowerCase() + '.' : 'Nada programado todavía.'}</p>`;
+  const cards = things.map(th => { const T = MTASKS(th.id).map(t => ({ t, s: mState(t) })).sort((a, b) => SEV_ORDER[a.s.sev] - SEV_ORDER[b.s.sev] || (a.t.next || '9').localeCompare(b.t.next || '9')), worst = T[0];
+    const yr = sum(U.filter(x => x.kind === 'thing' && x.t.thing === th.id), x => x.cost), last = MLOGS(th.id)[0];
+    return `<section class="card mthing"><div class="row2"><button type="button" class="mth-h" data-act="thingEdit" data-v="${th.id}">${tIco(th.icon, th.color, '')}<span><b>${esc(th.name)}</b><small class="muted">${esc([th.brand, th.place].filter(Boolean).join(' · ') || (THING_ICONS[th.icon] || THING_ICONS.otro)[0])}</small></span></button>${worst ? `<span class="pill ${worst.s.sev === 'new' ? '' : worst.s.sev}">${worst.s.sev === 'bad' ? T.filter(x => x.s.sev === 'bad').length + ' vencido' + (T.filter(x => x.s.sev === 'bad').length > 1 ? 's' : '') : worst.s.sev === 'mid' ? worst.s.label : 'al día'}</span>` : ''}</div>
+      ${T.map(({ t, s }) => { const tot = t.every ? Math.max(1, daysTo(t.next) - daysTo(stepDate(t.next, -t.every, t.unit))) : 30, p = t.next ? Math.min(1, Math.max(0, 1 - daysTo(t.next) / tot)) : 0; return `<button type="button" class="vtask" data-act="mTask" data-v="${t.id}"><div class="row2"><span>${esc(t.name)}</span><span class="pill ${s.sev === 'new' ? '' : s.sev}">${esc(s.label)}</span></div><div class="bar ${s.sev === 'bad' ? 'over' : s.sev === 'mid' ? 'near' : 'good'}"><i style="width:${t.next ? Math.max(4, p * 100) : 0}%"></i></div><small class="muted">${everyLabel(t)}${t.cost ? ' · ≈ ' + money(t.cost) : ''}${t.last ? ' · último ' + dLabel(t.last) : ''}</small></button>`; }).join('') || '<p class="note" style="margin:0">Sin mantenimientos todavía.</p>'}
+      <div class="row2 mth-f"><small class="muted">${yr ? 'Al año ≈ ' + money(yr) : ''}${last ? `${yr ? ' · ' : ''}último hecho ${dLabel(last.date)}` : ''}</small><button type="button" class="linkbtn" data-act="mTaskNew" data-v="${th.id}">+ Mantenimiento</button></div></section>`; }).join('')
+    + VEHS().map(v => { const t = sortedTasks(v).find(x => x.s.sev !== 'new'), a = VAPPTS(v.id)[0]; return `<section class="card mthing"><div class="row2"><button type="button" class="mth-h" data-act="vehGo" data-v="${v.id}"><span class="acc-ic" style="--ac:${ACC_COLORS[0]}">${vsvg(v.type)}</span><span><b>${esc(v.name)}</b><small class="muted">${fmtKm(v.km)} · se maneja en Vehículos</small></span></button>${t ? `<span class="pill ${t.s.sev}">${esc(t.s.sev === 'ok' ? 'al día' : t.s.label)}</span>` : ''}</div>${a ? `<p class="note" style="margin:0">Programado: ${dLabel(a.date)}${a.shop ? ' en ' + esc(a.shop) : ''} · ≈ ${money(a.cost || 0)}</p>` : ''}</section>`; }).join('');
+  return `${head('Mantenimientos', 'Programa el mantenimiento de cualquier cosa con su precio aproximado. Te aviso cuando toque.', `<button class="btn" data-act="thingNew">+ Cosa</button><button class="btn pri" data-act="mTaskNew" data-v="">+ Programar</button>`)}
+  ${empty ? `<div class="card veh-empty"><span class="veh-ic big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${THING_ICONS.herramienta[1]}</svg></span><h2>Agrega lo que quieres mantener al día</h2><p class="muted">El aire acondicionado, tu laptop, la refri, la casa, el filtro de agua… Cada cosa con sus mantenimientos y lo que cuestan.</p><button class="btn pri" data-act="thingNew">Agregar una cosa</button></div>` : `
+  <div class="kpis mkpis"><div class="kpi"><span class="label">Este mes</span><span class="v">≈ ${money(m1)}</span></div><div class="kpi"><span class="label">Próximos 3 meses</span><span class="v">≈ ${money(m3)}</span></div><div class="kpi"><span class="label">Vencidos</span><span class="v ${U.some(x => x.late || x.date < today()) ? 'neg' : ''}">${U.filter(x => x.first && (x.late || x.date < today())).length}</span></div></div>
+  ${planner}
+  <div class="seg">${[['agenda', 'Agenda'], ['cosas', 'Mis cosas']].map(([k, l]) => `<button type="button" data-act="mTab2" data-v="${k}" class="${tab === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+  ${tab === 'agenda' ? `<section class="card">${sel ? `<div class="row2" style="margin-bottom:6px"><b>${ymLabel(sel)}</b><button type="button" class="linkbtn" data-act="mMonth" data-v="">Ver todo</button></div>` : ''}${agenda}</section>` : `<div class="grid-2 mthings">${cards}</div>`}`}`;
+}
+function mantCard() {
+  const U = mantUpcoming(2).filter(x => x.first && daysTo(x.date) <= 14).slice(0, 4); if (!U.length) return '';
+  return `<section class="card side-card"><header style="margin:0"><h2>Mantenimientos</h2><a href="#mantenimientos">Ver</a></header>${U.map(x => `<div class="row2" style="font-size:.88rem"><span>${esc(x.name)} <small class="muted">· ${esc(x.of)}</small></span><span class="pill ${x.late || x.date < today() ? 'bad' : daysTo(x.date) <= 3 ? 'mid' : ''}">${x.late || x.date < today() ? 'vencido' : daysTo(x.date) === 0 ? 'hoy' : dLabel(x.date).replace(/ \d{4}$/, '')}</span></div>`).join('')}</section>`;
+}
+function mantNotifs() {
+  if (!S.data || !S.data.store || !(S.data.store.mtask || S.data.store.vappt)) return [];
+  const out = [];
+  MTASKS().forEach(t => { if (!t.next || t.off) return; const n = daysTo(t.next), th = store('thing')[t.thing] || {}; if (n <= 3) out.push({ sev: n < 0 ? 'bad' : 'mid', text: `${esc(th.name || '')}: ${esc(t.name)} ${n < 0 ? 'vencido' : n === 0 ? 'hoy' : n === 1 ? 'mañana' : 'en ' + n + ' días'}${t.cost ? ` · ≈ ${money(t.cost)}` : ''}`, act: 'mGo' }); });
+  VAPPTS().forEach(a => { const n = daysTo(a.date), v = vGet(a.veh) || {}; if (n <= 1) out.push({ sev: n < 0 ? 'mid' : 'info', text: `${esc(v.name || '')}: mantenimiento ${n < 0 ? 'programado el ' + dLabel(a.date) + ' · ¿ya lo hiciste?' : n === 0 ? 'hoy' : 'mañana'}${a.shop ? ' en ' + esc(a.shop) : ''}`, act: n < 0 ? 'apptDone' : 'vehGo', veh: n < 0 ? a.id : a.veh }); });
+  return out;
+}
+
+/* formularios de Mis cosas */
+function defaultSubFor(icon) {
+  const subs = S.data.cats.filter(c => c.type === 'Gasto').map(c => c.sub), f = re => subs.find(s => re.test(s));
+  if (['laptop', 'celular', 'impresora', 'tv'].includes(icon)) return f(/equipo|tecnolog|accesorio/i) || f(/manten.*hogar/i) || 'Mantenimiento del hogar';
+  if (icon === 'mascota') return f(/mascota|veterin/i) || 'Mascota';
+  if (icon === 'salud') return f(/consulta|m[eé]dic|salud/i) || 'Consultas médicas';
+  return f(/manten.*hogar/i) || 'Mantenimiento del hogar';
+}
+function editThing(th) {
+  const isNew = !th;
+  th = Object.assign({ id: 'c' + uid(), name: '', icon: 'casa', color: ACC_COLORS[1], brand: '', place: '', warranty: '', notes: '', scope: 'Personal', sub: '' }, th || {});
+  const subs = [...new Set([defaultSubFor(th.icon), ...S.data.cats.filter(c => c.type === 'Gasto').map(c => c.sub)])];
+  openSheet(isNew ? 'Nueva cosa' : 'Editar · ' + esc(th.name), `
+    <div class="acc-prev" id="thPrev"></div>
+    <div class="field"><span>¿Qué es?</span><div class="acc-icons" id="thIcons">${Object.entries(THING_ICONS).map(([k, [l]]) => `<button type="button" data-k="${k}" title="${l}" aria-label="${l}" class="${k === th.icon ? 'on' : ''}">${tIco(k, 'currentColor')}</button>`).join('')}</div></div>
+    <div class="two"><label class="field"><span>Nombre</span><input id="thName" value="${esc(th.name)}" placeholder="Aire del cuarto" required></label><label class="field"><span>Marca o modelo</span><input id="thBrand" value="${esc(th.brand)}" placeholder="LG 12,000 BTU"></label></div>
+    <div class="two"><label class="field"><span>Dónde está</span><input id="thPlace" value="${esc(th.place)}" placeholder="Cuarto, oficina…"></label><label class="field"><span>Garantía hasta</span><input id="thWar" type="date" value="${esc(th.warranty || '')}"></label></div>
+    <div class="field"><span>Color</span><div class="acc-colors" id="thColors">${ACC_COLORS.map(c => `<button type="button" data-c="${c}" style="background:${c}" class="${c === th.color ? 'on' : ''}" aria-label="Color"></button>`).join('')}</div></div>
+    <div class="two"><label class="field"><span>Subcategoría del gasto</span>${sel('thSub', subs, th.sub || subs[0])}</label><label class="field"><span>Ámbito</span>${sel('thScope', S.data.lists.scopes, th.scope)}</label></div>
+    <label class="field"><span>Notas</span><input id="thNotes" value="${esc(th.notes)}" placeholder="Técnico de confianza, número de serie…"></label>
+    ${isNew ? `<label class="ag-pin"><input type="checkbox" id="thTpl" checked> Agregar mantenimientos sugeridos</label>` : ''}
+    <div class="btns"><button class="btn pri">Guardar</button>${isNew ? '' : '<button type="button" class="btn danger" id="thDel">Eliminar</button>'}</div>`, f => {
+    const name = $('#thName').value.trim(); if (!name) return 'Ponle un nombre.';
+    const rec = Object.assign({}, th, { name, brand: $('#thBrand').value.trim(), place: $('#thPlace').value.trim(), warranty: $('#thWar').value, notes: $('#thNotes').value.trim(), sub: $('#thSub').value, scope: $('#thScope').value, icon: f._icon, color: f._color }); const id = rec.id; delete rec.id;
+    vPut('thing', id, rec);
+    if (isNew && $('#thTpl') && $('#thTpl').checked) (THING_TPL[rec.icon] || []).forEach(([n, every, unit, cost]) => opq('rec.upsert', { coll: 'mtask', id: 'm' + uid(), data: { thing: id, name: n, every, unit, cost, next: stepDate(today(), Math.max(1, Math.round(every / 2)), unit) } }));
+    S.ui.mTab2 = 'cosas'; if (S.ui.view !== 'mantenimientos') go('mantenimientos');
+  }, f => {
+    f._icon = th.icon; f._color = th.color;
+    const prev = () => { $('#thPrev').innerHTML = `${tIco(f._icon, f._color, 'lg')}<div><b>${esc($('#thName').value.trim() || (THING_ICONS[f._icon] || THING_ICONS.otro)[0])}</b><small>${esc($('#thBrand').value.trim())}</small></div>`; };
+    f.querySelector('#thIcons').onclick = e => { const b = e.target.closest('button'); if (!b) return; f._icon = b.dataset.k; f.querySelectorAll('#thIcons button').forEach(x => x.classList.toggle('on', x === b)); if (!$('#thName').value.trim()) $('#thName').placeholder = THING_ICONS[f._icon][0]; const ds = defaultSubFor(f._icon); if ([...$('#thSub').options].some(o => o.value === ds)) $('#thSub').value = ds; prev(); };
+    f.querySelector('#thColors').onclick = e => { const b = e.target.closest('button'); if (!b) return; f._color = b.dataset.c; f.querySelectorAll('#thColors button').forEach(x => x.classList.toggle('on', x === b)); prev(); };
+    f.addEventListener('input', prev); prev();
+    const d = f.querySelector('#thDel'); if (d) d.onclick = () => { MTASKS(th.id).forEach(t => opq('rec.delete', { coll: 'mtask', id: t.id })); MLOGS(th.id).forEach(l => { (l.imgs || []).forEach(im => { blobDel('img', im.id, im.n); IDB.del(im.id); }); opq('rec.delete', { coll: 'mlog', id: l.id }); }); op('rec.delete', { coll: 'thing', id: th.id }); closeSheet(); toast('Eliminado. Los gastos que registraste se quedan.'); };
+  });
+}
+const THING_TPL = {
+  aire: [['Limpieza de filtros', 1, 'm', 0], ['Mantenimiento completo (técnico)', 6, 'm', 25]],
+  laptop: [['Limpieza interna y pasta térmica', 12, 'm', 15], ['Respaldo de archivos', 1, 'm', 0]],
+  refri: [['Limpiar serpentín y empaques', 6, 'm', 0], ['Revisión de técnico', 2, 'y', 20]],
+  lavadora: [['Limpieza de tambor y filtro', 1, 'm', 0], ['Revisión de técnico', 2, 'y', 20]],
+  agua: [['Cambio de filtro', 3, 'm', 8]],
+  casa: [['Fumigación', 6, 'm', 40], ['Limpieza de cisterna o tanque', 6, 'm', 15], ['Revisión de instalaciones eléctricas', 1, 'y', 25]],
+  impresora: [['Limpieza de cabezales', 1, 'm', 0], ['Cambio de tinta', 3, 'm', 15]],
+  celular: [['Respaldo y limpieza de almacenamiento', 1, 'm', 0]],
+  planta: [['Abono', 2, 'm', 5]],
+  mascota: [['Vacunas', 1, 'y', 25], ['Desparasitante', 3, 'm', 8]]
+};
+function editMTask(t, thingId) {
+  const isNew = !t, things = THINGS();
+  if (!things.length) return editThing();
+  t = Object.assign({ id: 'm' + uid(), thing: thingId || S.ui.mThing || things[0].id, name: '', every: 6, unit: 'm', next: '', cost: '', notes: '', shop: '', off: false }, t || {});
+  if (!t.next) t.next = stepDate(today(), 7, 'd');
+  openSheet(isNew ? 'Programar mantenimiento' : esc(t.name), `
+    <div class="two"><label class="field"><span>Cosa</span>${sel('mtThing', things.map(x => [x.id, x.name]), t.thing)}</label><label class="field"><span>Mantenimiento</span><input id="mtName" value="${esc(t.name)}" placeholder="Limpieza, cambio de filtro…" ${isNew ? 'autofocus' : ''} required></label></div>
+    <div class="two"><label class="field"><span>Próxima fecha</span><input id="mtNext" type="date" value="${t.next}"></label><label class="field"><span>Precio aproximado</span><input id="mtCost" class="calc" type="text" inputmode="decimal" value="${t.cost || ''}" placeholder="0"></label></div>
+    <div class="field"><span>Se repite</span><div class="nrow"><select id="mtRep" class="ctl" style="width:auto"><option value="1" ${t.every ? 'selected' : ''}>Cada</option><option value="0" ${!t.every ? 'selected' : ''}>Una sola vez</option></select><input id="mtEvery" type="number" min="1" inputmode="numeric" value="${t.every || 6}" style="width:76px"><select id="mtUnit" class="ctl" style="width:auto">${UNITS.map(([k, l]) => `<option value="${k}" ${t.unit === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
+    <label class="field"><span>Quién lo hace (opcional)</span><input id="mtShop" list="mtShops" value="${esc(t.shop || '')}" placeholder="Yo mismo, técnico…"><datalist id="mtShops">${shopNames().map(s => `<option value="${esc(s)}">`).join('')}</datalist></label>
+    <label class="field"><span>Notas</span><input id="mtNotes" value="${esc(t.notes || '')}"></label>
+    ${!isNew && MLOGS().filter(l => l.task === t.id).length ? `<p class="note" style="margin:0">Historial: ${MLOGS().filter(l => l.task === t.id).slice(0, 5).map(l => `${dLabel(l.date)} ${l.cost ? money(l.cost) : ''}`).join(' · ')}</p>` : ''}
+    <div class="btns"><button class="btn pri">Guardar</button>${isNew ? '' : `<button type="button" class="btn" id="mtDone">Ya lo hice</button><button type="button" class="btn danger" id="mtDel">Eliminar</button>`}</div>`, f => {
+    const name = $('#mtName').value.trim(); if (!name) return 'Escribe qué mantenimiento es.';
+    const rep = $('#mtRep').value === '1';
+    const rec = Object.assign({}, t, { thing: $('#mtThing').value, name, next: $('#mtNext').value, cost: calcVal('#mtCost'), every: rep ? Math.max(1, Number($('#mtEvery').value) || 1) : 0, unit: $('#mtUnit').value, shop: $('#mtShop').value.trim(), notes: $('#mtNotes').value.trim() }); const id = rec.id; delete rec.id;
+    if (!rec.next) return 'Elige la próxima fecha.';
+    vPut('mtask', id, rec); toast(`Programado para el ${dLabel(rec.next)}`);
+  }, f => {
+    const tog = () => { const on = $('#mtRep').value === '1'; $('#mtEvery').hidden = !on; $('#mtUnit').hidden = !on; }; $('#mtRep').onchange = tog; tog();
+    const dn = f.querySelector('#mtDone'); if (dn) dn.onclick = () => { closeSheet(); mDone(t.id); };
+    const del = f.querySelector('#mtDel'); if (del) del.onclick = () => { op('rec.delete', { coll: 'mtask', id: t.id }); closeSheet(); };
+  });
+}
+function mDone(id) {
+  const t = Object.assign({ id }, store('mtask')[id]), th = Object.assign({ id: t.thing }, store('thing')[t.thing] || {});
+  const imgs = [];
+  openSheet('Hecho · ' + esc(t.name), `<p class="note" style="margin:0">${esc(th.name || '')}${t.next ? ' · tocaba el ' + dLabel(t.next) : ''}</p>
+    <div class="two"><label class="field"><span>Cuándo lo hiciste</span><input id="mdDate" type="date" value="${today()}"></label><label class="field"><span>Cuánto costó</span><input id="mdCost" class="calc" type="text" inputmode="decimal" value="${t.cost || ''}" placeholder="${t.cost ? '' : '0'}"></label></div>
+    <label class="field"><span>Quién lo hizo</span><input id="mdShop" list="mdShops" value="${esc(t.shop || '')}"><datalist id="mdShops">${shopNames().map(s => `<option value="${esc(s)}">`).join('')}</datalist></label>
+    <label class="field"><span>Notas</span><input id="mdNotes" placeholder="Qué se cambió, recomendaciones…"></label>
+    <label class="field"><span>Fotos (factura, trabajo)</span><input id="mdImg" type="file" accept="image/*" multiple></label><div class="simgs" id="mdImgs"></div>
+    <p class="note" id="mdNext" style="margin:0"></p>
+    <button class="btn pri">Guardar</button>`, () => {
+    const date = $('#mdDate').value || today(), cost = calcVal('#mdCost'), lid = 'h' + uid();
+    vPut('mlog', lid, { thing: t.thing, task: id, name: t.name, date, cost, shop: $('#mdShop').value.trim(), notes: $('#mdNotes').value.trim(), imgs: imgs.slice() });
+    const next = t.every ? stepDate(date, t.every, t.unit) : '';
+    const rec = Object.assign({}, store('mtask')[id], { last: date, next, lastCost: cost }); if (!t.every) rec.off = true;
+    vPut('mtask', id, rec);
+    if (cost > 0) setTimeout(() => askExpense({ v: { name: th.name || 'Mantenimiento', fund: ((mantFund() || {}).name) || '', scope: th.scope || 'Personal', acc: '' }, desc: `${th.name ? th.name + ': ' : ''}${t.name}`.slice(0, 90), amount: cost, date, sub: th.sub || defaultSubFor(th.icon), notes: 'Mantenimiento', onDone: movId => vPut('mlog', lid, Object.assign({}, store('mlog')[lid], { movId })) }), 30);
+    else toast(next ? 'Hecho. Próxima vez: ' + dLabel(next) : 'Hecho');
+  }, f => {
+    bindPhotos(f, '#mdImg', '#mdImgs', imgs);
+    const nx = () => { const d = $('#mdDate').value || today(); $('#mdNext').textContent = t.every ? `La próxima vez queda para el ${dLabel(stepDate(d, t.every, t.unit))} (${everyLabel(t)}).` : 'Era de una sola vez: sale de tu agenda.'; };
+    f.querySelector('#mdDate').addEventListener('change', nx); nx();
+  });
+}
+function mFund(per) {
+  const name = 'Fondo de mantenimientos';
+  openSheet('Fondo de mantenimientos', `<p class="note" style="margin:0">Una meta donde vas apartando para tus mantenimientos. Cuando hagas uno, puedes pagarlo desde este fondo.</p>
+    <div class="two"><label class="field"><span>Nombre</span><input id="mfName" value="${name}"></label><label class="field"><span>Se guarda en la cuenta</span>${sel('mfAcc', S.data.accounts.map(a => a.name), '', 'No vincular')}</label></div>
+    <label class="field"><span>Monto objetivo (lo de los próximos 12 meses)</span><input id="mfTar" class="calc" type="text" inputmode="decimal" value="${Math.round(sum(mantUpcoming(12), x => x.cost))}"></label>
+    <p class="note" style="margin:0">Sugerido: aparta ${money(per)} al mes.</p><button class="btn pri">Crear fondo</button>`, () => {
+    const n = $('#mfName').value.trim() || name;
+    if (!S.data.goals.some(g => g.name === n)) op('goal.upsert', { name: n, purpose: 'Mantenimientos de mis cosas y vehículos', target: calcVal('#mfTar'), initial: 0, due: '', acc: $('#mfAcc').value });
+    vPut('mcfg', 'main', Object.assign({}, store('mcfg').main, { fund: n })); toast('Fondo creado. Apórtale cada mes desde aquí o desde Metas.');
+  });
+}
+Object.assign(ACT, {
+  apptNew: el => editAppt(el.dataset.v), apptEdit: el => { const a = Object.assign({ id: el.dataset.v }, store('vappt')[el.dataset.v]); editAppt(a.veh, a); }, apptDone: el => apptDone(el.dataset.v),
+  thingNew: () => editThing(), thingEdit: el => editThing(Object.assign({ id: el.dataset.v }, store('thing')[el.dataset.v])),
+  mTaskNew: el => editMTask(null, el.dataset.v), mTask: el => editMTask(Object.assign({ id: el.dataset.v }, store('mtask')[el.dataset.v])), mDone: el => mDone(el.dataset.v),
+  mTab2: el => { S.ui.mTab2 = el.dataset.v; render(); }, mMonth: el => { S.ui.mMonth = S.ui.mMonth === el.dataset.v ? '' : el.dataset.v; S.ui.mTab2 = 'agenda'; render(); },
+  mFund: el => mFund(Number(el.dataset.v) || 0), mGo: () => go('mantenimientos')
+});
 
 /* ---------------- Arranque ---------------- */
 load();

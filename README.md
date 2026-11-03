@@ -127,3 +127,8 @@ La hoja manda los avisos aunque tengas la app cerrada:
 5. En cada teléfono: abre la app instalada → **Ajustes → Avisos → Activar aquí** y acepta el permiso. Las notificaciones llegan de la propia app Mis Finanzas (Web Push firmado por la hoja), sin instalar nada más.
 
 En Ajustes programas horarios (hora, días, correo y/o teléfono, qué incluye) y el aviso a la hora de cada pendiente con hora. `desactivarAvisos` apaga todo desde la hoja.
+
+## Mantenimientos
+
+- **Vehículos → Programar:** fecha, hora, taller, tareas del plan (se precargan las vencidas), otras cosas y precio aproximado (suma solo los precios del plan). Se agrega a la agenda con aviso. "Ya lo hice" abre el registro del mantenimiento con todo marcado.
+- **Sección Mantenimientos** para cualquier cosa (aire, laptop, refri, casa, filtro de agua, mascota…): cada cosa con sus mantenimientos (cada X días/semanas/meses/años o una sola vez), precio aproximado e historial. Gráfica de los próximos 12 meses (incluye lo programado y el plan de los vehículos con precio), "aparta X al mes" y fondo de mantenimientos. Al marcar hecho pregunta si lo registras como gasto.
