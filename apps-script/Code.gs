@@ -12,7 +12,8 @@
  * cualquier dato nuevo de la app (ajustes compartidos, funciones futuras), así que
  * las próximas mejoras de la app ya no necesitan cambiar este código.
  *
- * Versión 4: avisos programados por correo (tu Gmail) y al teléfono (app ntfy).
+ * Versión 5: avisos programados por correo (tu Gmail) y como notificación de la propia
+ * app Mis Finanzas en tu teléfono (sin instalar nada más).
  * Después de pegar este código: elige la función "activarAvisos" arriba, toca Ejecutar
  * y acepta los permisos. Luego Implementar → Administrar implementaciones → Editar →
  * Versión: Nueva versión → Implementar.
@@ -27,7 +28,7 @@ const PAG = { sheet: 'Pagos fijos', first: 6, last: 30 };                       
 const PRE = { sheet: 'Presupuesto', first: 6, last: 45 };                           // A categoría (fórmula), B monto
 const CAT = { sheet: 'Categorias', first: 5, last: 400 };                           // A sub, B categoría, C tipo; E gasto, G ingreso, K métodos, M ámbitos, O tipos de cuenta
 const NOT = { sheet: 'Notas', first: 6, last: 1005, idCol: 7, extra: 4 };          // A..F, G = ID de la app, H tipo, I hora, J color, K fijada
-const API_VERSION = 4;
+const API_VERSION = 5;
 const APP = { sheet: 'AppData' };                                                  // almacén genérico: Colección | ID | Datos (JSON) | Actualizado
 
 const TZ = 'America/El_Salvador';
@@ -42,6 +43,7 @@ function doPost(e) {
   try { body = JSON.parse(e.postData.contents); } catch (err) { return json_({ ok: false, error: 'Solicitud inválida' }); }
   const token = PropertiesService.getScriptProperties().getProperty('TOKEN');
   if (!token || body.token !== token) return json_({ ok: false, error: 'Código de acceso incorrecto' });
+  if (body.pull) return json_({ ok: true, items: pushPull_(String(body.pull)) });   // lo pide la app en el teléfono al recibir un aviso
 
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) return json_({ ok: false, error: 'La hoja está ocupada, intenta en unos segundos' });
@@ -417,13 +419,15 @@ function deliver_(cfg, channels, title, dg, force) {
     if (!to) throw new Error('Falta tu correo en Ajustes → Avisos');
     MailApp.sendEmail({ to: to, subject: 'Mis Finanzas · ' + title, htmlBody: mailWrap_(title, dg.html || '<p>Todo en orden. No tienes nada pendiente.</p>', cfg.appUrl || APP_URL_DEFAULT), name: 'Mis Finanzas' });
   }
-  if (channels.indexOf('phone') >= 0) {
-    if (!cfg.topic) { if (force) throw new Error('Falta el tema de ntfy en Ajustes → Avisos'); return; }
-    ntfy_(cfg, title, dg.text || 'Todo en orden. No tienes nada pendiente.', dg.urgent ? 'high' : 'default', dg.urgent ? ['warning'] : ['spiral_calendar']);
-  }
+  if (channels.indexOf('phone') >= 0) phone_(cfg, title, dg.text || 'Todo en orden. No tienes nada pendiente.', dg.urgent ? 'high' : 'default', dg.urgent ? ['warning'] : ['spiral_calendar'], force);
+}
+function phone_(cfg, title, body, prio, tags, force) {
+  const n = pushSend_(title, body, prio === 'high');
+  if (cfg.topic) ntfy_(cfg, title, body, prio, tags);
+  if (!n && !cfg.topic && force) throw new Error('Ningún teléfono tiene las notificaciones activadas. En el teléfono: Ajustes → Avisos → Activar en este teléfono.');
 }
 function deliverOne_(cfg, channels, title, body, prio, tags) {
-  if (channels.indexOf('phone') >= 0 && cfg.topic) ntfy_(cfg, title, body, prio, tags);
+  if (channels.indexOf('phone') >= 0) phone_(cfg, title, body, prio, tags, false);
   if (channels.indexOf('email') >= 0) { const to = cfg.email || Session.getEffectiveUser().getEmail(); if (to) MailApp.sendEmail({ to: to, subject: 'Recordatorio · ' + title, htmlBody: mailWrap_(title, '<p>' + esc_(body) + '</p>', cfg.appUrl || APP_URL_DEFAULT), name: 'Mis Finanzas' }); }
 }
 function ntfy_(cfg, title, message, priority, tags) {
@@ -514,3 +518,98 @@ function fechaLarga_(d) { const x = new Date(d + 'T12:00:00'); return DIAS_[x.ge
 function fechaCorta_(d) { const x = new Date(d + 'T12:00:00'); return x.getDate() + ' ' + MESES_[x.getMonth()].slice(0, 3); }
 function money_(n) { return (Math.round(n * 100) / 100).toFixed(2); }
 function esc_(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+
+// =====================================================================
+//  Notificaciones de la propia app (Web Push con firma VAPID, sin apps extra)
+//  La hoja guarda el aviso en una cola y "despierta" a la app del teléfono;
+//  la app pide el contenido aquí (pull) y lo muestra como notificación.
+// =====================================================================
+function readColl_(coll) {
+  const sh = appSheet_(SpreadsheetApp.getActive()), out = {};
+  if (sh.getLastRow() < 2) return out;
+  sh.getRange(2, 1, sh.getLastRow() - 1, 3).getValues().forEach(r => { if (r[0] === coll) { try { out[String(r[1])] = JSON.parse(r[2]); } catch (e) { } } });
+  return out;
+}
+function pushSend_(title, body, urgent) {
+  const subs = readColl_('pushsub'), vap = (readColl_('notif') || {}).vapid;
+  const ids = Object.keys(subs).filter(k => subs[k] && subs[k].endpoint && !subs[k].off);
+  if (!ids.length || !vap || !vap.d || !vap.pub) return 0;
+  const props = PropertiesService.getScriptProperties();
+  let q = []; try { q = JSON.parse(props.getProperty('PUSH_Q') || '[]'); } catch (e) { }
+  const now = Date.now();
+  q = q.filter(x => now - x.t < 2 * 864e5).slice(-30);
+  q.push({ id: Utilities.getUuid().slice(0, 8), t: now, title: String(title).slice(0, 120), body: String(body).slice(0, 1500), urgent: !!urgent });
+  props.setProperty('PUSH_Q', JSON.stringify(q));
+  let ok = 0;
+  ids.forEach(id => {
+    const sub = subs[id];
+    try {
+      const aud = (String(sub.endpoint).match(/^https?:\/\/[^/]+/) || [''])[0];
+      const jwt = vapidJwt_(aud, vap);
+      const res = UrlFetchApp.fetch(sub.endpoint, { method: 'post', muteHttpExceptions: true, headers: { TTL: '86400', Urgency: urgent ? 'high' : 'normal', Authorization: 'vapid t=' + jwt + ', k=' + vap.pub } });
+      const code = res.getResponseCode();
+      if (code === 404 || code === 410) { const sh = appSheet_(SpreadsheetApp.getActive()), r = findRec_(sh, 'pushsub', id); if (r) sh.deleteRow(r); }
+      else if (code < 300) ok++;
+      else Logger.log('Push ' + id + ' respondió ' + code + ': ' + res.getContentText().slice(0, 200));
+    } catch (e) { Logger.log('Push ' + id + ': ' + e); }
+  });
+  return ok;
+}
+function pushPull_(dev) {
+  const props = PropertiesService.getScriptProperties();
+  let q = []; try { q = JSON.parse(props.getProperty('PUSH_Q') || '[]'); } catch (e) { }
+  const key = 'PUSH_SEEN_' + dev.replace(/[^\w]/g, '').slice(0, 30), seen = Number(props.getProperty(key) || 0);
+  const items = q.filter(x => x.t > seen && Date.now() - x.t < 6 * 3600e3);
+  if (q.length) props.setProperty(key, String(Math.max(seen, q[q.length - 1].t)));
+  return items.slice(-5);
+}
+
+// ---------- Firma ES256 (curva P-256) para VAPID ----------
+let P256C_ = null;
+function bi_(n) { return BigInt(n); }
+function p256_() { return P256C_ || (P256C_ = {
+  p: BigInt('0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff'),
+  n: BigInt('0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551'),
+  gx: BigInt('0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296'),
+  gy: BigInt('0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5')
+}); }
+function vapidJwt_(aud, vap) {
+  const enc = o => b64u_(Utilities.newBlob(JSON.stringify(o)).getBytes());
+  const input = enc({ typ: 'JWT', alg: 'ES256' }) + '.' + enc({ aud: aud, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: 'mailto:' + (vap.mail || 'avisos@misfinanzas.app') });
+  return input + '.' + es256_(input, vap.d);
+}
+function es256_(msg, dB64u) {
+  const P = p256_(), d = bytesToBig_(b64uDecode_(dB64u));
+  const e = bytesToBig_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, msg, Utilities.Charset.UTF_8).map(b => b & 255));
+  for (let tries = 0; tries < 8; tries++) {
+    const seed = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, Utilities.getUuid() + Utilities.getUuid() + Date.now() + dB64u + msg + tries).map(b => b & 255);
+    const k = bytesToBig_(seed) % (P.n - bi_(1)) + bi_(1);
+    const R = ecMul_(k, [P.gx, P.gy]); if (!R) continue;
+    const r = R[0] % P.n; if (r === bi_(0)) continue;
+    const s = (modInv_(k, P.n) * (e + r * d)) % P.n; if (s === bi_(0)) continue;
+    return b64u_(bigToBytes_(r, 32).concat(bigToBytes_(s, 32)));
+  }
+  throw new Error('No se pudo firmar el aviso');
+}
+function mod_(a, m) { const r = a % m; return r < bi_(0) ? r + m : r; }
+function modInv_(a, m) { let [o, r] = [mod_(a, m), m], [x0, x1] = [bi_(1), bi_(0)]; while (r !== bi_(0)) { const q = o / r; [o, r] = [r, o - q * r]; [x0, x1] = [x1, x0 - q * x1]; } return mod_(x0, m); }
+// puntos en coordenadas jacobianas para que sea rápido
+function jDbl_(X, Y, Z) { const p = p256_().p; if (Y === bi_(0)) return [bi_(0), bi_(1), bi_(0)]; const YY = Y * Y % p, S = bi_(4) * X * YY % p, ZZ = Z * Z % p, M = bi_(3) * (X - ZZ) * (X + ZZ) % p; const X3 = mod_(M * M - bi_(2) * S, p); const Y3 = mod_(M * (S - X3) - bi_(8) * YY * YY, p); const Z3 = bi_(2) * Y * Z % p; return [X3, Y3, Z3]; }
+function jAdd_(A, B) {
+  const p = p256_().p; if (A[2] === bi_(0)) return B; if (B[2] === bi_(0)) return A;
+  const Z1Z1 = A[2] * A[2] % p, Z2Z2 = B[2] * B[2] % p, U1 = A[0] * Z2Z2 % p, U2 = B[0] * Z1Z1 % p, S1 = A[1] * B[2] * Z2Z2 % p, S2 = B[1] * A[2] * Z1Z1 % p;
+  if (U1 === U2) return S1 === S2 ? jDbl_(A[0], A[1], A[2]) : [bi_(0), bi_(1), bi_(0)];
+  const H = mod_(U2 - U1, p), R = mod_(S2 - S1, p), HH = H * H % p, HHH = H * HH % p, V = U1 * HH % p;
+  const X3 = mod_(R * R - HHH - bi_(2) * V, p), Y3 = mod_(R * (V - X3) - S1 * HHH, p), Z3 = A[2] * B[2] % p * H % p; return [X3, Y3, Z3];
+}
+function ecMul_(k, G) {
+  let R = [bi_(0), bi_(1), bi_(0)], Q = [G[0], G[1], bi_(1)];
+  while (k > bi_(0)) { if (k & bi_(1)) R = jAdd_(R, Q); Q = jDbl_(Q[0], Q[1], Q[2]); k >>= bi_(1); }
+  if (R[2] === bi_(0)) return null;
+  const p = p256_().p, zi = modInv_(R[2], p), zi2 = zi * zi % p; return [R[0] * zi2 % p, R[1] * zi2 % p * zi % p];
+}
+function bytesToBig_(b) { let x = bi_(0); for (let i = 0; i < b.length; i++) x = (x << bi_(8)) + BigInt(b[i] & 255); return x; }
+function bigToBytes_(x, n) { const out = []; for (let i = 0; i < n; i++) { out.unshift(Number(x & bi_(255))); x >>= bi_(8); } return out; }
+function b64u_(bytes) { return Utilities.base64EncodeWebSafe(bytes.map(b => b > 127 ? b - 256 : b)).replace(/=+$/, ''); }
+function b64uDecode_(s) { s = String(s).replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return Utilities.base64Decode(s).map(b => b & 255); }

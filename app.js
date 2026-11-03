@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '2.5.0';
+const VERSION = '2.6.0';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -2845,7 +2845,7 @@ Object.assign(ACT, { shopEdit: el => editShop(el.dataset.v ? Object.assign({ id:
 const NOTIF_CONTENT = [['agenda', 'Pendientes y agenda'], ['pagos', 'Pagos fijos'], ['veh', 'Moto y documentos'], ['dinero', 'Dinero del día']];
 const DAYS_L = [[1, 'L'], [2, 'M'], [3, 'M'], [4, 'J'], [5, 'V'], [6, 'S'], [7, 'D']];
 function notifDefaults() {
-  return { email: '', topic: 'mf-' + uid().slice(0, 10), server: 'https://ntfy.sh', appUrl: location.origin + location.pathname.replace(/index\.html$/, ''),
+  return { email: '', appUrl: location.origin + location.pathname.replace(/index\.html$/, ''),
     schedules: [{ id: 'a' + uid().slice(0, 6), name: 'Resumen de la mañana', time: '07:00', days: [1, 2, 3, 4, 5, 6, 7], channels: ['email', 'phone'], content: ['agenda', 'pagos', 'veh', 'dinero'], skipEmpty: false },
       { id: 'b' + uid().slice(0, 6), name: 'Cierre del día', time: '20:00', days: [1, 2, 3, 4, 5, 6, 7], channels: ['phone'], content: ['agenda', 'dinero'], skipEmpty: true }],
     exact: { on: true, channels: ['phone', 'email'], before: 15 } };
@@ -2854,16 +2854,16 @@ function notifCfg() { const c = (((S.data || {}).store || {}).notif || {}).cfg; 
 function notifCard() {
   const v = S.cfg.serverV || 0, saved = (((S.data || {}).store || {}).notif || {}).cfg;
   if (!S.cfg.url) return `<section class="card"><header><h2>Avisos y notificaciones</h2></header><p class="muted" style="margin:0">Conecta tu hoja primero: ella es la que manda los avisos aunque tengas la app cerrada.</p></section>`;
-  if (v < 4) return `<section class="card"><header><h2>Avisos y notificaciones</h2><span class="pill mid">Falta actualizar la hoja</span></header>
-    <p class="muted" style="margin:0 0 10px">Para mandarte correos y avisos al teléfono a la hora que programes, tu hoja necesita el conector v4 (tienes el v${v || '?'}). Es la última vez que lo pegas para esto.</p>
-    <ol class="steps"><li>Toca <b>Copiar código nuevo</b>.</li><li>En tu hoja: <b>Extensiones → Apps Script</b>. Borra todo el contenido de <b>Code.gs</b>, pega y guarda (💾).</li><li>Arriba, en la lista de funciones, elige <b>activarAvisos</b> y toca <b>Ejecutar</b>. Acepta los permisos (enviar correo, conectarse a internet, ejecutarse a horas programadas). Te llegará un correo de confirmación.</li><li><b>Implementar → Administrar implementaciones → ✏️ Editar → Versión: Nueva versión → Implementar.</b> La URL no cambia.</li><li>Vuelve aquí y toca <b>Ya lo hice</b>.</li></ol>
+  if (v < 5) return `<section class="card"><header><h2>Avisos y notificaciones</h2><span class="pill mid">Falta actualizar la hoja</span></header>
+    <p class="muted" style="margin:0 0 10px">Para mandarte correos y avisos al teléfono a la hora que programes, tu hoja necesita el conector v5 (tienes el v${v || '?'}). Es la última vez que lo pegas para esto.</p>
+    <ol class="steps"><li>Toca <b>Copiar código nuevo</b>.</li><li>En tu hoja: <b>Extensiones → Apps Script</b>. Borra todo el contenido de <b>Code.gs</b>, pega y guarda (💾).</li><li>Arriba, en la lista de funciones, elige <b>activarAvisos</b> y toca <b>Ejecutar</b>. Acepta los permisos (enviar correo, conectarse a internet, ejecutarse a horas programadas). Si Google dice “Google no verificó esta app”, toca <b>Configuración avanzada → Ir a (tu proyecto)</b>: es tu propio código. Te llegará un correo de confirmación.</li><li><b>Implementar → Administrar implementaciones → ✏️ Editar → Versión: Nueva versión → Implementar.</b> La URL no cambia.</li><li>Vuelve aquí y toca <b>Ya lo hice</b>.</li></ol>
     <div class="btns"><button class="btn pri" data-act="copyGs">Copiar código nuevo</button><button class="btn" data-act="syncNow">Ya lo hice</button><a class="btn" href="https://github.com/diego291/mis-finanzas/blob/main/apps-script/Code.gs" target="_blank" rel="noopener">Ver el código</a></div></section>`;
   const c = notifCfg() || notifDefaults(), isDraft = !!S.ui.notifDraft || !saved;
   const chk = (name, val, on, lab) => `<label class="nchk"><input type="checkbox" data-n="${name}" value="${val}" ${on ? 'checked' : ''}><span>${lab}</span></label>`;
   return `<section class="card notif" id="notifCard"><header><h2>Avisos y notificaciones</h2>${saved && !saved.off ? '<span class="pill ok">Activos</span>' : saved && saved.off ? '<span class="pill">Pausados</span>' : '<span class="pill mid">Sin configurar</span>'}</header>
-    <div class="two"><label class="field"><span>Correo donde te llegan</span><input id="nEmail" type="email" value="${esc(c.email || '')}" placeholder="Si lo dejas vacío, a tu Gmail de la hoja"></label>
-    <label class="field"><span>Tema de ntfy (tu canal privado)</span><div class="nrow"><input id="nTopic" value="${esc(c.topic || '')}" autocomplete="off" spellcheck="false"><button type="button" class="btn sm" data-act="ntfyCopy">Copiar</button></div></label></div>
-    <details class="nhelp" ${saved ? '' : 'open'}><summary>Cómo recibirlas en tu teléfono (2 minutos)</summary><ol class="steps"><li>Instala <b>ntfy</b> desde la Play Store o la App Store. Es gratis y no pide cuenta.</li><li>Ábrela, toca <b>+</b> y escribe exactamente el tema: <code>${esc(c.topic || '')}</code>.</li><li>Toca <b>Suscribirse</b> y luego <b>Probar teléfono</b> aquí abajo.</li></ol><p class="note" style="margin:0">El tema funciona como una contraseña: quien lo sepa puede ver tus avisos. No lo compartas.</p></details>
+    <div><label class="field"><span>Correo donde te llegan</span><input id="nEmail" type="email" value="${esc(c.email || '')}" placeholder="Si lo dejas vacío, a tu Gmail de la hoja"></label>
+    </div>
+    ${pushBlock()}
     <div class="nhead"><b>Horarios</b><button type="button" class="linkbtn" data-act="nAdd">+ Agregar horario</button></div>
     <div class="nscheds">${(c.schedules || []).map((sc, i) => `<div class="nsched ${sc.off ? 'off' : ''}" data-i="${i}">
       <div class="nrow"><input class="nname" value="${esc(sc.name || '')}" placeholder="Nombre"><input class="ntime" type="time" value="${esc(sc.time || '07:00')}"><label class="nsw" title="Activo"><input type="checkbox" class="non" ${sc.off ? '' : 'checked'}><span></span></label><button type="button" class="nx" data-act="nDel" data-v="${i}" aria-label="Quitar horario">×</button></div>
@@ -2879,7 +2879,7 @@ function notifCard() {
 }
 function readNotif() {
   const card = $('#notifCard'); const c = notifCfg() || notifDefaults(); if (!card) return c;
-  c.email = $('#nEmail').value.trim(); c.topic = $('#nTopic').value.trim().replace(/[^\w-]/g, '');
+  c.email = $('#nEmail').value.trim();
   c.appUrl = c.appUrl || location.origin + location.pathname.replace(/index\.html$/, '');
   c.schedules = [...card.querySelectorAll('.nsched[data-i]')].map(el => ({ id: (c.schedules[el.dataset.i] || {}).id || uid().slice(0, 7), name: el.querySelector('.nname').value.trim() || 'Resumen', time: el.querySelector('.ntime').value || '07:00', off: !el.querySelector('.non').checked,
     days: [...el.querySelectorAll('.ndays .on')].map(b => Number(b.dataset.d)), channels: [...el.querySelectorAll('[data-n=ch]:checked')].map(x => x.value), content: [...el.querySelectorAll('[data-n=ct]:checked')].map(x => x.value), skipEmpty: el.querySelector('.nskip').checked }));
@@ -2888,24 +2888,71 @@ function readNotif() {
 }
 function notifValid(c) {
   if (c.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(c.email)) return 'Revisa el correo.';
-  if (!c.topic || c.topic.length < 6) return 'El tema de ntfy debe tener al menos 6 letras o números.';
   const bad = c.schedules.find(s => !s.off && (!s.channels.length || !s.content.length || !s.days.length)); if (bad) return `“${bad.name}”: elige al menos un día, un destino y qué incluye.`;
   return '';
 }
 function notifSave(c, quiet) { recPut('notif', 'cfg', c); op('notif.install', {}); S.ui.notifDraft = null; if (!quiet) toast(c.off ? 'Avisos pausados' : 'Avisos guardados. Tu hoja ya los manda.'); }
 Object.assign(ACT, {
   copyGs: async () => { try { const t = await (await fetch('apps-script/Code.gs', { cache: 'no-store' })).text(); await navigator.clipboard.writeText(t); toast('Código copiado. Pégalo en Code.gs'); } catch (e) { toast('No pude copiarlo aquí. Usa “Ver el código” y cópialo de ahí.'); } },
-  ntfyCopy: () => { const t = $('#nTopic').value.trim(); navigator.clipboard?.writeText(t).then(() => toast('Tema copiado: ' + t), () => toast(t)); },
   nAdd: () => { const c = readNotif(); c.schedules.push({ id: uid().slice(0, 7), name: 'Nuevo aviso', time: '12:00', days: [1, 2, 3, 4, 5], channels: ['phone'], content: ['agenda'], skipEmpty: true }); S.ui.notifDraft = c; render(); },
   nDel: el => { const c = readNotif(); c.schedules.splice(Number(el.dataset.v), 1); S.ui.notifDraft = c; render(); },
   nSave: () => { const c = readNotif(); const e = notifValid(c); if (e) return toast(e); notifSave(c); },
   nPause: () => { const c = readNotif(); c.off = !c.off; notifSave(c); },
-  nTest: el => { const c = readNotif(); const e = notifValid(c); if (e) return toast(e); notifSave(c, true); op('notif.test', { channel: el.dataset.v, cfg: c }); toast(el.dataset.v === 'phone' ? 'Enviando prueba a ntfy… debe llegar en segundos' : 'Enviando prueba a tu correo…'); },
+  nTest: el => { const c = readNotif(); const e = notifValid(c); if (e) return toast(e); notifSave(c, true); op('notif.test', { channel: el.dataset.v, cfg: c }); toast(el.dataset.v === 'phone' ? 'Enviando prueba a tus teléfonos… llega en unos segundos' : 'Enviando prueba a tu correo…'); },
   nPend: () => { const c = readNotif(); const e = notifValid(c); if (e) return toast(e); notifSave(c, true); op('notif.send', { channels: ['email'], content: ['agenda'], all: true, cfg: c }); toast('Te mando tus pendientes al correo…'); }
 });
 document.addEventListener('click', e => { const b = e.target.closest('#notifCard .ndays button'); if (b) { b.classList.toggle('on'); S.ui.notifDraft = readNotif(); } });
 document.addEventListener('input', e => { if (e.target.closest && e.target.closest('#notifCard')) S.ui.notifDraft = readNotif(); });
 document.addEventListener('change', e => { if (e.target.closest && e.target.closest('#notifCard')) S.ui.notifDraft = readNotif(); });
+
+/* ---- notificaciones de la propia app en este teléfono (Web Push) ---- */
+const b64uToBytes = s => { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return Uint8Array.from(atob(s), c => c.charCodeAt(0)); };
+const bytesToB64u = b => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const devId = () => { try { let d = localStorage.getItem('mf.dev'); if (!d) { d = 'd' + uid(); localStorage.setItem('mf.dev', d); } return d; } catch (e) { return 'd' + uid(); } };
+const pushOk = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && location.protocol !== 'file:';
+function devName() { const u = navigator.userAgent; const m = u.match(/Android[^;)]*;\s*([^;)]+?)(?:\s+Build|\))/); return (m ? m[1].trim() : /iPhone/.test(u) ? 'iPhone' : /iPad/.test(u) ? 'iPad' : /Windows/.test(u) ? 'Computadora Windows' : /Mac/.test(u) ? 'Mac' : 'Este equipo') + (/Edg\//.test(u) ? ' · Edge' : /Chrome/.test(u) ? ' · Chrome' : /Firefox/.test(u) ? ' · Firefox' : /Safari/.test(u) ? ' · Safari' : ''); }
+function pushBlock() {
+  const subs = Object.entries(store('pushsub')).map(([id, x]) => Object.assign({ id }, x)), me = subs.find(x => x.id === devId());
+  const perm = 'Notification' in window ? Notification.permission : 'unsupported';
+  const state = !pushOk() ? 'Este navegador no permite notificaciones. Abre Mis Finanzas desde el ícono de la app instalada (o desde Chrome).' : perm === 'denied' ? 'Bloqueaste las notificaciones de Mis Finanzas. Actívalas en Ajustes del teléfono → Apps → Mis Finanzas (o Chrome) → Notificaciones, y vuelve aquí.' : me && perm === 'granted' ? 'Este equipo recibe tus avisos.' : 'Este equipo todavía no recibe avisos.';
+  return `<div class="pushbox"><div class="nrow"><span class="push-ic ${me && perm === 'granted' ? 'on' : ''}">${gsvg('phone')}</span><div style="flex:1;min-width:0"><b>Notificaciones en este teléfono</b><small class="muted" style="display:block">${state}</small></div>
+    ${pushOk() && perm !== 'denied' ? (me && perm === 'granted' ? `<button type="button" class="btn sm" data-act="pushOff">Desactivar</button>` : `<button type="button" class="btn sm pri" data-act="pushOn">Activar aquí</button>`) : ''}</div>
+    ${subs.length ? `<div class="pushdevs">${subs.map(x => `<div class="row2"><span>${esc(x.name || 'Equipo')}${x.id === devId() ? ' <span class="pill acc">este</span>' : ''}<small class="muted"> · desde ${dLabel(String(x.created ? new Date(x.created).toISOString().slice(0, 10) : today()))}</small></span><button type="button" class="linkbtn" data-act="pushRm" data-v="${x.id}">Quitar</button></div>`).join('')}</div>` : ''}
+    <p class="note" style="margin:0">Llegan como cualquier notificación de tu teléfono, con el ícono de Mis Finanzas, aunque tengas la app cerrada. Actívalo en cada teléfono donde los quieras.</p></div>`;
+}
+async function pushConf() { try { if (!S.cfg.url || !S.cfg.token) return; const c = await caches.open('mf-conf'); await c.put('conf', new Response(JSON.stringify({ url: S.cfg.url, token: S.cfg.token, dev: devId() }), { headers: { 'Content-Type': 'application/json' } })); } catch (e) { } }
+async function pushOn() {
+  if (!pushOk()) return toast('Este navegador no permite notificaciones');
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') { render(); return toast('Sin permiso no te puedo mandar avisos'); }
+  try {
+    let vap = store('notif').vapid;
+    if (!vap || !vap.d || !vap.pub) {
+      const kp = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+      const jwk = await crypto.subtle.exportKey('jwk', kp.privateKey), raw = await crypto.subtle.exportKey('raw', kp.publicKey);
+      vap = { d: jwk.d, pub: bytesToB64u(raw), mail: (readNotif() || {}).email || '' };
+      recPut('notif', 'vapid', vap);
+    }
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (sub && sub.options && sub.options.applicationServerKey && bytesToB64u(sub.options.applicationServerKey) !== vap.pub) { await sub.unsubscribe(); sub = null; }
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uToBytes(vap.pub) });
+    const j = sub.toJSON();
+    recPut('pushsub', devId(), { endpoint: j.endpoint, keys: j.keys, name: devName(), created: Date.now() });
+    await pushConf();
+    const c = readNotif(); if (!(((S.data.store || {}).notif || {}).cfg)) recPut('notif', 'cfg', c);
+    op('notif.install', {});
+    toast('Listo. Este teléfono ya recibe tus avisos. Toca “Probar teléfono”.');
+  } catch (e) { console.error(e); toast('No pude activarlas: ' + (e.message || e)); }
+  render();
+}
+async function pushOff(id) {
+  id = id || devId();
+  if (id === devId()) { try { const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); if (sub) await sub.unsubscribe(); } catch (e) { } }
+  op('rec.delete', { coll: 'pushsub', id }); toast('Ese equipo ya no recibe avisos');
+}
+Object.assign(ACT, { pushOn: () => pushOn(), pushOff: () => pushOff(), pushRm: el => pushOff(el.dataset.v) });
+pushConf();
 
 /* ---------------- Arranque ---------------- */
 load();

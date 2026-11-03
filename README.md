@@ -116,7 +116,7 @@ Sección **Vehículos** (y tarjeta en Inicio) para llevar cada vehículo por sep
 Se guarda en la hoja AppData (conector v3).
 - **Talleres y tiendas:** directorio con nombre, tipo, contacto, teléfono, WhatsApp, dirección, enlace de Maps, horario, especialidad y notas. Botones para llamar, escribir por WhatsApp y ver el mapa. Cada lugar muestra cuántas veces fuiste y cuánto has gastado ahí (servicios hechos ahí y piezas "compradas en").
 
-## Avisos por correo y al teléfono (conector v4)
+## Avisos por correo y al teléfono (conector v5)
 
 La hoja manda los avisos aunque tengas la app cerrada:
 
@@ -124,6 +124,6 @@ La hoja manda los avisos aunque tengas la app cerrada:
 2. En la hoja: **Extensiones → Apps Script**, reemplaza todo `Code.gs` y guarda.
 3. Elige la función **activarAvisos** y toca **Ejecutar**. Acepta los permisos (correo, internet, horarios). Llega un correo de confirmación.
 4. **Implementar → Administrar implementaciones → Editar → Nueva versión → Implementar**.
-5. Para el teléfono, instala la app **ntfy** y suscríbete al tema que aparece en Ajustes.
+5. En cada teléfono: abre la app instalada → **Ajustes → Avisos → Activar aquí** y acepta el permiso. Las notificaciones llegan de la propia app Mis Finanzas (Web Push firmado por la hoja), sin instalar nada más.
 
 En Ajustes programas horarios (hora, días, correo y/o teléfono, qué incluye) y el aviso a la hora de cada pendiente con hora. `desactivarAvisos` apaga todo desde la hoja.

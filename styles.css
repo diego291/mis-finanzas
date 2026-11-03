@@ -912,3 +912,7 @@ body[data-design="c"] .next-step b { color: var(--cta-bg); }
 .notif .two { grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); }
 .notif .field, .nrow { min-width: 0; }
 @media (max-width: 600px) { .nsched .nrow { flex-wrap: wrap; } .nsched .nrow .nname { flex-basis: calc(100% - 40px); } .nsched .nrow .nx { order: 0; } .nsched .nrow .ntime { flex: 1; } }
+.pushbox { display: grid; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--surface-2); }
+.push-ic { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--surface); color: var(--muted); flex: none; }
+.push-ic svg { width: 20px; height: 20px; } .push-ic.on { background: var(--accent-soft); color: var(--accent); }
+.pushdevs { display: grid; gap: 4px; font-size: .86rem; } .pushdevs .row2 { padding: 4px 0; border-top: 1px solid var(--line); }
