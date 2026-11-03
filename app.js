@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '2.8.2';
+const VERSION = '2.9.0';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -437,17 +437,50 @@ const VIEWS = [
   ['presupuesto', 'Presupuesto', 'Planear'], ['pagos', 'Pagos fijos'], ['deudas', 'Deudas'],
   ['estadisticas', 'Estadísticas', 'Analizar'], ['revision', 'Revisión'], ['ajustes', 'Ajustes', 'App']
 ];
-const PRIMARY = ['inicio', 'movimientos', 'agenda', 'metas'];
+const NAV_GROUPS = [
+  ['dia', 'Día a día', ['inicio', 'movimientos', 'cuentas', 'agenda', 'bloc']],
+  ['plan', 'Planear', ['presupuesto', 'metas', 'pagos', 'deudas']],
+  ['cosas', 'Mis cosas', ['vehiculos', 'mantenimientos']],
+  ['ana', 'Analizar', ['estados', 'estadisticas', 'revision']]
+];
+const FAV_DEFAULT = ['inicio', 'movimientos', 'agenda', 'metas'];
+const navName = k => (VIEWS.find(v => v[0] === k) || [k, k])[1];
+const navFavs = () => { const f = (S.cfg.favs || FAV_DEFAULT).filter(k => VIEWS.some(v => v[0] === k)); return f.length ? f.slice(0, 4) : FAV_DEFAULT; };
+const navClosed = () => { try { return JSON.parse(localStorage.getItem('mf.navClosed') || '[]'); } catch (e) { return []; } };
+function navBadges() {
+  const b = {}; if (!S.data) return b;
+  try { b.revision = checks().filter(c => c.sev !== 'info').length; } catch (e) { }
+  try { b.agenda = S.data.notes.filter(n => !isDone(n) && n.due && n.due <= today() && (kindOf(n) === 'pendiente' || kindOf(n) === 'evento')).length; } catch (e) { }
+  try { b.vehiculos = VEHS().flatMap(vAlerts).filter(a => a.sev === 'bad').length; } catch (e) { }
+  try { b.mantenimientos = mantNotifs().filter(a => a.sev === 'bad').length; } catch (e) { }
+  try { const ym = ymOf(today()); b.pagos = S.data.fixed.filter(f => f.freq === 'Mensual' && fixedStatus(f, ym).late).length; } catch (e) { }
+  return b;
+}
 function renderNav() {
-  const html = ['<div class="navbrand"><span class="mark">$</span><span>Mis Finanzas</span></div>'];
-  VIEWS.forEach(([k, name, grp], i) => {
-    if (grp) html.push(`<div class="grp">${grp}</div>`);
-    if (k === 'agenda') html.push('<span class="slot" aria-hidden="true"></span>');
-    const n = k === 'revision' && S.data ? checks().filter(c => c.sev !== 'info').length : 0;
-    html.push(`<a href="#${k}" data-v="${k}" class="${PRIMARY.includes(k) ? '' : 'sec'} ${S.ui.view === k ? 'on' : ''}">${svgI(k)}<span>${name}${n ? ` <span class="pill bad">${n}</span>` : ''}</span></a>`);
+  const B = navBadges(), closed = navClosed(), cur = S.ui.view;
+  const link = k => `<a href="#${k}" data-v="${k}" class="${cur === k ? 'on' : ''}" title="${esc(navName(k))}">${svgI(k)}<span class="nl">${navName(k)}</span>${B[k] ? `<span class="nb">${B[k]}</span>` : ''}</a>`;
+  const groups = NAV_GROUPS.map(([g, label, items]) => { const isClosed = closed.includes(g) && !items.includes(cur), n = sum(items, k => B[k] || 0); return `<div class="ngrp ${isClosed ? 'closed' : ''}" data-g="${g}"><button type="button" class="grp" data-act="navGrp" data-v="${g}" aria-expanded="${!isClosed}"><span>${label}</span>${isClosed && n ? `<span class="nb">${n}</span>` : ''}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button><div class="gitems">${items.map(link).join('')}</div></div>`; }).join('');
+  const favs = navFavs(), moreN = sum(Object.entries(B).filter(([k]) => !favs.includes(k)), e => e[1] || 0);
+  const mob = `<div class="mfavs">${favs.slice(0, 2).map(link).join('')}<span class="slot" aria-hidden="true"></span>${favs.slice(2, 4).map(link).join('')}<a href="#" class="more" data-act="more">${svgI('mas')}<span class="nl">Más</span>${moreN ? `<span class="nb">${moreN}</span>` : ''}</a></div>`;
+  $('#nav').innerHTML = `<div class="navbrand"><span class="mark">$</span><span>Mis Finanzas</span></div><div class="ngroups">${groups}</div><div class="nfoot">${link('ajustes')}</div>${mob}`;
+}
+function navLauncher() {
+  const favs = navFavs();
+  const tile = k => `<div class="lt ${S.ui.view === k ? 'on' : ''}" data-k="${k}" data-name="${esc(navName(k).toLowerCase())}"><a href="#${k}" data-act="close">${svgI(k)}<span>${navName(k)}</span></a><button type="button" class="lstar ${favs.includes(k) ? 'on' : ''}" data-fav="${k}" aria-label="${favs.includes(k) ? 'Quitar de' : 'Agregar a'} la barra">★</button></div>`;
+  openSheet('Todas las secciones', `<input class="ctl" id="lSearch" type="search" placeholder="Buscar sección…" autocomplete="off">
+    ${NAV_GROUPS.concat([['app', 'App', ['ajustes']]]).map(([g, label, items]) => `<div class="lgrp"><div class="lgh">${label}</div><div class="lgrid">${items.map(tile).join('')}</div></div>`).join('')}
+    <p class="note" style="margin:0">Toca ★ para elegir las 4 secciones de tu barra de abajo (tienes ${favs.length}).</p>`, () => { }, f => {
+    f.querySelector('#lSearch').addEventListener('input', e => { const q = e.target.value.trim().toLowerCase(); f.querySelectorAll('.lt').forEach(t => t.hidden = q && !t.dataset.name.includes(q)); f.querySelectorAll('.lgrp').forEach(g => g.hidden = ![...g.querySelectorAll('.lt')].some(t => !t.hidden)); });
+    f.addEventListener('click', e => {
+      const b = e.target.closest('[data-fav]'); if (!b) return; e.preventDefault();
+      let fv = navFavs().slice(); const k = b.dataset.fav;
+      if (fv.includes(k)) { if (fv.length <= 1) return toast('Deja al menos una'); fv = fv.filter(x => x !== k); }
+      else { if (fv.length >= 4) return toast('La barra tiene 4 lugares. Quita una ★ primero.'); fv.push(k); }
+      S.cfg.favs = fv; save(); renderNav();
+      f.querySelectorAll('[data-fav]').forEach(x => x.classList.toggle('on', fv.includes(x.dataset.fav)));
+      f.querySelector('.note').textContent = `Toca ★ para elegir las 4 secciones de tu barra de abajo (tienes ${fv.length}).`;
+    });
   });
-  html.push(`<a href="#" class="more" data-act="more">${svgI('mas')}<span>Más</span></a>`);
-  $('#nav').innerHTML = html.join('');
 }
 function go(v) { if (location.hash !== '#' + v) location.hash = v; else route(); }
 function route() {
@@ -2096,7 +2129,8 @@ const ACT = {
   go: el => go(el.dataset.v), syncNow: () => sync(true),
   disconnect: () => { S.cfg.url = ''; S.cfg.token = ''; save(); render(); toast('Hoja desconectada. Los datos siguen en este equipo.'); },
   startLocal: () => { S.data = normalize(emptyData()); save(); render(); },
-  more: () => openSheet('Secciones', `<div class="list">${VIEWS.map(([k, n]) => `<a class="item click" href="#${k}" data-act="close" style="text-decoration:none;color:inherit"><span class="ic">${svgI(k)}</span><div class="t"><b>${n}</b></div><span></span></a>`).join('')}</div>`, () => { }),
+  more: () => navLauncher(),
+  navGrp: el => { const g = el.dataset.v; let c = navClosed(); c = c.includes(g) ? c.filter(x => x !== g) : c.concat(g); try { localStorage.setItem('mf.navClosed', JSON.stringify(c)); } catch (e) { } renderNav(); },
   csv: () => { const L = filteredMovs(); const cols = ['date', 'type', 'acc', 'sub', 'cat', 'desc', 'amount', 'to', 'tag', 'scope', 'method', 'notes']; const head = ['Fecha', 'Tipo', 'Cuenta', 'Subcategoría', 'Categoría', 'Descripción', 'Monto', 'Cuenta destino', 'Meta / Deuda', 'Ámbito', 'Método', 'Notas']; download('movimientos.csv', '﻿' + [head, ...L.map(m => cols.map(c => c === 'cat' ? mcat(m) : m[c]))].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n'), 'text/csv'); },
   exportJson: () => download(`mis-finanzas-${today()}.json`, JSON.stringify({ app: 'Mis Finanzas', version: VERSION, exported: new Date().toISOString(), data: S.data, outbox: S.outbox }, null, 1), 'application/json'),
   copyJson: () => { const t = JSON.stringify({ data: S.data }); navigator.clipboard?.writeText(t).then(() => toast('Copia en el portapapeles'), () => toast('No se pudo copiar en este navegador')); },
