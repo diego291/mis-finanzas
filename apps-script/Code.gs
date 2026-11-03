@@ -649,6 +649,15 @@ function activarTodo() {
 /** Por si quieres forzar una actualización a mano. */
 function actualizarConector() { const r = autoActualizar_(true); Logger.log(r.error || r.msg); }
 
+function tokenScopes_() {
+  try { const r = UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?access_token=' + ScriptApp.getOAuthToken(), { muteHttpExceptions: true }); return r.getResponseCode() === 200 ? String(JSON.parse(r.getContentText()).scope || '') : null; } catch (e) { return null; }
+}
+/** Muestra en el registro qué permisos tiene la hoja y si la API responde. */
+function diagnostico() {
+  Logger.log('Permisos concedidos: ' + (tokenScopes_() || '(no se pudo leer)').split(' ').map(x => x.replace('https://www.googleapis.com/auth/', '')).join(', '));
+  const r = UrlFetchApp.fetch('https://script.googleapis.com/v1/projects/' + ScriptApp.getScriptId() + '/content', { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
+  Logger.log('API de Apps Script respondió ' + r.getResponseCode() + (r.getResponseCode() === 200 ? ' (todo bien)' : ': ' + r.getContentText().slice(0, 400)));
+}
 function autoActualizar_(force) {
   const props = PropertiesService.getScriptProperties();
   if (!force && Date.now() - Number(props.getProperty('UPD_LAST') || 0) < 55 * 60e3) return { msg: 'Revisado hace poco' };
@@ -660,8 +669,14 @@ function autoActualizar_(force) {
     const code = r.getResponseCode(), txt = r.getContentText();
     if (code >= 300) {
       if (/has not (been used|enabled)|SERVICE_DISABLED|User has not enabled the Apps Script API/i.test(txt)) throw new Error('Activa la API de Google Apps Script en https://script.google.com/home/usersettings y vuelve a intentar.');
-      if (code === 403) throw new Error('Faltan permisos: pega también el appsscript.json y ejecuta activarTodo para aceptarlos.');
-      throw new Error('Google respondió ' + code + ': ' + txt.slice(0, 200));
+      let gmsg = ''; try { gmsg = (JSON.parse(txt).error || {}).message || ''; } catch (e) { gmsg = txt.slice(0, 200); }
+      if (code === 403 || code === 401) {
+        const need = ['script.projects', 'script.deployments'], got = tokenScopes_();
+        const miss = got ? need.filter(x => got.indexOf('/auth/' + x) < 0) : [];
+        if (miss.length) throw new Error('Google no te pidió los permisos nuevos (faltan: ' + miss.join(', ') + '). Revisa que appsscript.json esté guardado (💾) con la lista "oauthScopes" y vuelve a ejecutar activarTodo: debe salir la ventana de permisos.');
+        throw new Error('Google no dejó modificar el proyecto (' + code + '): ' + gmsg + ' → Revisa que la API de Google Apps Script esté encendida en https://script.google.com/home/usersettings (puede tardar 2-3 minutos en activarse) y vuelve a ejecutar activarTodo.');
+      }
+      throw new Error('Google respondió ' + code + ': ' + gmsg);
     }
     return txt ? JSON.parse(txt) : {};
   };
