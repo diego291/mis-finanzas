@@ -1189,3 +1189,9 @@ body[data-design="c"] .next-step b { color: var(--cta-bg); }
 .home-cards > * { break-inside: avoid; margin-bottom: var(--gap); width: 100%; }
 .today-card .agp-sec { display: grid; gap: 1px; }
 .agp-more { justify-self: start; font-size: .8rem; padding: 4px 6px; }
+
+/* Registro: saldo sutil en cada cuenta */
+.accchip .acc-bal { font-family: var(--f-num); font-size: .72rem; font-weight: 500; color: var(--muted); opacity: .8; margin-left: 2px; transition: color .2s; }
+.accchip .acc-bal.neg { color: #ffb4a8; }
+.accchip .acc-bal.down { color: #ffb4a8; opacity: 1; }
+.accchip .acc-bal.up { color: var(--accent); opacity: 1; }

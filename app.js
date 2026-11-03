@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '3.0.6';
+const VERSION = '3.0.7';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -1899,7 +1899,12 @@ function editMov(m, preset, opts = {}) {
     if (st.type.includes('meta') && !st.goal) return 'Elige la meta';
     return '';
   };
-  const chipRow = (list, cur, act) => `<div class="reg-chips">${list.map(n => { const ac = act === 'acc' || act === 'to'; return `<button type="button" class="rchip ${ac ? 'accchip' : ''} ${n === cur ? 'on' : ''}" data-r="${act}" data-v="${esc(n)}" ${ac ? `style="--ac:${accStyle(n).color}"` : ''}>${ac ? accBadge(n, 'sm') : ''}${esc(n)}</button>`; }).join('')}</div>`;
+  const baseBal = (() => { const b = balances(); if (m) { const A = m.amount || 0, f = { 'Ingreso': -1, 'Gasto': 1, 'Transferencia': 1, 'Aporte a meta': 1, 'Retiro de meta': -1 }[m.type] || 0; b[m.acc] = (b[m.acc] || 0) + f * A; if (m.type === 'Transferencia' && m.to) b[m.to] = (b[m.to] || 0) - A; } return b; })();
+  const balNow = () => { const b = Object.assign({}, baseBal), A = r2(calc(st.amt) || 0); if (!(A > 0) || !st.acc) return b;
+    const f = { 'Ingreso': 1, 'Gasto': -1, 'Transferencia': -1, 'Aporte a meta': -1, 'Retiro de meta': 1 }[st.type] || 0; b[st.acc] = (b[st.acc] || 0) + f * A;
+    if (st.type === 'Transferencia' && st.to && st.to !== st.acc) b[st.to] = (b[st.to] || 0) + A; return b; };
+  const chipRow = (list, cur, act) => { const bn = balNow(); return `<div class="reg-chips">${list.map(n => { const ac = act === 'acc' || act === 'to'; const v = r2(bn[n] || 0), d = r2(v - (baseBal[n] || 0));
+    return `<button type="button" class="rchip ${ac ? 'accchip' : ''} ${n === cur ? 'on' : ''}" data-r="${act}" data-v="${esc(n)}" ${ac ? `style="--ac:${accStyle(n).color}"` : ''}>${ac ? accBadge(n, 'sm') : ''}${esc(n)}${ac ? `<small class="acc-bal ${v < 0 ? 'neg' : ''} ${d ? (d < 0 ? 'down' : 'up') : ''}" title="${d ? 'Antes ' + money(baseBal[n] || 0) : 'Saldo actual'}">${money(v)}</small>` : ''}</button>`; }).join('')}</div>`; };
   const paint = () => {
     const n = r2(calc(st.amt) || 0), k = kind(), err = valid(), ex = isExpr(st.amt);
     const sign = st.type === 'Gasto' || st.type === 'Aporte a meta' ? '−' : st.type === 'Ingreso' || st.type === 'Retiro de meta' ? '+' : '';
@@ -1908,7 +1913,6 @@ function editMov(m, preset, opts = {}) {
       return `<div class="reg-tiles">${subs.map(s => `<button type="button" class="rtile ${s === st.sub ? 'on' : ''}" data-r="sub" data-v="${esc(s)}" title="${esc(s)}">${gsvg(glyphFor(s, catOf(s)))}<span>${esc(s.replace(/\s*\(.*\)/, ''))}</span></button>`).join('')}<button type="button" class="rtile" data-r="allCats">${gsvg('dots')}<span>Más</span></button></div>
       ${st.allCats ? `<label class="field"><span>Todas las subcategorías</span><select id="rSub">${subOptions(st.type, st.sub)}</select></label>` : ''}`;
     })() : '';
-    const freq = isNew && (st.type === 'Gasto' || st.type === 'Ingreso') ? frequent().filter(f => f[0] === st.type).slice(0, 5) : [];
     body.innerHTML = `
       <div class="seg reg-type">${typeTabs.map(([t, l]) => `<button type="button" data-r="type" data-v="${t}" class="${(l === k) ? 'on' : ''}">${l}</button>`).join('')}</div>
       ${k === 'Meta' ? `<div class="seg reg-type sm">${[['Aporte a meta', 'Aportar'], ['Retiro de meta', 'Retirar']].map(([t, l]) => `<button type="button" data-r="type" data-v="${t}" class="${st.type === t ? 'on' : ''}">${l}</button>`).join('')}</div>` : ''}
@@ -1918,7 +1922,6 @@ function editMov(m, preset, opts = {}) {
       ${st.type === 'Transferencia' ? `<div class="reg-lab">Va a</div>${chipRow(accOrder().filter(a => a !== st.acc), st.to, 'to')}` : ''}
       ${st.type.includes('meta') ? `<div class="reg-lab">Meta</div>${chipRow(D.goals.map(g => g.name), st.goal, 'goal')}` : ''}
       ${budgetNote()}
-      ${freq.length ? `<div class="reg-chips">${freq.map((f, i) => `<button type="button" class="rchip dash" data-r="freq" data-v="${i}">${esc(f[3] || f[1])}</button>`).join('')}</div>` : ''}
       ${tiles}
       <div class="reg-chips">${[['Hoy', today()], ['Ayer', (() => { const d = new Date(); d.setDate(d.getDate() - 1); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; })()]].map(([l, v]) => `<button type="button" class="rchip ${st.date === v ? 'on' : ''}" data-r="date" data-v="${v}">${l}</button>`).join('')}<label class="rchip date ${st.date !== today() ? 'on' : ''}"><input type="date" id="rDate" value="${st.date}" aria-label="Fecha"></label></div>
       ${canPhoto ? `<div class="reg-photos">${st.imgs.map((x, i) => `<span class="sim"><img ${x.url ? `src="${x.url}"` : `data-img="${x.id}"`} alt="Foto ${i + 1}" data-r="imgView" data-v="${i}"><button type="button" data-r="imgRm" data-v="${i}" aria-label="Quitar foto">×</button></span>`).join('')}<label class="rchip pbtn">${CAM_I}Tomar foto<input type="file" accept="image/*" capture="environment" id="rCam" hidden></label><label class="rchip pbtn">${GAL_I}${st.imgs.length ? 'Otra' : 'Foto de galería'}<input type="file" accept="image/*" multiple id="rGal" hidden></label></div>` : ''}
