@@ -827,3 +827,12 @@ body[data-design="c"] .next-step b { color: var(--cta-bg); }
 .veh-hero, .veh-kpis { min-width: 0; }
 @media (max-width: 600px) { .veh-kpis { grid-template-columns: 1fr 1fr; } .veh-kpis .kpi:first-child { grid-column: 1 / -1; } }
 .veh-hero, .veh-col, .side-card { grid-template-columns: minmax(0, 1fr); }
+
+/* fotos en registros */
+.reg-photos { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.reg-photos .sim { width: 64px; height: 64px; }
+.rchip.pbtn, .pbtns .btn { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.rchip.pbtn svg, .pbtns .btn svg { width: 16px; height: 16px; flex: none; }
+.pbtns { display: flex; gap: 8px; flex-wrap: wrap; }
+.mi-cam { display: inline-flex; vertical-align: -2px; margin-right: 5px; color: var(--accent); }
+.mi-cam svg { width: 14px; height: 14px; }

@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '2.1.1';
+const VERSION = '2.2.0';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -94,6 +94,7 @@ const ICON = {
   vehiculos: '<circle cx="5.5" cy="16.5" r="3.5"/><circle cx="18.5" cy="16.5" r="3.5"/><path d="M5.5 16.5l4-6h5l4 6M9.5 10.5L8 7H5.5M14.5 10.5l2-3.5H19"/>',
   mas: '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>'
 };
+const CAM_I = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>', GAL_I = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>';
 const svgI = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICON[k]}</svg>`;
 
 /* ---------------- Estado ---------------- */
@@ -559,7 +560,7 @@ function movItem(m) {
   const c0 = mcat(m) || m.type, ws = c0.split(/[\s/]+/).filter(w => w.length > 2), ini = (ws.length > 1 ? ws[0][0] + ws[1][0] : c0.slice(0, 2)).toUpperCase();
   const ab = m.type === 'Transferencia' ? '⇄' : m.type.includes('meta') ? 'ME' : ini;
   const sub = m.type === 'Transferencia' ? `${m.acc} → ${m.to || '¿?'}` : m.type.includes('meta') ? `${m.type} · ${m.tag || m.goal}` : `${m.sub || 'Sin subcategoría'} · ${m.acc}`;
-  return `<div class="item click" data-act="editMov" data-id="${esc(m.id)}"><span class="ic ${k}">${ab}</span><div class="t"><b>${esc(m.desc || m.sub || m.type)}</b><small>${esc(sub)}${m.scope && m.scope !== 'Personal' ? ' · ' + esc(m.scope) : ''}</small></div><span class="amt ${sign > 0 ? 'pos' : ''}">${sign > 0 ? '+' : sign < 0 ? '−' : ''}${money(m.amount).replace('−', '')}</span></div>`;
+  return `<div class="item click" data-act="editMov" data-id="${esc(m.id)}"><span class="ic ${k}">${ab}</span><div class="t"><b>${movImgs(m.id).length ? `<span class="mi-cam" title="Tiene foto">${CAM_I}</span>` : ''}${esc(m.desc || m.sub || m.type)}</b><small>${esc(sub)}${m.scope && m.scope !== 'Personal' ? ' · ' + esc(m.scope) : ''}</small></div><span class="amt ${sign > 0 ? 'pos' : ''}">${sign > 0 ? '+' : sign < 0 ? '−' : ''}${money(m.amount).replace('−', '')}</span></div>`;
 }
 
 /* ---- Libreta: cuentas, días y pestañas de periodo ---- */
@@ -1757,10 +1758,20 @@ function parseQuick(t) {
   }
   return out;
 }
+/* fotos de los movimientos: se guardan en la hoja AppData (colección movimg) */
+function saveMovImgs(id, before, after) {
+  const keep = after.filter(x => x.id), added = after.filter(x => x.url).map(x => storeImage(x.url));
+  before.filter(x => !keep.some(y => y.id === x.id)).forEach(x => { blobDel('img', x.id, x.n); IDB.del(x.id); IMG.delete(x.id); });
+  const list = keep.concat(added);
+  if (list.length) recPut('movimg', id, { imgs: list }); else if (before.length) opq('rec.delete', { coll: 'movimg', id });
+}
+const movImgs = id => ((((S.data || {}).store || {}).movimg || {})[id] || {}).imgs || [];
 function editMov(m, preset, opts = {}) {
   const isNew = !m, D = S.data;
   const st = Object.assign({ id: uid(), date: S.ui.ym === ymOf(today()) ? today() : S.ui.ym + '-01', type: 'Gasto', acc: accOrder()[0] || '', to: '', sub: '', desc: '', amt: '', goal: '', debt: '', scope: 'Personal', method: '', notes: '', more: false, allCats: false }, m ? Object.assign({}, m, { amt: String(m.amount || '') }) : {}, preset ? Object.assign({}, preset, preset.amount != null ? { amt: String(preset.amount) } : {}) : {});
   if (st.tag && !st.goal && !st.debt) { if (st.type === 'Gasto') st.debt = st.tag; else st.goal = st.tag; }
+  let origImgs = (((S.data.store || {}).movimg || {})[st.id] || {}).imgs || []; st.imgs = origImgs.slice();
+  const canPhoto = !(S.cfg.url && S.cfg.serverV && S.cfg.serverV < 3);
   const kind = () => st.type.includes('meta') ? 'Meta' : st.type === 'Transferencia' ? 'Mover' : st.type;
   const typeTabs = [['Gasto', 'Gasto'], ['Ingreso', 'Ingreso'], ['Transferencia', 'Mover'], ['Aporte a meta', 'Meta']];
   $('#sheet').innerHTML = `<header><h2>${isNew ? 'Registrar' : 'Editar movimiento'}</h2><button type="button" class="x" data-act="close" aria-label="Cerrar">×</button></header>
@@ -1811,6 +1822,7 @@ function editMov(m, preset, opts = {}) {
       ${freq.length ? `<div class="reg-chips">${freq.map((f, i) => `<button type="button" class="rchip dash" data-r="freq" data-v="${i}">${esc(f[3] || f[1])}</button>`).join('')}</div>` : ''}
       ${tiles}
       <div class="reg-chips">${[['Hoy', today()], ['Ayer', (() => { const d = new Date(); d.setDate(d.getDate() - 1); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; })()]].map(([l, v]) => `<button type="button" class="rchip ${st.date === v ? 'on' : ''}" data-r="date" data-v="${v}">${l}</button>`).join('')}<label class="rchip date ${st.date !== today() ? 'on' : ''}"><input type="date" id="rDate" value="${st.date}" aria-label="Fecha"></label></div>
+      ${canPhoto ? `<div class="reg-photos">${st.imgs.map((x, i) => `<span class="sim"><img ${x.url ? `src="${x.url}"` : `data-img="${x.id}"`} alt="Foto ${i + 1}" data-r="imgView" data-v="${i}"><button type="button" data-r="imgRm" data-v="${i}" aria-label="Quitar foto">×</button></span>`).join('')}<label class="rchip pbtn">${CAM_I}Tomar foto<input type="file" accept="image/*" capture="environment" id="rCam" hidden></label><label class="rchip pbtn">${GAL_I}${st.imgs.length ? 'Otra' : 'Foto de galería'}<input type="file" accept="image/*" multiple id="rGal" hidden></label></div>` : ''}
       <button type="button" class="reg-more" data-r="more">${st.more ? 'Menos detalles' : 'Descripción, notas y más'}</button>
       ${st.more ? `<div class="form">
         <label class="field"><span>Descripción</span><input id="rDesc" value="${esc(st.desc)}" placeholder="Gasolina para la semana"></label>
@@ -1821,12 +1833,14 @@ function editMov(m, preset, opts = {}) {
       ${ex && isFinite(calc(st.amt)) ? `<button type="button" class="rchip" data-r="key" data-v="=" style="justify-self:center">= ${money(n)} · usar resultado</button>` : ''}
       <button type="button" class="reg-save ${err ? 'off' : ''}" data-r="save">${err || (isNew ? 'Guardar ' : 'Guardar cambios · ') + sign + money(n).replace('−', '')}</button>
       ${isNew ? '' : `<div class="btns" style="justify-content:center"><button type="button" class="btn sm" data-r="dup">Duplicar</button><button type="button" class="btn sm danger" data-r="del">Eliminar</button></div><div id="delConfirm" hidden class="alert bad"><span></span><div><b>¿Eliminar este movimiento?</b><p>Se borra también de tu hoja.</p></div><div class="acts"><button type="button" class="btn sm danger" data-r="delYes">Eliminar</button></div></div>`}`;
+    hydrateImgs(body);
   };
   const readMore = () => { if (!st.more) return; st.desc = $('#rDesc')?.value.trim() ?? st.desc; st.scope = $('#rScope')?.value || st.scope; st.method = $('#rMethod')?.value ?? st.method; st.debt = $('#rDebt')?.value ?? st.debt; st.notes = $('#rNotes')?.value.trim() ?? st.notes; };
   const save = () => {
     readMore(); if (valid()) return;
     const t = st.type;
     const rec = { id: st.id, date: st.date || today(), type: t, acc: st.acc, to: t === 'Transferencia' ? st.to : '', sub: t === 'Gasto' || t === 'Ingreso' ? st.sub : '', desc: st.desc || (t === 'Gasto' || t === 'Ingreso' ? st.sub : t === 'Transferencia' ? 'A ' + st.to : st.goal), amount: r2(calc(st.amt)), goal: t.includes('meta') ? st.goal : '', debt: t === 'Gasto' ? st.debt : '', scope: st.scope || 'Personal', method: st.method, notes: st.notes };
+    saveMovImgs(rec.id, origImgs, st.imgs); origImgs = []; st.imgs = [];
     op('mov.upsert', rec);
     if (opts.after) opts.after(rec);
     if (!isNew) { closeSheet(); toast('Cambios guardados'); return; }
@@ -1857,13 +1871,19 @@ function editMov(m, preset, opts = {}) {
       st.amt = a;
     }
     else if (r === 'save') return save();
+    else if (r === 'imgRm') { st.imgs.splice(Number(v), 1); }
+    else if (r === 'imgView') { const x = st.imgs[Number(v)]; const src = x && (x.url || IMG.get(x.id) || b.src); if (src) viewPhoto(src); return; }
     else if (r === 'again') { Object.assign(st, { id: uid(), amt: '', sub: '', desc: '', notes: '', to: '', goal: '', debt: '', date: today() }); }
     else if (r === 'dup') { closeSheet(); return editMov(null, Object.assign({}, m, { id: uid(), date: today() })); }
     else if (r === 'del') { $('#delConfirm').hidden = false; return; }
-    else if (r === 'delYes') { op('mov.delete', { id: st.id }); closeSheet(); toast('Movimiento eliminado'); return; }
+    else if (r === 'delYes') { saveMovImgs(st.id, origImgs, []); op('mov.delete', { id: st.id }); closeSheet(); toast('Movimiento eliminado'); return; }
     paint();
   };
-  body.onchange = e => {
+  body.onchange = async e => {
+    if ((e.target.id === 'rCam' || e.target.id === 'rGal') && e.target.files.length) {
+      readMore(); for (const f of e.target.files) { try { st.imgs.push({ url: await compressImage(f, 1400, .7) }); } catch (er) { toast('No pude leer esa foto'); } }
+      e.target.value = ''; paint(); return;
+    }
     if (e.target.id === 'rSub') { st.sub = e.target.value; st.allCats = false; readMore(); paint(); }
     if (e.target.id === 'rDate' && e.target.value) { st.date = e.target.value; readMore(); paint(); }
   };
@@ -2587,7 +2607,13 @@ function bindPhotos(f, inSel, boxSel, list) {
   const box = f.querySelector(boxSel);
   const draw = () => { box.innerHTML = list.map((x, i) => `<span class="sim"><img data-img="${x.id}" alt="Foto ${i + 1}"><button type="button" data-rm="${i}" aria-label="Quitar foto">×</button></span>`).join(''); hydrateImgs(box); };
   box.addEventListener('click', e => { const b = e.target.closest('[data-rm]'); if (b) { list.splice(Number(b.dataset.rm), 1); draw(); return; } const im = e.target.closest('img'); if (im && im.src) viewPhoto(im.src); });
-  f.querySelector(inSel).addEventListener('change', async e => { for (const file of e.target.files) { try { const url = await compressImage(file, 1400, .7); list.push(storeImage(url)); } catch (er) { toast('No pude leer esa imagen'); } } e.target.value = ''; draw(); });
+  const inp = f.querySelector(inSel); inp.hidden = true;
+  const cam = document.createElement('input'); cam.type = 'file'; cam.accept = 'image/*'; cam.setAttribute('capture', 'environment'); cam.hidden = true;
+  const btns = document.createElement('div'); btns.className = 'pbtns';
+  btns.innerHTML = `<button type="button" class="btn sm" data-p="cam">${CAM_I}Tomar foto</button><button type="button" class="btn sm" data-p="gal">${GAL_I}Galería</button>`;
+  inp.after(btns, cam); btns.onclick = e => { const b = e.target.closest('[data-p]'); if (b) (b.dataset.p === 'cam' ? cam : inp).click(); };
+  cam.addEventListener('change', e => inp.dispatchEvent(Object.assign(new Event('change'), { _files: e.target.files, _src: e.target })));
+  f.querySelector(inSel).addEventListener('change', async e => { const src = e._src || e.target; for (const file of [...(e._files || e.target.files)]) { try { const url = await compressImage(file, 1400, .7); list.push(storeImage(url)); } catch (er) { toast('No pude leer esa imagen'); } } src.value = ''; draw(); });
   draw();
 }
 function viewPhoto(src) { const d = document.createElement('div'); d.className = 'photo-view'; d.innerHTML = `<img src="${src}" alt="Foto"><button type="button" aria-label="Cerrar">×</button>`; d.onclick = () => d.remove(); document.body.appendChild(d); }
