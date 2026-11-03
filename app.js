@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '2.4.0';
+const VERSION = '2.5.0';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -1700,6 +1700,7 @@ function vAjustes() {
     <div class="btns"><button class="btn pri" type="submit">${c.url ? 'Guardar y sincronizar' : 'Conectar'}</button>${c.url ? '<button class="btn" type="button" data-act="syncNow">Sincronizar ahora</button><button class="btn danger" type="button" data-act="disconnect">Desconectar</button>' : ''}</div></form>
     ${c.url && c.serverV && c.serverV < 3 ? `<div class="alert" style="margin-top:12px"><span></span><div><b>Actualiza el conector de tu hoja (una sola vez)</b><p>Tu hoja tiene el conector v${c.serverV}. Con la versión 3 la agenda completa y tus ajustes se respaldan y se comparten entre tus equipos, y las mejoras futuras ya no necesitarán este paso.</p></div><div class="acts"><a class="btn sm" href="https://github.com/diego291/mis-finanzas/blob/main/apps-script/Code.gs" target="_blank" rel="noopener">Ver código</a></div></div>` : c.url && c.serverV >= 3 ? '<p class="muted" style="font-size:.82rem;margin:12px 0 0">Conector v3: tus ajustes se comparten entre tus equipos.</p>' : ''}
     <p class="muted" style="font-size:.82rem;margin:12px 0 0">La hoja es la fuente de verdad: lo que cambies directo en Sheets también aparece aquí. ${S.outbox.length ? `<b>${S.outbox.length} cambio(s) esperan para enviarse.</b>` : ''}</p></section>
+  ${notifCard()}
   <section class="card"><header><h2>Personal y análisis</h2></header><form class="form" id="anaForm"><label class="field"><span>Tu nombre (para el saludo)</span><input id="aName" value="${esc(c.name)}" placeholder="Diego"></label><label class="field"><span>Meses de gastos para el fondo de emergencia</span><input id="aEm" type="number" min="1" max="12" value="${c.emergencyMonths}"></label>
     <div class="field"><span>Categorías que cuentan como necesidad (regla 50/30/20)</span><div class="chips" style="flex-wrap:wrap">${S.data.lists.expenseCats.map(k => `<label class="chip" style="border-style:solid;${c.needs.includes(k) ? 'color:var(--accent);border-color:var(--accent)' : ''}"><input type="checkbox" name="need" value="${esc(k)}" ${c.needs.includes(k) ? 'checked' : ''} style="margin-right:5px">${esc(k)}</label>`).join('')}</div></div><div><button class="btn" type="submit">Guardar</button></div></form></section>
   <section class="card"><header><h2>Sobre semanal de efectivo</h2>${c.envelope && c.envelope.on ? '<span class="pill ok">Activo</span>' : ''}</header><form class="form" id="envForm">
@@ -2839,6 +2840,72 @@ function viewShop(id) {
   });
 }
 Object.assign(ACT, { shopEdit: el => editShop(el.dataset.v ? Object.assign({ id: el.dataset.v }, store('vshop')[el.dataset.v]) : null), shopView: el => viewShop(el.dataset.v) });
+
+/* ---------------- Avisos programados: correo + teléfono (ntfy), los envía la hoja (conector v4) ---------------- */
+const NOTIF_CONTENT = [['agenda', 'Pendientes y agenda'], ['pagos', 'Pagos fijos'], ['veh', 'Moto y documentos'], ['dinero', 'Dinero del día']];
+const DAYS_L = [[1, 'L'], [2, 'M'], [3, 'M'], [4, 'J'], [5, 'V'], [6, 'S'], [7, 'D']];
+function notifDefaults() {
+  return { email: '', topic: 'mf-' + uid().slice(0, 10), server: 'https://ntfy.sh', appUrl: location.origin + location.pathname.replace(/index\.html$/, ''),
+    schedules: [{ id: 'a' + uid().slice(0, 6), name: 'Resumen de la mañana', time: '07:00', days: [1, 2, 3, 4, 5, 6, 7], channels: ['email', 'phone'], content: ['agenda', 'pagos', 'veh', 'dinero'], skipEmpty: false },
+      { id: 'b' + uid().slice(0, 6), name: 'Cierre del día', time: '20:00', days: [1, 2, 3, 4, 5, 6, 7], channels: ['phone'], content: ['agenda', 'dinero'], skipEmpty: true }],
+    exact: { on: true, channels: ['phone', 'email'], before: 15 } };
+}
+function notifCfg() { const c = (((S.data || {}).store || {}).notif || {}).cfg; return S.ui.notifDraft || (c ? JSON.parse(JSON.stringify(c)) : null); }
+function notifCard() {
+  const v = S.cfg.serverV || 0, saved = (((S.data || {}).store || {}).notif || {}).cfg;
+  if (!S.cfg.url) return `<section class="card"><header><h2>Avisos y notificaciones</h2></header><p class="muted" style="margin:0">Conecta tu hoja primero: ella es la que manda los avisos aunque tengas la app cerrada.</p></section>`;
+  if (v < 4) return `<section class="card"><header><h2>Avisos y notificaciones</h2><span class="pill mid">Falta actualizar la hoja</span></header>
+    <p class="muted" style="margin:0 0 10px">Para mandarte correos y avisos al teléfono a la hora que programes, tu hoja necesita el conector v4 (tienes el v${v || '?'}). Es la última vez que lo pegas para esto.</p>
+    <ol class="steps"><li>Toca <b>Copiar código nuevo</b>.</li><li>En tu hoja: <b>Extensiones → Apps Script</b>. Borra todo el contenido de <b>Code.gs</b>, pega y guarda (💾).</li><li>Arriba, en la lista de funciones, elige <b>activarAvisos</b> y toca <b>Ejecutar</b>. Acepta los permisos (enviar correo, conectarse a internet, ejecutarse a horas programadas). Te llegará un correo de confirmación.</li><li><b>Implementar → Administrar implementaciones → ✏️ Editar → Versión: Nueva versión → Implementar.</b> La URL no cambia.</li><li>Vuelve aquí y toca <b>Ya lo hice</b>.</li></ol>
+    <div class="btns"><button class="btn pri" data-act="copyGs">Copiar código nuevo</button><button class="btn" data-act="syncNow">Ya lo hice</button><a class="btn" href="https://github.com/diego291/mis-finanzas/blob/main/apps-script/Code.gs" target="_blank" rel="noopener">Ver el código</a></div></section>`;
+  const c = notifCfg() || notifDefaults(), isDraft = !!S.ui.notifDraft || !saved;
+  const chk = (name, val, on, lab) => `<label class="nchk"><input type="checkbox" data-n="${name}" value="${val}" ${on ? 'checked' : ''}><span>${lab}</span></label>`;
+  return `<section class="card notif" id="notifCard"><header><h2>Avisos y notificaciones</h2>${saved && !saved.off ? '<span class="pill ok">Activos</span>' : saved && saved.off ? '<span class="pill">Pausados</span>' : '<span class="pill mid">Sin configurar</span>'}</header>
+    <div class="two"><label class="field"><span>Correo donde te llegan</span><input id="nEmail" type="email" value="${esc(c.email || '')}" placeholder="Si lo dejas vacío, a tu Gmail de la hoja"></label>
+    <label class="field"><span>Tema de ntfy (tu canal privado)</span><div class="nrow"><input id="nTopic" value="${esc(c.topic || '')}" autocomplete="off" spellcheck="false"><button type="button" class="btn sm" data-act="ntfyCopy">Copiar</button></div></label></div>
+    <details class="nhelp" ${saved ? '' : 'open'}><summary>Cómo recibirlas en tu teléfono (2 minutos)</summary><ol class="steps"><li>Instala <b>ntfy</b> desde la Play Store o la App Store. Es gratis y no pide cuenta.</li><li>Ábrela, toca <b>+</b> y escribe exactamente el tema: <code>${esc(c.topic || '')}</code>.</li><li>Toca <b>Suscribirse</b> y luego <b>Probar teléfono</b> aquí abajo.</li></ol><p class="note" style="margin:0">El tema funciona como una contraseña: quien lo sepa puede ver tus avisos. No lo compartas.</p></details>
+    <div class="nhead"><b>Horarios</b><button type="button" class="linkbtn" data-act="nAdd">+ Agregar horario</button></div>
+    <div class="nscheds">${(c.schedules || []).map((sc, i) => `<div class="nsched ${sc.off ? 'off' : ''}" data-i="${i}">
+      <div class="nrow"><input class="nname" value="${esc(sc.name || '')}" placeholder="Nombre"><input class="ntime" type="time" value="${esc(sc.time || '07:00')}"><label class="nsw" title="Activo"><input type="checkbox" class="non" ${sc.off ? '' : 'checked'}><span></span></label><button type="button" class="nx" data-act="nDel" data-v="${i}" aria-label="Quitar horario">×</button></div>
+      <div class="ndays">${DAYS_L.map(([d, l]) => `<button type="button" class="${(sc.days || []).includes(d) ? 'on' : ''}" data-d="${d}">${l}</button>`).join('')}</div>
+      <div class="nopts"><span class="muted">Enviar a</span>${chk('ch', 'email', (sc.channels || []).includes('email'), 'Correo')}${chk('ch', 'phone', (sc.channels || []).includes('phone'), 'Teléfono')}</div>
+      <div class="nopts"><span class="muted">Incluye</span>${NOTIF_CONTENT.map(([k, l]) => chk('ct', k, (sc.content || []).includes(k), l)).join('')}</div>
+      <label class="nchk"><input type="checkbox" class="nskip" ${sc.skipEmpty ? 'checked' : ''}><span>No mandar si no hay nada que avisar</span></label></div>`).join('') || '<p class="note">Sin horarios. Agrega uno.</p>'}</div>
+    <div class="nsched"><div class="nrow"><b style="flex:1">Aviso a la hora de cada pendiente con hora</b><label class="nsw"><input type="checkbox" id="nExOn" ${c.exact && c.exact.on ? 'checked' : ''}><span></span></label></div>
+      <div class="nopts"><span class="muted">Avisar</span><select id="nBefore" class="ctl" style="width:auto;min-height:32px;padding:4px 8px">${[[0, 'a la hora'], [5, '5 min antes'], [15, '15 min antes'], [30, '30 min antes'], [60, '1 hora antes']].map(([m, l]) => `<option value="${m}" ${Number((c.exact || {}).before) === m ? 'selected' : ''}>${l}</option>`).join('')}</select>${chk('ex', 'phone', ((c.exact || {}).channels || []).includes('phone'), 'Teléfono')}${chk('ex', 'email', ((c.exact || {}).channels || []).includes('email'), 'Correo')}</div></div>
+    <div class="btns"><button type="button" class="btn pri" data-act="nSave">${saved ? 'Guardar cambios' : 'Activar avisos'}</button><button type="button" class="btn" data-act="nTest" data-v="phone">Probar teléfono</button><button type="button" class="btn" data-act="nTest" data-v="email">Probar correo</button><button type="button" class="btn" data-act="nPend">Mandarme mis pendientes</button>${saved ? `<button type="button" class="btn" data-act="nPause">${saved.off ? 'Reanudar' : 'Pausar todo'}</button>` : ''}</div>
+    <p class="note" style="margin:0">${isDraft && saved ? 'Tienes cambios sin guardar. ' : ''}La hoja revisa cada 10 minutos, así que un aviso puede llegar hasta 10 minutos después de la hora. Funciona aunque tengas el teléfono y la app apagados.</p>
+  </section>`;
+}
+function readNotif() {
+  const card = $('#notifCard'); const c = notifCfg() || notifDefaults(); if (!card) return c;
+  c.email = $('#nEmail').value.trim(); c.topic = $('#nTopic').value.trim().replace(/[^\w-]/g, '');
+  c.appUrl = c.appUrl || location.origin + location.pathname.replace(/index\.html$/, '');
+  c.schedules = [...card.querySelectorAll('.nsched[data-i]')].map(el => ({ id: (c.schedules[el.dataset.i] || {}).id || uid().slice(0, 7), name: el.querySelector('.nname').value.trim() || 'Resumen', time: el.querySelector('.ntime').value || '07:00', off: !el.querySelector('.non').checked,
+    days: [...el.querySelectorAll('.ndays .on')].map(b => Number(b.dataset.d)), channels: [...el.querySelectorAll('[data-n=ch]:checked')].map(x => x.value), content: [...el.querySelectorAll('[data-n=ct]:checked')].map(x => x.value), skipEmpty: el.querySelector('.nskip').checked }));
+  c.exact = { on: $('#nExOn').checked, before: Number($('#nBefore').value) || 0, channels: [...card.querySelectorAll('[data-n=ex]:checked')].map(x => x.value) };
+  return c;
+}
+function notifValid(c) {
+  if (c.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(c.email)) return 'Revisa el correo.';
+  if (!c.topic || c.topic.length < 6) return 'El tema de ntfy debe tener al menos 6 letras o números.';
+  const bad = c.schedules.find(s => !s.off && (!s.channels.length || !s.content.length || !s.days.length)); if (bad) return `“${bad.name}”: elige al menos un día, un destino y qué incluye.`;
+  return '';
+}
+function notifSave(c, quiet) { recPut('notif', 'cfg', c); op('notif.install', {}); S.ui.notifDraft = null; if (!quiet) toast(c.off ? 'Avisos pausados' : 'Avisos guardados. Tu hoja ya los manda.'); }
+Object.assign(ACT, {
+  copyGs: async () => { try { const t = await (await fetch('apps-script/Code.gs', { cache: 'no-store' })).text(); await navigator.clipboard.writeText(t); toast('Código copiado. Pégalo en Code.gs'); } catch (e) { toast('No pude copiarlo aquí. Usa “Ver el código” y cópialo de ahí.'); } },
+  ntfyCopy: () => { const t = $('#nTopic').value.trim(); navigator.clipboard?.writeText(t).then(() => toast('Tema copiado: ' + t), () => toast(t)); },
+  nAdd: () => { const c = readNotif(); c.schedules.push({ id: uid().slice(0, 7), name: 'Nuevo aviso', time: '12:00', days: [1, 2, 3, 4, 5], channels: ['phone'], content: ['agenda'], skipEmpty: true }); S.ui.notifDraft = c; render(); },
+  nDel: el => { const c = readNotif(); c.schedules.splice(Number(el.dataset.v), 1); S.ui.notifDraft = c; render(); },
+  nSave: () => { const c = readNotif(); const e = notifValid(c); if (e) return toast(e); notifSave(c); },
+  nPause: () => { const c = readNotif(); c.off = !c.off; notifSave(c); },
+  nTest: el => { const c = readNotif(); const e = notifValid(c); if (e) return toast(e); notifSave(c, true); op('notif.test', { channel: el.dataset.v, cfg: c }); toast(el.dataset.v === 'phone' ? 'Enviando prueba a ntfy… debe llegar en segundos' : 'Enviando prueba a tu correo…'); },
+  nPend: () => { const c = readNotif(); const e = notifValid(c); if (e) return toast(e); notifSave(c, true); op('notif.send', { channels: ['email'], content: ['agenda'], all: true, cfg: c }); toast('Te mando tus pendientes al correo…'); }
+});
+document.addEventListener('click', e => { const b = e.target.closest('#notifCard .ndays button'); if (b) { b.classList.toggle('on'); S.ui.notifDraft = readNotif(); } });
+document.addEventListener('input', e => { if (e.target.closest && e.target.closest('#notifCard')) S.ui.notifDraft = readNotif(); });
+document.addEventListener('change', e => { if (e.target.closest && e.target.closest('#notifCard')) S.ui.notifDraft = readNotif(); });
 
 /* ---------------- Arranque ---------------- */
 load();

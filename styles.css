@@ -881,3 +881,34 @@ body[data-design="c"] .next-step b { color: var(--cta-bg); }
 .srows input.sr-shop { width: 100%; padding: 7px 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface-2); color: var(--fg); font-size: .84rem; min-height: 0; }
 @media (max-width: 600px) { .sr-two { grid-template-columns: 1fr; } }
 .shops { grid-template-columns: minmax(0, 1fr); } .shop { min-width: 0; }
+
+/* avisos y notificaciones */
+.notif { display: grid; gap: 14px; }
+.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: .88rem; }
+.steps code, .nhelp code { background: var(--surface-2); padding: 1px 6px; border-radius: 6px; font-family: var(--f-num); }
+.nrow { display: flex; gap: 8px; align-items: center; }
+.nrow input:not([type=checkbox]) { flex: 1; min-width: 0; padding: 9px 11px; border-radius: var(--r-ctl); border: 1px solid var(--line); background: var(--surface-2); color: var(--fg); font: inherit; }
+.nrow input.ntime { flex: none; width: 118px; font-family: var(--f-num); }
+.nhelp { background: var(--surface-2); border-radius: 12px; padding: 10px 14px; font-size: .88rem; }
+.nhelp summary { cursor: pointer; font-weight: 700; } .nhelp[open] summary { margin-bottom: 8px; }
+.nhead { display: flex; justify-content: space-between; align-items: center; }
+.nscheds { display: grid; gap: 10px; }
+.nsched { border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: grid; gap: 10px; }
+.nsched.off { opacity: .55; }
+.ndays { display: flex; gap: 5px; flex-wrap: wrap; }
+.ndays button { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); font-weight: 700; font-size: .8rem; cursor: pointer; }
+.ndays button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.nopts { display: flex; gap: 6px 10px; flex-wrap: wrap; align-items: center; font-size: .86rem; }
+.nopts > .muted { font-size: .78rem; font-weight: 700; min-width: 58px; }
+.nchk { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: .86rem; }
+.nchk input { width: 17px; height: 17px; accent-color: var(--accent); margin: 0; }
+.nsw { position: relative; width: 42px; height: 24px; flex: none; cursor: pointer; }
+.nsw input { opacity: 0; position: absolute; inset: 0; margin: 0; cursor: pointer; }
+.nsw span { position: absolute; inset: 0; border-radius: 99px; background: var(--line); transition: background .15s; pointer-events: none; }
+.nsw span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgb(0 0 0 / .25); }
+.nsw input:checked + span { background: var(--accent); } .nsw input:checked + span::after { transform: translateX(18px); }
+.nx { width: 30px; height: 30px; border: 0; border-radius: 50%; background: none; color: var(--muted); font-size: 18px; cursor: pointer; flex: none; } .nx:hover { color: var(--neg); background: var(--surface-2); }
+.notif, .nsched, .nscheds { grid-template-columns: minmax(0, 1fr); }
+.notif .two { grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); }
+.notif .field, .nrow { min-width: 0; }
+@media (max-width: 600px) { .nsched .nrow { flex-wrap: wrap; } .nsched .nrow .nname { flex-basis: calc(100% - 40px); } .nsched .nrow .nx { order: 0; } .nsched .nrow .ntime { flex: 1; } }
