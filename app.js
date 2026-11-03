@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '3.0.0';
+const VERSION = '3.0.1';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -503,7 +503,7 @@ function render() {
   if (S.ui.view === 'bloc' && $('#pgEditor') && ae && ($('#pgEditor').contains(ae) || ae.id === 'pgTitle' || ae.closest('#edBar')) && $('#pgEditor').dataset.pg === S.ui.pg) return;
   if (typeof edTimer !== 'undefined' && edTimer) pgSaveNow();
   const fn = { inicio: vInicio, estados: vEstados, movimientos: vMovs, cuentas: vCuentas, metas: vMetas, presupuesto: vPresupuesto, pagos: vPagos, deudas: vDeudas, estadisticas: vStats, revision: vRevision, notas: vAgenda, agenda: vAgenda, bloc: vBloc, vehiculos: vVehiculos, mantenimientos: vMant, ajustes: vAjustes }[S.ui.view];
-  try { $('#view').innerHTML = `<div class="wrap">${fn()}</div>`; S.lastError = ''; if (S.ui.view === 'bloc') { const ed = $('#pgEditor'); if (ed) { ed.dataset.pg = S.ui.pg; edBind(); } } if (S.ui.view === 'agenda') calBind(); }
+  try { $('#view').innerHTML = `<div class="wrap">${fn()}</div>`; S.lastError = ''; if (S.ui.view === 'bloc') { const ed = $('#pgEditor'); if (ed) { ed.dataset.pg = S.ui.pg; edBind(); } } if (S.ui.view === 'agenda') calBind(); labelTables($('#view')); }
   catch (e) {
     console.error(e); S.lastError = (e && e.message) || String(e);
     $('#view').innerHTML = `<div class="wrap"><div class="card" style="display:grid;gap:12px;max-width:620px"><h2>No pude mostrar esta sección</h2><p class="muted" style="margin:0">Algún dato de tu hoja tiene un formato que la app no esperaba. Mándale una captura de este mensaje a quien te ayuda con la app.</p><code style="font-family:var(--f-num);font-size:.8rem;background:var(--surface-2);padding:10px;border-radius:8px;white-space:pre-wrap;word-break:break-word">v${VERSION} · ${esc(S.ui.view)} · ${esc(S.lastError)}\n${esc(((e && e.stack) || '').split('\n').slice(1, 3).join('\n'))}</code><div class="btns"><button class="btn pri" data-act="reloadSheet">Volver a cargar desde mi hoja</button><button class="btn" data-act="go" data-v="movimientos">Ir a Movimientos</button></div></div></div>`;
@@ -3280,13 +3280,23 @@ const fmtT = s => fmtTime(s);
 const shortT = m => { const h = Math.floor((m % 1440) / 60), mm = m % 60; return `${(h % 12) || 12}${mm ? ':' + pad(mm) : ''}${h < 12 ? 'a' : 'p'}`; };
 const isMobileW = () => window.innerWidth < 700;
 
+/* materias: "AOL - Defensa Fase 3" -> código AOL con color fijo */
+const COURSE_COLORS = ['#1e88e5', '#8e24aa', '#e65100', '#00897b', '#c2185b', '#5e35b1', '#6d8b00', '#d81b60', '#0277bd', '#bf360c', '#2e7d32', '#ad1457'];
+function courseOf(title) { const m = String(title || '').match(/^\s*([A-ZÁÉÍÓÚÑ]{2,6})\s*[-–:]\s*(.+)$/); if (!m) return null; return { code: m[1], rest: m[2].replace(/^\d+\s*[-–:]\s*/, '').trim() }; }
+const courseColor = code => { const c = ((store('agcal').cfg || {}).courses || {})[code]; if (c) return c; const L = calCourses(), i = L.indexOf(code); if (i >= 0) return COURSE_COLORS[i % COURSE_COLORS.length]; let h = 0; for (const ch of code) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return COURSE_COLORS[h % COURSE_COLORS.length]; };
+const calDone = id => !!store('caldone')[id];
+function calCourses() { const set = {}; ((S.data.calendar || {}).events || []).forEach(e => { const c = courseOf(e.title); if (c) set[c.code] = (set[c.code] || 0) + 1; }); return Object.keys(set).sort(); }
+const chipLabel = x => x.code ? `<span class="ccode" style="--cc:${x.color}">${esc(x.code)}</span>${esc(x.short)}` : esc(x.title);
+const adSort = (a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0) || (a.code || '~').localeCompare(b.code || '~') || a.title.localeCompare(b.title);
 /* todo lo que se ve en el calendario, en un solo formato */
 function calItems(from, to) {
   const out = [], hid = calHidden();
   if (calReady()) (S.data.calendar.events || []).forEach(e => {
     const d0 = e.start.slice(0, 10), d1 = e.allDay ? addDays(e.end.slice(0, 10), -1) : e.end.slice(0, 10);
-    if (d1 < from || d0 > to) return; const cat = calCatOf(e.color); if (hid.includes(cat.name)) return;
-    out.push({ key: 'g:' + e.id, src: 'g', ev: e, title: e.title, d0, d1: d1 < d0 ? d0 : d1, allDay: e.allDay, s: e.allDay ? null : tm(e.start.slice(11)), e: e.allDay ? null : tm(e.end.slice(11)) + (e.end.slice(0, 10) > d0 ? 1440 * Math.min(1, daysTo(e.end.slice(0, 10)) - daysTo(d0)) : 0), color: GCOL[e.color || ''], recur: !!(e.sid || e.rrule), loc: e.loc });
+    if (d1 < from || d0 > to) return; const cat = calCatOf(e.color), co = courseOf(e.title);
+    if (hid.includes(co && !e.color ? 'Materia ' + co.code : cat.name)) return;
+    if (co && hid.includes('Materia ' + co.code)) return;
+    out.push({ key: 'g:' + e.id, src: 'g', ev: e, title: e.title, code: co ? co.code : '', short: co ? co.rest : e.title, d0, d1: d1 < d0 ? d0 : d1, allDay: e.allDay, s: e.allDay ? null : tm(e.start.slice(11)), e: e.allDay ? null : tm(e.end.slice(11)) + (e.end.slice(0, 10) > d0 ? 1440 * Math.min(1, daysTo(e.end.slice(0, 10)) - daysTo(d0)) : 0), color: co && !e.color ? courseColor(co.code) : GCOL[e.color || ''], recur: !!(e.sid || e.rrule), loc: e.loc, done: calDone(e.id) });
   });
   if (!hid.includes('De la app')) {
     S.data.notes.forEach(n => { const k = kindOf(n); if (!n.due || n.due < from || n.due > to || (k !== 'evento' && k !== 'pendiente')) return; const t = n.time && /^\d{1,2}:\d{2}/.test(n.time) ? tm(n.time) : null; out.push({ key: 'n:' + n.id, src: 'n', ev: n, title: (k === 'pendiente' ? '☐ ' : '') + n.text, d0: n.due, d1: n.due, allDay: t == null, s: t, e: t == null ? null : t + 60, color: AG_COLORS[n.color] || '#5f6b76', done: isDone(n) }); });
@@ -3319,7 +3329,8 @@ function calView() {
     : !calReady() ? `<div class="alert"><span></span><div><b>Falta dar permiso a Google Calendar</b><p>${S.data.calendar && S.data.calendar.error && S.data.calendar.error !== 'sin-permiso' ? esc(S.data.calendar.error) + '. ' : ''}En Apps Script: pega el appsscript.json de <b>Copiar permisos</b>, guarda y ejecuta <b>activarTodo</b>. Si aún falla: <b>Servicios + → Google Calendar API → Agregar</b>.</p></div><div class="acts"><button class="btn sm pri" data-act="copyMan">Copiar permisos</button><button class="btn sm" data-act="syncNow">Ya lo hice</button></div></div>` : '';
   const bar = `<div class="cal-bar"><button type="button" class="btn sm" data-act="calNav" data-v="0">Hoy</button><button type="button" class="btn sm ic" data-act="calNav" data-v="-1" aria-label="Anterior">‹</button><button type="button" class="btn sm ic" data-act="calNav" data-v="1" aria-label="Siguiente">›</button><b class="cal-title">${title}</b>
     <div class="seg cal-seg">${[['dia', 'Día'], ['semana', isMobileW() ? '3 días' : 'Semana'], ['mes', 'Mes'], ['lista', 'Lista']].map(([k, l]) => `<button type="button" data-act="calView" data-v="${k}" class="${v === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
-    <div class="cal-cats">${calCats().map(c => `<button type="button" class="ccat ${hid.includes(c.name) ? 'off' : ''}" data-act="calCat" data-v="${esc(c.name)}" style="--cc:${GCOL[c.color || '']}"><i></i>${esc(c.name)}</button>`).join('')}<button type="button" class="ccat ${hid.includes('De la app') ? 'off' : ''}" data-act="calCat" data-v="De la app" style="--cc:#5f6b76"><i></i>Pendientes, pagos y mantenimientos</button><button type="button" class="linkbtn" data-act="calCats" style="font-size:.8rem">Editar</button></div>`;
+    <div class="cal-cats">${calCats().map(c => `<button type="button" class="ccat ${hid.includes(c.name) ? 'off' : ''}" data-act="calCat" data-v="${esc(c.name)}" style="--cc:${GCOL[c.color || '']}"><i></i>${esc(c.name)}</button>`).join('')}<button type="button" class="ccat ${hid.includes('De la app') ? 'off' : ''}" data-act="calCat" data-v="De la app" style="--cc:#5f6b76"><i></i>Pendientes, pagos y mantenimientos</button><button type="button" class="linkbtn" data-act="calCats" style="font-size:.8rem">Editar</button></div>
+    ${calCourses().length ? `<div class="cal-cats cal-courses"><small class="muted">Materias</small>${calCourses().map(c => `<button type="button" class="ccat ${hid.includes('Materia ' + c) ? 'off' : ''}" data-act="calCat" data-v="Materia ${esc(c)}" style="--cc:${courseColor(c)}"><i></i>${esc(c)}</button>`).join('')}</div>` : ''}`;
   let body;
   if (v === 'mes') body = calMonth(base);
   else if (v === 'lista') body = calList(base);
@@ -3331,8 +3342,9 @@ function calGrid(start, n) {
   const items = calItems(start, end), allDay = items.filter(x => x.allDay), timed = items.filter(x => !x.allDay);
   const nowM = new Date().getHours() * 60 + new Date().getMinutes();
   const head = `<div class="cg-head" style="--n:${n}"><span></span>${dates.map(d => { const x = new Date(d + 'T12:00'); return `<button type="button" class="cg-dh ${d === today() ? 'td' : ''}" data-act="calGo" data-v="${d}"><small>${WEEK[(x.getDay() + 6) % 7].toUpperCase()}</small><b>${x.getDate()}</b></button>`; }).join('')}</div>`;
-  const adRows = dates.map(d => allDay.filter(x => x.d0 <= d && x.d1 >= d));
-  const ad = adRows.some(r => r.length) ? `<div class="cg-ad" style="--n:${n}"><small class="muted">todo el día</small>${adRows.map((r, i) => `<div class="cg-adc">${r.slice(0, 4).map(x => `<button type="button" class="cchip ${x.done ? 'done' : ''}" style="--cc:${x.color}" data-act="calOpen" data-k="${esc(x.key)}">${esc(x.title)}</button>`).join('')}${r.length > 4 ? `<button type="button" class="cmore" data-act="calGo" data-v="${dates[i]}">+${r.length - 4}</button>` : ''}</div>`).join('')}</div>` : '';
+  const adRows = dates.map(d => allDay.filter(x => x.d0 <= d && x.d1 >= d).sort(adSort));
+  const open = !!S.ui.calAdOpen, max = open ? 99 : n === 1 ? 6 : 3, hasMore = adRows.some(r => r.length > max);
+  const ad = adRows.some(r => r.length) ? `<div class="cg-ad ${open ? 'open' : ''}" style="--n:${n}"><div class="cg-adl"><small class="muted">todo el día</small>${hasMore || open ? `<button type="button" class="cad-tg" data-act="calAdToggle" aria-label="${open ? 'Contraer' : 'Ver todo'}">${open ? '▲' : '▼'}</button>` : ''}</div>${adRows.map(r => `<div class="cg-adc ${n === 1 ? 'one' : ''}">${r.slice(0, max).map(x => `<button type="button" class="cchip ${x.code ? 'co' : ''} ${x.done ? 'done' : ''}" style="--cc:${x.color}" data-act="calOpen" data-k="${esc(x.key)}" title="${esc(x.title)}">${chipLabel(x)}</button>`).join('')}${r.length > max ? `<button type="button" class="cmore" data-act="calAdToggle">+${r.length - max} más</button>` : ''}</div>`).join('')}</div>` : '';
   const cols = dates.map(d => { const L = layoutDay(timed.filter(x => x.d0 === d).map(x => Object.assign({}, x)));
     return `<div class="cg-col ${d === today() ? 'td' : ''}" data-d="${d}">${L.map(x => { const h = Math.max(18, (Math.min(x.e, 1440) - x.s) / 60 * HOUR_H), w = 100 / x._n; return `<div class="cev ${x.src} ${x.done ? 'done' : ''} ${h < 34 ? 'sm' : ''}" style="--cc:${x.color};top:${x.s / 60 * HOUR_H}px;height:${h}px;left:calc(${x._c * w}% + 1px);width:calc(${w}% - 3px)" data-act="calOpen" data-k="${esc(x.key)}" ${x.src === 'g' && x.ev.owner !== false ? 'data-drag="1"' : ''}><b>${esc(x.title)}</b><small>${shortT(x.s)}${h >= 34 ? '–' + shortT(x.e) : ''}${x.recur ? ' ↻' : ''}${x.loc && h > 50 ? ' · ' + esc(x.loc) : ''}</small>${x.src === 'g' ? '<i class="cres"></i>' : ''}</div>`; }).join('')}${d === today() ? `<div class="cnow" style="top:${nowM / 60 * HOUR_H}px"></div>` : ''}</div>`; }).join('');
   return `<div class="cg">${head}${ad}<div class="cg-scroll" id="cgScroll"><div class="cg-body" style="--n:${n};height:${24 * HOUR_H}px"><div class="cg-hours">${Array.from({ length: 24 }, (_, h) => `<span style="top:${h * HOUR_H}px">${h ? (h % 12 || 12) + (h < 12 ? ' a. m.' : ' p. m.') : ''}</span>`).join('')}</div>${cols}</div></div></div>`;
@@ -3341,14 +3353,14 @@ function calMonth(base) {
   const ym = base.slice(0, 7), first = ym + '-01', gs = weekStart(first), cells = Array.from({ length: 42 }, (_, i) => addDays(gs, i));
   const rows = cells.slice(35).every(d => d.slice(0, 7) !== ym) ? 5 : 6, C = cells.slice(0, rows * 7);
   const items = calItems(C[0], C[C.length - 1]);
-  return `<div class="cm"><div class="cm-h">${WEEK.map(w => `<span>${w}</span>`).join('')}</div><div class="cm-g" style="grid-template-rows:repeat(${rows},minmax(84px,1fr))">${C.map(d => { const L = items.filter(x => x.d0 <= d && x.d1 >= d).sort((a, b) => (a.allDay ? -1 : a.s) - (b.allDay ? -1 : b.s)), max = isMobileW() ? 2 : 3;
-    return `<div class="cm-d ${d.slice(0, 7) !== ym ? 'out' : ''} ${d === today() ? 'td' : ''}" data-act="calNewDay" data-v="${d}"><button type="button" class="cm-n" data-act="calGo" data-v="${d}">${Number(d.slice(8))}</button>${L.slice(0, max).map(x => `<button type="button" class="cchip ${x.allDay ? '' : 'tl'} ${x.done ? 'done' : ''}" style="--cc:${x.color}" data-act="calOpen" data-k="${esc(x.key)}">${x.allDay ? '' : `<i></i>${fmtT(hm(x.s)).replace(/:00/, '').replace(/ ([ap])\. m\./, '$1')} `}${esc(x.title)}</button>`).join('')}${L.length > max ? `<button type="button" class="cmore" data-act="calGo" data-v="${d}">+${L.length - max} más</button>` : ''}</div>`; }).join('')}</div></div>`;
+  return `<div class="cm"><div class="cm-h">${WEEK.map(w => `<span>${w}</span>`).join('')}</div><div class="cm-g" style="grid-template-rows:repeat(${rows},minmax(84px,1fr))">${C.map(d => { const L = items.filter(x => x.d0 <= d && x.d1 >= d).sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0) || (a.allDay ? -1 : a.s) - (b.allDay ? -1 : b.s) || adSort(a, b)), max = isMobileW() ? 2 : 3;
+    return `<div class="cm-d ${d.slice(0, 7) !== ym ? 'out' : ''} ${d === today() ? 'td' : ''}" data-act="calNewDay" data-v="${d}"><button type="button" class="cm-n" data-act="calGo" data-v="${d}">${Number(d.slice(8))}</button>${L.slice(0, max).map(x => `<button type="button" class="cchip ${x.allDay ? '' : 'tl'} ${x.done ? 'done' : ''}" style="--cc:${x.color}" data-act="calOpen" data-k="${esc(x.key)}">${x.allDay ? '' : `<i></i>${shortT(x.s)} `}${x.allDay ? chipLabel(x) : esc(x.short || x.title)}</button>`).join('')}${L.length > max ? `<button type="button" class="cmore" data-act="calGo" data-v="${d}">+${L.length - max} más</button>` : ''}</div>`; }).join('')}</div></div>`;
 }
 function calList(base) {
   const to = addDays(base, 60), items = calItems(base, to), days = {};
   items.forEach(x => { for (let d = x.d0 < base ? base : x.d0; d <= x.d1 && d <= to; d = addDays(d, 1)) (days[d] = days[d] || []).push(x); });
   const keys = Object.keys(days).sort();
-  return keys.length ? `<div class="cl">${keys.map(d => { const x = new Date(d + 'T12:00'); return `<div class="cl-day ${d === today() ? 'td' : ''}"><button type="button" class="cl-dh" data-act="calGo" data-v="${d}"><b>${x.getDate()}</b><small>${WEEK[(x.getDay() + 6) % 7]} · ${MSHORT[x.getMonth()]}</small></button><div class="cl-items">${days[d].sort((a, b) => (a.allDay ? -1 : a.s) - (b.allDay ? -1 : b.s)).map(i => `<button type="button" class="cl-it ${i.done ? 'done' : ''}" data-act="calOpen" data-k="${esc(i.key)}"><i style="background:${i.color}"></i><span class="cl-t">${i.allDay ? 'Todo el día' : fmtT(hm(i.s)) + ' – ' + fmtT(hm(i.e))}</span><span class="cl-n">${esc(i.title)}${i.recur ? ' ↻' : ''}${i.loc ? `<small>${esc(i.loc)}</small>` : ''}</span></button>`).join('')}</div></div>`; }).join('')}</div>` : '<p class="note">Nada en los próximos 60 días.</p>';
+  return keys.length ? `<div class="cl">${keys.map(d => { const x = new Date(d + 'T12:00'); return `<div class="cl-day ${d === today() ? 'td' : ''}"><button type="button" class="cl-dh" data-act="calGo" data-v="${d}"><b>${x.getDate()}</b><small>${WEEK[(x.getDay() + 6) % 7]} · ${MSHORT[x.getMonth()]}</small></button><div class="cl-items">${days[d].sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0) || (a.allDay ? -1 : a.s) - (b.allDay ? -1 : b.s) || adSort(a, b)).map(i => `<button type="button" class="cl-it ${i.done ? 'done' : ''}" data-act="calOpen" data-k="${esc(i.key)}"><i style="background:${i.color}"></i><span class="cl-t">${i.allDay ? 'Todo el día' : fmtT(hm(i.s)) + ' – ' + fmtT(hm(i.e))}</span><span class="cl-n">${i.code ? `<span class="ccode" style="--cc:${i.color}">${esc(i.code)}</span>${esc(i.short)}` : esc(i.title)}${i.recur ? ' ↻' : ''}${i.loc ? `<small>${esc(i.loc)}</small>` : ''}</span></button>`).join('')}</div></div>`; }).join('')}</div>` : '<p class="note">Nada en los próximos 60 días.</p>';
 }
 
 /* abrir lo que se tocó */
@@ -3366,6 +3378,7 @@ function rrulePreset(r, date) { const o = rruleParse(r); if (!o.freq) return 'no
 function rruleText(r, date) { const o = rruleParse(r); if (!o.freq) return 'No se repite'; const u = { DAILY: ['día', 'días'], WEEKLY: ['semana', 'semanas'], MONTHLY: ['mes', 'meses'], YEARLY: ['año', 'años'] }[o.freq]; const dn = { MO: 'lun', TU: 'mar', WE: 'mié', TH: 'jue', FR: 'vie', SA: 'sáb', SU: 'dom' }; return `Cada ${o.interval > 1 ? o.interval + ' ' + u[1] : u[0]}${o.byday.length ? ' (' + o.byday.map(d => dn[d]).join(', ') + ')' : ''}${o.until ? ' hasta ' + dLabel(o.until) : o.count ? ', ' + o.count + ' veces' : ''}`; }
 
 function calEdit(e, preset) {
+  if (e && e.owner === false) return calViewOnly(e);
   const isNew = !e, recur = !!(e && (e.sid || e.rrule));
   e = Object.assign({ id: '', sid: '', mf: '', title: '', allDay: false, start: `${today()}T09:00`, end: `${today()}T10:00`, desc: '', loc: '', color: '', rem: [15], rrule: '' }, e ? JSON.parse(JSON.stringify(e)) : {}, preset || {});
   const remDefault = e.rem == null; if (remDefault) e.rem = [];
@@ -3386,7 +3399,7 @@ function calEdit(e, preset) {
     <label class="field"><span>Ubicación</span><div class="nrow"><input id="ceLoc" value="${esc(e.loc)}" placeholder="Dirección o lugar">${e.loc ? `<a class="btn sm" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(e.loc)}" target="_blank" rel="noopener">Mapa</a>` : ''}</div></label>
     <label class="field"><span>Descripción</span><textarea id="ceDesc" rows="3" placeholder="Notas, enlaces…">${esc(e.desc)}</textarea></label>
     ${!isNew && e.rrule ? `<p class="note" style="margin:0">↻ ${esc(rruleText(e.rrule, d0))}</p>` : ''}
-    <div class="btns"><button class="btn pri">Guardar</button>${isNew ? '' : '<button type="button" class="btn danger" id="ceDel">Eliminar</button>'}${e.link ? `<a class="btn" href="${esc(e.link)}" target="_blank" rel="noopener">Abrir en Google Calendar</a>` : ''}</div>
+    <div class="btns"><button class="btn pri">Guardar</button>${isNew ? '' : `<button type="button" class="btn" id="ceDone">${calDone(e.id) ? 'Desmarcar hecho' : '✓ Marcar como hecho'}</button><button type="button" class="btn danger" id="ceDel">Eliminar</button>`}${e.link ? `<a class="btn" href="${esc(e.link)}" target="_blank" rel="noopener">Abrir en Google Calendar</a>` : ''}</div>
     ${calReady() ? '' : '<p class="note" style="margin:0">Se guardará en tu Google Calendar cuando conectes el permiso de Calendar.</p>'}`, f => {
     const title = $('#ceTitle').value.trim() || '(Sin título)', all = $('#ceAll').checked, D0 = $('#ceD0').value || today();
     const scope = (f.querySelector('#ceScope .on') || {}).dataset ? f.querySelector('#ceScope .on').dataset.v : 'one';
@@ -3412,12 +3425,23 @@ function calEdit(e, preset) {
       else if (b.closest('#ceDays')) b.classList.toggle('on');
       else { b.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); }
     });
+    const dn = f.querySelector('#ceDone'); if (dn) dn.onclick = () => { calToggleDone(e.id); closeSheet(); };
     const del = f.querySelector('#ceDel'); if (del) del.onclick = () => {
       const scope = f.querySelector('#ceScope .on') ? f.querySelector('#ceScope .on').dataset.v : 'one';
       if (!del.dataset.ok) { del.dataset.ok = 1; del.textContent = recur && scope === 'all' ? '¿Eliminar toda la serie?' : '¿Seguro? Toca otra vez'; return; }
       op('cal.delete', { id: e.id, sid: e.sid, mf: e.mf, scope }); closeSheet(); toast('Evento eliminado');
     };
   });
+}
+function calToggleDone(id) { if (calDone(id)) op('rec.delete', { coll: 'caldone', id }); else op('rec.upsert', { coll: 'caldone', id, data: { t: Date.now() } }); toast(calDone(id) ? 'Marcado como hecho' : 'Pendiente otra vez'); }
+function calViewOnly(e) {
+  const co = courseOf(e.title), d0 = e.start.slice(0, 10), x = new Date(d0 + 'T12:00');
+  openSheet(co ? `<span class="ccode" style="--cc:${courseColor(co.code)}">${esc(co.code)}</span> ${esc(co.rest)}` : esc(e.title), `
+    <p class="muted" style="margin:0">${WDAY_FULL[x.getDay()]} ${x.getDate()} de ${MONTHS[x.getMonth()].toLowerCase()}${e.allDay ? '' : ' · ' + fmtT(e.start.slice(11)) + ' – ' + fmtT(e.end.slice(11))}</p>
+    ${e.desc ? `<div class="cv-desc">${esc(e.desc).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>').replace(/\n/g, '<br>')}</div>` : ''}
+    ${e.loc ? `<p style="margin:0">📍 ${esc(e.loc)}</p>` : ''}
+    <p class="note" style="margin:0">Este evento viene de otro calendario (por ejemplo, Classroom), así que no se puede editar desde aquí. Puedes marcarlo como hecho para tu control.</p>
+    <div class="btns"><button type="button" class="btn pri" id="cvDone">${calDone(e.id) ? 'Desmarcar hecho' : '✓ Marcar como hecho'}</button>${e.link ? `<a class="btn" href="${esc(e.link)}" target="_blank" rel="noopener">Abrir en Google Calendar</a>` : ''}</div>`, () => { }, f => { f.querySelector('#cvDone').onclick = () => { calToggleDone(e.id); closeSheet(); }; });
 }
 function calCatsEdit() {
   const cats = calCats().map(c => Object.assign({}, c));
@@ -3498,10 +3522,20 @@ Object.assign(ACT, {
   calOpen: el => calOpen(el.dataset.k), calNew: () => { const d = S.ui.calDate || today(); calEdit(null, { start: `${d}T${hm(Math.min(22 * 60, Math.ceil((new Date().getHours() * 60 + new Date().getMinutes()) / 30) * 30 + 30))}`, end: `${d}T${hm(Math.min(23 * 60, Math.ceil((new Date().getHours() * 60 + new Date().getMinutes()) / 30) * 30 + 90))}` }); },
   calCat: el => { let h = calHidden(); const n = el.dataset.v; h = h.includes(n) ? h.filter(x => x !== n) : h.concat(n); try { localStorage.setItem('mf.calHidden', JSON.stringify(h)); } catch (e) { } render(); },
   calCats: () => calCatsEdit(),
+  calAdToggle: () => { S.ui.calAdOpen = !S.ui.calAdOpen; render(); },
   calEditG: el => { const e = (S.data.calendar.events || []).find(x => x.id === el.dataset.id); if (e) calEdit(e); }
 });
 try { const v = localStorage.getItem('mf.calView'); if (v) S.ui.calView = v; } catch (e) { }
 
+/* tablas: cada celda sabe su encabezado, para mostrarse como tarjeta cuando no cabe a lo ancho */
+function labelTables(root) {
+  (root || document).querySelectorAll('.tbl-wrap table').forEach(t => {
+    const hr = t.querySelector('thead tr:last-child'); if (!hr) return;
+    const H = [...hr.children].map(th => th.textContent.trim());
+    t.closest('.tbl-wrap').classList.toggle('wide', H.length > 9); [...hr.children].forEach(th => { if (th.textContent.trim().length <= 2 && th.textContent.trim()) th.classList.add('mo'); });
+    t.querySelectorAll('tbody tr, tfoot tr').forEach(tr => { let i = 0; [...tr.children].forEach(td => { const span = Number(td.getAttribute('colspan')) || 1; const lab = H[i] || ''; td.setAttribute('data-label', span > 1 ? '' : lab); if (lab.length > 0 && lab.length <= 2) td.classList.add('mo'); i += span; }); });
+  });
+}
 /* ---------------- Arranque ---------------- */
 load();
 S.ui.ym = ymOf(today()); S.ui.seenYm = S.ui.ym;
