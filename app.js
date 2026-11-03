@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '2.3.0';
+const VERSION = '2.4.0';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -1719,7 +1719,7 @@ function vAjustes() {
 /* ---------------- Formularios (hoja inferior) ---------------- */
 function openSheet(title, body, onSubmit, after) {
   $('#sheet').innerHTML = `<header><h2>${title}</h2><button type="button" class="x" data-act="close" aria-label="Cerrar">×</button></header><form class="form" id="sheetForm" novalidate>${body}<div class="err-msg" id="fErr"></div></form>`;
-  $('#sheetBg').hidden = false;
+  $('#sheetBg').hidden = false; $('#sheet').scrollTop = 0; $('#sheet').scrollLeft = 0; $('#sheetBg').scrollTop = 0;
   const f = $('#sheetForm');
   f.onsubmit = e => { e.preventDefault(); const err = onSubmit(f); if (err) { $('#fErr').textContent = err; return; } closeSheet(); };
   if (after) after(f);
@@ -2497,6 +2497,7 @@ function vVehiculos() {
       </section>
     </div>
   </div>
+  ${shopsCard()}
   <section class="card side-card"><header style="margin:0"><h2>Historial</h2><span class="muted" style="font-size:.84rem">${y2(v)}</span></header>
     <div class="seg">${[['serv', 'Mantenimientos'], ['gas', 'Gasolina'], ['km', 'Kilometraje']].map(([k, l]) => `<button type="button" data-act="vehHist" data-v="${k}" class="${hist === k ? 'on' : ''}">${l}</button>`).join('')}</div>
     <div class="list">${histBody}</div>
@@ -2600,11 +2601,11 @@ function editServ(vid, log) {
   T.forEach(({ t, s }) => { if (!fromTask.has(t.id)) rows.push({ task: t.id, name: t.name, action: t.action || 'Cambiado', cost: '', detail: '', on: false, sev: s.sev, label: s.label }); });
   const rowHTML = (r, i) => `<div class="srow ${r.on ? 'on' : ''} ${r.task && !r.on && !['bad', 'mid'].includes(r.sev) && isNew ? 'later' : ''}" data-i="${i}" data-task="${esc(r.task || '')}" data-name="${esc(r.task ? r.name : '')}">
     <label class="sr-main"><input type="checkbox" ${r.on ? 'checked' : ''}><span class="sr-name">${r.task ? esc(r.name) : `<input class="sr-nm" value="${esc(r.name)}" placeholder="Pieza o arreglo">`}${r.task && r.sev && (r.sev === 'bad' || r.sev === 'mid') ? ` <span class="pill ${r.sev}">${esc(r.label)}</span>` : ''}</span><input class="calc sr-cost" type="text" inputmode="decimal" placeholder="$0" value="${r.cost || ''}"></label>
-    <div class="sr-more"><div class="seg sr-act">${ACTIONS.map(a => `<button type="button" class="${(r.action || 'Cambiado') === a ? 'on' : ''}">${a}</button>`).join('')}</div><input class="sr-det" placeholder="Marca, medida o detalle (opcional)" value="${esc(r.detail || '')}"></div></div>`;
+    <div class="sr-more"><div class="seg sr-act">${ACTIONS.map(a => `<button type="button" class="${(r.action || 'Cambiado') === a ? 'on' : ''}">${a}</button>`).join('')}</div><div class="sr-two"><input class="sr-det" placeholder="Marca, medida o detalle (opcional)" value="${esc(r.detail || '')}"><input class="sr-shop" list="sShops" placeholder="Comprado en (opcional)" value="${esc(r.shop || '')}"></div></div></div>`;
   const mBud = vMonth(v, ymOf(log.date)).mant - (isNew ? 0 : Number(log.total) || 0);
   openSheet(isNew ? 'Mantenimiento · ' + esc(v.name) : 'Editar mantenimiento', `
     <div class="two"><label class="field"><span>Fecha</span><input id="sDate" type="date" value="${log.date}"></label><label class="field"><span>Kilometraje</span><input id="sKm" type="number" inputmode="numeric" value="${esc(log.km)}"></label></div>
-    <label class="field"><span>Taller o lugar</span><input id="sShop" value="${esc(log.shop)}" list="sShops" placeholder="Taller, agencia o yo mismo"><datalist id="sShops">${[...new Set(VEHS().flatMap(x => vLogs(x.id).map(l => l.shop)).filter(Boolean))].map(s => `<option value="${esc(s)}">`).join('')}</datalist></label>
+    <label class="field"><span>Taller o lugar</span><input id="sShop" value="${esc(log.shop)}" list="sShops" placeholder="Taller, agencia o yo mismo"><datalist id="sShops">${shopNames().map(s => `<option value="${esc(s)}">`).join('')}</datalist></label>
     <div class="field"><span>Checklist · marca lo que se hizo</span><div class="srows" id="sRows">${rows.map(rowHTML).join('')}</div>
       <div class="btns"><button type="button" class="btn sm" id="sAdd">+ Pieza o arreglo</button>${rows.some((r, i) => r.task && !r.on && !['bad', 'mid'].includes(r.sev)) && isNew ? '<button type="button" class="btn sm" id="sAll">Ver todo el plan</button>' : ''}</div></div>
     <div class="two"><label class="field"><span>Mano de obra</span><input id="sLabor" class="calc" type="text" inputmode="decimal" value="${log.labor || ''}" placeholder="0"></label><label class="field"><span>Fotos (factura, piezas)</span><input id="sImg" type="file" accept="image/*" multiple></label></div>
@@ -2623,6 +2624,8 @@ function editServ(vid, log) {
     vPut('vlog', id, rec);
     rec.items.filter(i => i.on && i.task).forEach(i => { const t = store('vtask')[i.task]; if (!t) return; if (!t.lastDate || date >= t.lastDate) vPut('vtask', i.task, Object.assign({}, t, { lastKm: km || t.lastKm, lastDate: date })); });
     if (km && km >= (Number(v.km) || 0)) vSave(Object.assign({}, vGet(v.id), { km, kmDate: date >= (v.kmDate || '') ? date : v.kmDate }));
+    const newShop = rec.shop && !SHOPS().some(x => x.name.toLowerCase() === rec.shop.toLowerCase()) ? rec.shop : '';
+    if (newShop) setTimeout(() => toast(`¿Guardar “${newShop}” en tus talleres?`, ['Guardar', () => editShop(null, newShop)]), 2600);
     const desc = `${v.name}: ${rec.title || 'mantenimiento'}`.slice(0, 90);
     if (log.movId && S.data.movs.some(m => m.id === log.movId)) { const m = S.data.movs.find(x => x.id === log.movId); op('mov.upsert', Object.assign({}, m, { amount: total, date, desc })); toast('Mantenimiento y gasto actualizados'); }
     else if (total > 0) setTimeout(() => askExpense({ v, desc, amount: total, date, sub: v.subMant || defaultSubs().mant, notes: `${fmtKm(km)}${rec.shop ? ' · ' + rec.shop : ''}`, onDone: movId => vPut('vlog', id, Object.assign({}, store('vlog')[id], { movId })) }), 30);
@@ -2648,7 +2651,7 @@ function editServ(vid, log) {
 function readRows(f) {
   return [...f.querySelectorAll('.srow')].map(r => {
     const nm = r.querySelector('.sr-nm'), x = calc(r.querySelector('.sr-cost').value);
-    return { name: nm ? nm.value.trim() : r.dataset.name, on: r.querySelector('input[type=checkbox]').checked, cost: isFinite(x) ? r2(x) : 0, action: (r.querySelector('.sr-act .on') || {}).textContent || 'Cambiado', detail: r.querySelector('.sr-det').value.trim(), task: r.dataset.task || '' };
+    return { name: nm ? nm.value.trim() : r.dataset.name, on: r.querySelector('input[type=checkbox]').checked, cost: isFinite(x) ? r2(x) : 0, action: (r.querySelector('.sr-act .on') || {}).textContent || 'Cambiado', detail: r.querySelector('.sr-det').value.trim(), shop: (r.querySelector('.sr-shop') || {}).value ? r.querySelector('.sr-shop').value.trim() : '', task: r.dataset.task || '' };
   });
 }
 function bindPhotos(f, inSel, boxSel, list) {
@@ -2746,7 +2749,7 @@ function showLog(id) {
   const mov = x.movId && S.data.movs.find(m => m.id === x.movId);
   openSheet(dLabel(x.date) + ' · ' + esc(v.name), `
     <div class="row2"><span class="muted">${fmtKm(x.km)}${x.shop ? ' · ' + esc(x.shop) : ''}</span><b class="num" style="font-size:1.2rem">${money(x.total)}</b></div>
-    <div class="list">${(x.items || []).filter(i => i.on).map(i => `<div class="row2 lrow"><span><b>${esc(i.name)}</b> <span class="pill acc">${esc(i.action)}</span>${i.detail ? `<br><small class="muted">${esc(i.detail)}</small>` : ''}</span><span class="num">${i.cost ? money(i.cost) : ''}</span></div>`).join('')}${x.labor ? `<div class="row2 lrow"><span>Mano de obra</span><span class="num">${money(x.labor)}</span></div>` : ''}</div>
+    <div class="list">${(x.items || []).filter(i => i.on).map(i => `<div class="row2 lrow"><span><b>${esc(i.name)}</b> <span class="pill acc">${esc(i.action)}</span>${i.detail || i.shop ? `<br><small class="muted">${esc([i.detail, i.shop ? 'en ' + i.shop : ''].filter(Boolean).join(' · '))}</small>` : ''}</span><span class="num">${i.cost ? money(i.cost) : ''}</span></div>`).join('')}${x.labor ? `<div class="row2 lrow"><span>Mano de obra</span><span class="num">${money(x.labor)}</span></div>` : ''}</div>
     ${x.notes ? `<p class="note" style="margin:0">${esc(x.notes)}</p>` : ''}
     ${(x.imgs || []).length ? `<div class="simgs" id="lImgs">${x.imgs.map(im => `<span class="sim"><img data-img="${im.id}" alt="Foto"></span>`).join('')}</div>` : ''}
     <p class="note" style="margin:0">${mov ? `Registrado como gasto en ${esc(mov.acc)}.` : 'No está en tus gastos.'}</p>
@@ -2780,6 +2783,62 @@ Object.assign(ACT, {
   vehLog: el => showLog(el.dataset.v), vehHist: el => { S.ui.vHist = el.dataset.v; render(); },
   vehTpl: el => loadTpl(vGet(el.dataset.v)), vehFund: el => vehFund(el.dataset.v)
 });
+
+/* ---- talleres y tiendas ---- */
+const SHOP_KINDS = ['Taller', 'Tienda de repuestos', 'Taller y repuestos', 'Agencia', 'Llantera', 'Gasolinera', 'Otro'];
+const SHOPS = () => Object.entries(store('vshop')).map(([id, x]) => Object.assign({ id }, x)).sort((a, b) => (b.fav ? 1 : 0) - (a.fav ? 1 : 0) || (a.name || '').localeCompare(b.name || ''));
+function shopNames() { return [...new Set(SHOPS().map(x => x.name).concat(VEHS().flatMap(v => vLogs(v.id).flatMap(l => [l.shop].concat((l.items || []).map(i => i.shop))))).filter(Boolean))]; }
+const telDigits = p => { const d = String(p || '').replace(/\D/g, ''); return d.length === 8 ? '503' + d : d; };
+function shopUse(name) {
+  const n = (name || '').trim().toLowerCase(); if (!n) return { visits: [], spent: 0, items: 0 };
+  const visits = [], all = VEHS().flatMap(v => vLogs(v.id).map(l => Object.assign({ vname: v.name }, l)));
+  let spent = 0, items = 0;
+  all.forEach(l => { const atShop = (l.shop || '').trim().toLowerCase() === n; const bought = (l.items || []).filter(i => i.on && (i.shop || '').trim().toLowerCase() === n); if (atShop) { visits.push(l); spent += Number(l.total) || 0; } else if (bought.length) { visits.push(Object.assign({}, l, { _items: bought })); spent += sum(bought, i => i.cost || 0); } items += bought.length; });
+  return { visits: visits.sort((a, b) => b.date.localeCompare(a.date)), spent, items };
+}
+const shopIcon = k => gsvg(/repuesto|tienda/i.test(k || '') ? 'cart' : /gasolin/i.test(k || '') ? 'fuel' : 'work');
+function shopsCard() {
+  const L = SHOPS();
+  return `<section class="card side-card"><header style="margin:0"><h2>Talleres y tiendas</h2><button type="button" class="linkbtn" data-act="shopEdit" data-v="">+ Agregar</button></header>
+  ${L.length ? `<div class="shops">${L.map(x => { const u = shopUse(x.name), last = u.visits[0]; return `<div class="shop"><button type="button" class="shop-main" data-act="shopView" data-v="${x.id}"><span class="ic">${shopIcon(x.kind)}</span><span class="t"><b>${x.fav ? '★ ' : ''}${esc(x.name)}</b><small>${esc([x.kind, x.contact, last ? 'última vez ' + dLabel(last.date) : ''].filter(Boolean).join(' · '))}</small></span></button>
+    <span class="shop-acts">${x.phone ? `<a class="sbtn" href="tel:+${telDigits(x.phone)}" aria-label="Llamar a ${esc(x.name)}" title="Llamar">${gsvg('phone')}</a>` : ''}${x.wa || x.phone ? `<a class="sbtn wa" href="https://wa.me/${telDigits(x.wa || x.phone)}" target="_blank" rel="noopener" aria-label="WhatsApp a ${esc(x.name)}" title="WhatsApp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l1.3-3.9A8 8 0 1 1 8 19.3z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 .8a4 4 0 0 1-2-2l.8-1-1-2z"/></svg></a>` : ''}${x.address || x.maps ? `<a class="sbtn" href="${esc(x.maps || 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(x.address))}" target="_blank" rel="noopener" aria-label="Ver en el mapa" title="Mapa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/></svg></a>` : ''}</span></div>`; }).join('')}</div>`
+  : '<p class="note">Guarda los talleres y tiendas de repuestos que usas: teléfono, WhatsApp, dirección y lo que has gastado en cada uno.</p>'}
+  </section>`;
+}
+function editShop(x, preName) {
+  const isNew = !x;
+  x = Object.assign({ id: 's' + uid(), name: preName || '', kind: 'Taller', contact: '', phone: '', wa: '', address: '', maps: '', hours: '', specialty: '', notes: '', fav: false }, x || {});
+  openSheet(isNew ? 'Nuevo taller o tienda' : 'Editar · ' + esc(x.name), `
+    <div class="two"><label class="field"><span>Nombre</span><input id="shName" value="${esc(x.name)}" placeholder="Taller Don Luis" ${isNew && !preName ? 'autofocus' : ''} required></label><label class="field"><span>Tipo</span>${sel('shKind', SHOP_KINDS, x.kind)}</label></div>
+    <div class="two"><label class="field"><span>Persona de contacto</span><input id="shContact" value="${esc(x.contact)}" placeholder="Don Luis"></label><label class="field"><span>Teléfono</span><input id="shPhone" type="tel" inputmode="tel" value="${esc(x.phone)}" placeholder="7777-7777"></label></div>
+    <div class="two"><label class="field"><span>WhatsApp (si es otro número)</span><input id="shWa" type="tel" inputmode="tel" value="${esc(x.wa)}"></label><label class="field"><span>Horario</span><input id="shHours" value="${esc(x.hours)}" placeholder="Lun a sáb 8:00 a 5:00"></label></div>
+    <label class="field"><span>Dirección</span><input id="shAddr" value="${esc(x.address)}" placeholder="Calle, colonia, municipio"></label>
+    <label class="field"><span>Enlace de Google Maps (opcional)</span><input id="shMaps" type="url" value="${esc(x.maps)}" placeholder="https://maps.app.goo.gl/…"></label>
+    <label class="field"><span>Especialidad o qué venden</span><input id="shSpec" value="${esc(x.specialty)}" placeholder="Motos Honda, frenos, llantas…"></label>
+    <label class="field"><span>Notas</span><textarea id="shNotes" rows="2" placeholder="Precios, si dan garantía, si hay que llegar temprano…">${esc(x.notes)}</textarea></label>
+    <label class="ag-pin"><input type="checkbox" id="shFav" ${x.fav ? 'checked' : ''}> Favorito (aparece primero)</label>
+    <div class="btns"><button class="btn pri">Guardar</button>${isNew ? '' : '<button type="button" class="btn danger" id="shDel">Eliminar</button>'}</div>`, () => {
+    const name = $('#shName').value.trim(); if (!name) return 'Escribe el nombre.';
+    let maps = $('#shMaps').value.trim(); if (maps && !/^https?:\/\//.test(maps)) maps = 'https://' + maps;
+    const d = { name, kind: $('#shKind').value, contact: $('#shContact').value.trim(), phone: $('#shPhone').value.trim(), wa: $('#shWa').value.trim(), address: $('#shAddr').value.trim(), maps, hours: $('#shHours').value.trim(), specialty: $('#shSpec').value.trim(), notes: $('#shNotes').value.trim(), fav: $('#shFav').checked };
+    vPut('vshop', x.id, d); toast(isNew ? 'Guardado en tus talleres' : 'Guardado');
+  }, f => { const del = f.querySelector('#shDel'); if (del) del.onclick = () => { op('rec.delete', { coll: 'vshop', id: x.id }); closeSheet(); toast('Eliminado. Tus mantenimientos conservan el nombre.'); }; });
+}
+function viewShop(id) {
+  const x = Object.assign({ id }, store('vshop')[id]), u = shopUse(x.name);
+  const row = (lab, val, href) => val ? `<div class="row2 lrow"><span class="muted">${lab}</span>${href ? `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(val)}</a>` : `<span>${esc(val)}</span>`}</div>` : '';
+  openSheet(esc(x.name), `<div class="shop-head"><span class="ic">${shopIcon(x.kind)}</span><div><b>${esc(x.kind)}</b><small class="muted">${esc(x.specialty || '')}</small></div></div>
+    <div class="pbtns">${x.phone ? `<a class="btn sm" href="tel:+${telDigits(x.phone)}">${gsvg('phone')}Llamar</a>` : ''}${x.wa || x.phone ? `<a class="btn sm" href="https://wa.me/${telDigits(x.wa || x.phone)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}${x.address || x.maps ? `<a class="btn sm" href="${esc(x.maps || 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(x.address))}" target="_blank" rel="noopener">Cómo llegar</a>` : ''}</div>
+    <div class="list">${row('Contacto', x.contact)}${row('Teléfono', x.phone, x.phone ? 'tel:+' + telDigits(x.phone) : '')}${row('Dirección', x.address)}${row('Horario', x.hours)}</div>
+    ${x.notes ? `<p class="note" style="margin:0">${esc(x.notes)}</p>` : ''}
+    <div class="stotal"><span>${u.visits.length} visita${u.visits.length === 1 ? '' : 's'}${u.items ? ` · ${u.items} pieza${u.items === 1 ? '' : 's'} compradas` : ''}</span><b class="num">${money(u.spent)}</b></div>
+    ${u.visits.length ? `<div class="list">${u.visits.slice(0, 8).map(l => `<button type="button" class="row2 lrow linkrow" data-lid="${l.id}"><span>${dLabel(l.date)} · ${esc(l.vname)}<br><small class="muted">${esc(l._items ? 'Compró: ' + l._items.map(i => i.name).join(', ') : l.title || 'Mantenimiento')}</small></span><span class="num">${money(l._items ? sum(l._items, i => i.cost || 0) : l.total)}</span></button>`).join('')}</div>` : '<p class="note" style="margin:0">Cuando registres un mantenimiento aquí, o una pieza "comprada en" este lugar, aparece en este historial.</p>'}
+    <div class="btns"><button type="button" class="btn pri" id="shEd">Editar</button></div>`, () => { }, f => {
+    f.querySelector('#shEd').onclick = () => { closeSheet(); editShop(x); };
+    f.addEventListener('click', e => { const b = e.target.closest('[data-lid]'); if (b) { closeSheet(); showLog(b.dataset.lid); } });
+  });
+}
+Object.assign(ACT, { shopEdit: el => editShop(el.dataset.v ? Object.assign({ id: el.dataset.v }, store('vshop')[el.dataset.v]) : null), shopView: el => viewShop(el.dataset.v) });
 
 /* ---------------- Arranque ---------------- */
 load();

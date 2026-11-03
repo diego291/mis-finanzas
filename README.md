@@ -114,3 +114,4 @@ Sección **Vehículos** (y tarjeta en Inicio) para llevar cada vehículo por sep
 - **Presupuesto:** mensual de mantenimiento y de gasolina por vehículo, más un fondo (meta) para piezas grandes. También calcula el **costo por km**.
 
 Se guarda en la hoja AppData (conector v3).
+- **Talleres y tiendas:** directorio con nombre, tipo, contacto, teléfono, WhatsApp, dirección, enlace de Maps, horario, especialidad y notas. Botones para llamar, escribir por WhatsApp y ver el mapa. Cada lugar muestra cuántas veces fuiste y cuánto has gastado ahí (servicios hechos ahí y piezas "compradas en").

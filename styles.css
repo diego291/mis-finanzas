@@ -860,3 +860,24 @@ body[data-design="c"] .next-step b { color: var(--cta-bg); }
 .acc-custom { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; color: var(--muted); cursor: pointer; }
 .acc-custom input { width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; }
 .acc-custom input::-webkit-color-swatch-wrapper { padding: 0; } .acc-custom input::-webkit-color-swatch { border: 0; border-radius: 50%; } .acc-custom input::-moz-color-swatch { border: 0; border-radius: 50%; }
+
+/* talleres y tiendas */
+.shops { display: grid; }
+.shop { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--line); padding: 4px 0; }
+.shop:last-child { border-bottom: 0; }
+.shop-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; border: 0; background: none; color: var(--fg); text-align: left; padding: 8px 2px; cursor: pointer; }
+.shop-main .ic, .shop-head .ic { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; background: var(--surface-2); color: var(--accent); flex: none; }
+.shop-main .ic svg, .shop-head .ic svg { width: 20px; height: 20px; }
+.shop-main .t { min-width: 0; } .shop-main b { display: block; font-size: .92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shop-main small { display: block; color: var(--muted); font-size: .78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shop-acts { display: flex; gap: 6px; flex: none; }
+.sbtn { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); color: var(--fg); }
+.sbtn svg { width: 18px; height: 18px; } .sbtn.wa { color: #25a35a; } .sbtn:hover { background: var(--accent-soft); color: var(--accent); }
+.shop-head { display: flex; align-items: center; gap: 12px; } .shop-head b, .shop-head small { display: block; }
+.pbtns a.btn { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; } .pbtns a.btn svg { width: 16px; height: 16px; }
+.linkrow { width: 100%; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--fg); text-align: left; cursor: pointer; font: inherit; }
+.linkrow:hover { background: var(--surface-2); }
+.sr-two { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.srows input.sr-shop { width: 100%; padding: 7px 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface-2); color: var(--fg); font-size: .84rem; min-height: 0; }
+@media (max-width: 600px) { .sr-two { grid-template-columns: 1fr; } }
+.shops { grid-template-columns: minmax(0, 1fr); } .shop { min-width: 0; }
