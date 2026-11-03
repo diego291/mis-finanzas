@@ -1183,3 +1183,9 @@ body[data-design="c"] .next-step b { color: var(--cta-bg); }
 .bidle { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
 .bidle .chip { border-style: solid; color: var(--fg); } .bidle .chip small { color: var(--muted); }
 @media (max-width: 600px) { .bgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .btile { padding: 10px; } .bt-n .num { font-size: 1.05rem; } .bt-h .pill { display: none; } }
+
+/* Inicio: tarjetas en mosaico, sin huecos */
+.home-cards { display: block !important; columns: 2 320px; column-gap: var(--gap); }
+.home-cards > * { break-inside: avoid; margin-bottom: var(--gap); width: 100%; }
+.today-card .agp-sec { display: grid; gap: 1px; }
+.agp-more { justify-self: start; font-size: .8rem; padding: 4px 6px; }

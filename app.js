@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '3.0.5';
+const VERSION = '3.0.6';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -1139,12 +1139,14 @@ function editAgenda(n, kind, day) {
     sync();
   });
 }
+function agRowCompact(n) { const c = n.gcol || AG_COLORS[n.color] || AG_COLORS.verde; return `<button type="button" class="agp-it ${isDone(n) ? 'done' : ''}" data-act="${n.gid ? 'calEditG' : 'agEdit'}" data-id="${esc(n.gid || n.id)}" title="${esc(n.text)}"><i style="background:${c}"></i>${n.time ? `<span class="agp-t">${fmtTime(n.time)}</span>` : ''}<span class="agp-n">${esc(n.text)}</span></button>`; }
 function todayCard() {
   const it = agItemsOn(today());
   const ev = it.ev.filter(n => !isDone(n)), td = it.td.filter(n => !isDone(n)), pays = it.pays.filter(x => !x.s.marked);
   const upcoming = !ev.length && !td.length && !pays.length ? S.data.notes.filter(n => kindOf(n) !== 'nota' && !isDone(n) && n.due > today()).sort((a, b) => (a.due + (a.time || '')).localeCompare(b.due + (b.time || ''))).slice(0, 3) : [];
   return `<section class="card side-card today-card"><header style="margin:0"><h2>Hoy en tu agenda</h2><a href="#agenda">Agenda</a></header>
-    ${ev.length || td.length || pays.length ? `<div class="ag-evs">${ev.map(agEventRow).join('')}</div><div class="ag-todos">${pays.map(agPayRow).join('')}${td.map(n => agTodoRow(n, false)).join('')}</div>`
+    ${ev.length || td.length || pays.length ? (() => { const tl = ev.filter(n => n.time), ad = ev.filter(n => !n.time), open = S.ui.homeAdOpen, sh = open ? ad : ad.slice(0, 4);
+      return `${tl.length ? `<div class="agp-sec">${tl.map(agRowCompact).join('')}</div>` : ''}${ad.length ? `<div class="agp-sec"><small class="agp-h">Todo el día · ${ad.length}</small>${sh.map(agRowCompact).join('')}${ad.length > 4 ? `<button type="button" class="linkbtn agp-more" data-act="homeAdToggle">${open ? 'Ver menos' : '+' + (ad.length - 4) + ' más'}</button>` : ''}</div>` : ''}${pays.length || td.length ? `<div class="ag-todos">${pays.map(agPayRow).join('')}${td.map(n => agTodoRow(n, false)).join('')}</div>` : ''}`; })()
     : `<p class="note">Nada para hoy.${upcoming.length ? ' Lo que viene:' : ''}</p>${upcoming.length ? `<div class="ag-todos">${upcoming.map(n => agTodoRow(n, true)).join('')}</div>` : ''}`}
     <form id="agQuickHome" class="ag-quick"><input id="agQH" type="text" autocomplete="off" placeholder="Anota un pendiente: llamar a cliente mañana"><button class="btn sm" type="submit">Agregar</button></form>
   </section>`;
@@ -2146,6 +2148,7 @@ const ACT = {
   blNewPg: el => newPage(el.dataset.v),
   blPageMenu: () => pageMenu(),
   blExport: () => exportDialog(),
+  homeAdToggle: () => { S.ui.homeAdOpen = !S.ui.homeAdOpen; render(); },
   agpDay: el => { S.ui.agpSel = el.dataset.v; setTimeout(() => { const p = $('#agPanel'); if (p) p.innerHTML = agPanelHTML(); }, 0); },
   agpWeek: el => { S.ui.agpWeek = addDays(weekStart(S.ui.agpWeek || S.ui.agpSel || today()), Number(el.dataset.v)); setTimeout(() => { const p = $('#agPanel'); if (p) p.innerHTML = agPanelHTML(); }, 0); },
   agpOpen: el => { S.ui.agTab = 'dia'; S.ui.calView = 'dia'; S.ui.calDate = el.dataset.v; $('#agPanel').hidden = true; go('agenda'); },
