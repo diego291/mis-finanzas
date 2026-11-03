@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '3.0.9';
+const VERSION = '3.1.0';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -1922,10 +1922,11 @@ function editMov(m, preset, opts = {}) {
         <div class="catmini">${subs.map(x => `<button type="button" class="cm" data-r="sub" data-v="${esc(x)}" title="${esc(x)}">${gsvg(glyphFor(x, catOf(x)))}${esc(short(x))}</button>`).join('')}<button type="button" class="cm more" data-r="allCats">${open ? 'Todas…' : '+ más'}</button></div></div>
       ${st.allCats ? `<label class="field"><span>Todas las subcategorías</span><select id="rSub">${subOptions(st.type, st.sub)}</select></label>` : ''}`;
     })() : '';
-    body.innerHTML = `
+    body.innerHTML = `<div class="reg-l">
       <div class="seg reg-type">${typeTabs.map(([t, l]) => `<button type="button" data-r="type" data-v="${t}" class="${(l === k) ? 'on' : ''}">${l}</button>`).join('')}</div>
       ${k === 'Meta' ? `<div class="seg reg-type sm">${[['Aporte a meta', 'Aportar'], ['Retiro de meta', 'Retirar']].map(([t, l]) => `<button type="button" data-r="type" data-v="${t}" class="${st.type === t ? 'on' : ''}">${l}</button>`).join('')}</div>` : ''}
       <div class="reg-amt ${st.type === 'Gasto' ? 'out' : st.type === 'Ingreso' ? 'in' : ''} ${n ? '' : 'zero'}">${ex ? `<small class="reg-expr">${esc(st.amt.replace(/\*/g, '×').replace(/\//g, '÷'))}</small>` : ''}<span>${sign}$${ex ? (isFinite(calc(st.amt)) ? n.toFixed(2) : '…') : esc(st.amt || '0')}</span></div>
+      ${KEYS_HTML()}</div><div class="reg-r">
       ${st.type === 'Transferencia' || st.type.includes('meta') ? `<div class="reg-lab">${st.type === 'Retiro de meta' ? 'Entra a' : 'Sale de'}</div>` : ''}
       ${accPick(accOrder(), st.acc, 'acc')}
       ${st.type === 'Transferencia' ? `<div class="reg-lab">Va a</div>${accPick(accOrder().filter(a => a !== st.acc), st.to, 'to')}` : ''}
@@ -1940,12 +1941,14 @@ function editMov(m, preset, opts = {}) {
         <div class="two"><label class="field"><span>Ámbito</span>${sel('rScope', D.lists.scopes, st.scope || 'Personal')}</label><label class="field"><span>Método de pago</span>${sel('rMethod', D.lists.methods, st.method, '—')}</label></div>
         ${st.type === 'Gasto' && D.debts.length ? `<label class="field"><span>¿Es pago de una deuda?</span>${sel('rDebt', D.debts.map(d => d.name), st.debt, 'No')}</label>` : ''}
         <label class="field"><span>Notas</span><textarea id="rNotes" rows="2">${esc(st.notes)}</textarea></label></div>` : ''}
-      <div class="reg-keys">${['7', '8', '9', '/', '4', '5', '6', '*', '1', '2', '3', '-', '.', '0', 'del', '+'].map(x => { const lab = { del: '⌫', '/': '÷', '*': '×', '-': '−', '+': '+' }[x] || x; return `<button type="button" class="${'+-*/'.includes(x) ? 'op' : ''}" data-r="key" data-v="${x}" aria-label="${{ del: 'Borrar', '/': 'Dividir', '*': 'Multiplicar', '-': 'Restar', '+': 'Sumar', '.': 'Punto decimal' }[x] || x}">${lab}</button>`; }).join('')}</div>
-      ${ex && isFinite(calc(st.amt)) ? `<button type="button" class="rchip" data-r="key" data-v="=" style="justify-self:center">= ${money(n)} · usar resultado</button>` : ''}
-      <button type="button" class="reg-save ${err ? 'off' : ''}" data-r="save">${err || (isNew ? 'Guardar ' : 'Guardar cambios · ') + sign + money(n).replace('−', '')}</button>
-      ${isNew ? '' : `<div class="btns" style="justify-content:center"><button type="button" class="btn sm" data-r="dup">Duplicar</button><button type="button" class="btn sm danger" data-r="del">Eliminar</button></div><div id="delConfirm" hidden class="alert bad"><span></span><div><b>¿Eliminar este movimiento?</b><p>Se borra también de tu hoja.</p></div><div class="acts"><button type="button" class="btn sm danger" data-r="delYes">Eliminar</button></div></div>`}`;
+      ${SAVE_HTML()}</div>`;
     hydrateImgs(body);
   };
+  const KEYS_HTML = () => { const n = r2(calc(st.amt) || 0), ex = isExpr(st.amt); return `<div class="reg-keys">${['7', '8', '9', '/', '4', '5', '6', '*', '1', '2', '3', '-', '.', '0', 'del', '+'].map(x => { const lab = { del: '⌫', '/': '÷', '*': '×', '-': '−', '+': '+' }[x] || x; return `<button type="button" class="${'+-*/'.includes(x) ? 'op' : ''}" data-r="key" data-v="${x}" aria-label="${{ del: 'Borrar', '/': 'Dividir', '*': 'Multiplicar', '-': 'Restar', '+': 'Sumar', '.': 'Punto decimal' }[x] || x}">${lab}</button>`; }).join('')}</div>
+      ${ex && isFinite(calc(st.amt)) ? `<button type="button" class="rchip reg-eq" data-r="key" data-v="=" style="justify-self:center">= ${money(n)} · usar resultado</button>` : ''}`; };
+  const SAVE_HTML = () => { const n = r2(calc(st.amt) || 0), err = valid(), sign = st.type === 'Gasto' || st.type === 'Aporte a meta' ? '−' : st.type === 'Ingreso' || st.type === 'Retiro de meta' ? '+' : ''; return `
+      <button type="button" class="reg-save ${err ? 'off' : ''}" data-r="save">${err || (isNew ? 'Guardar ' : 'Guardar cambios · ') + sign + money(n).replace('−', '')}</button>
+      ${isNew ? '' : `<div class="btns" style="justify-content:center"><button type="button" class="btn sm" data-r="dup">Duplicar</button><button type="button" class="btn sm danger" data-r="del">Eliminar</button></div><div id="delConfirm" hidden class="alert bad"><span></span><div><b>¿Eliminar este movimiento?</b><p>Se borra también de tu hoja.</p></div><div class="acts"><button type="button" class="btn sm danger" data-r="delYes">Eliminar</button></div></div>`}`; };
   const readMore = () => { if (!st.more) return; st.desc = $('#rDesc')?.value.trim() ?? st.desc; st.scope = $('#rScope')?.value || st.scope; st.method = $('#rMethod')?.value ?? st.method; st.debt = $('#rDebt')?.value ?? st.debt; st.notes = $('#rNotes')?.value.trim() ?? st.notes; };
   const save = () => {
     readMore(); if (valid()) return;

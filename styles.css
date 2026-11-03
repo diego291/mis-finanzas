@@ -1227,3 +1227,19 @@ body[data-design="c"] .next-step b { color: var(--cta-bg); }
 .catmini .cm svg { width: 14px; height: 14px; color: var(--muted); flex: none; }
 .catmini .cm.more { color: var(--accent); background: none; }
 .catmini .cm:hover { border-color: var(--muted); }
+
+/* Registrar: en teléfono un solo flujo; en PC dos columnas sin scroll */
+.reg-l, .reg-r { display: contents; }
+#regBody .reg-keys, #regBody .reg-eq { order: 1; }
+#regBody .reg-save, #regBody .reg-save ~ * { order: 2; }
+@media (min-width: 900px) and (min-height: 560px) {
+  .sheet:has(#regBody) { width: min(900px, 100%); }
+  #regBody { grid-template-columns: 300px minmax(0, 1fr); gap: 20px; align-items: start; }
+  #regBody:has(.reg-done) { grid-template-columns: minmax(0, 1fr); }
+  .reg-l, .reg-r { display: grid; gap: 10px; align-content: start; min-width: 0; }
+  #regBody .reg-keys, #regBody .reg-eq, #regBody .reg-save, #regBody .reg-save ~ * { order: 0; }
+  .reg-l { position: sticky; top: 0; }
+  .reg-l .reg-amt { font-size: 2.8rem; padding: 10px 0; }
+  .reg-l .reg-keys button { height: 48px; }
+  .reg-r .reg-save { position: static; box-shadow: none; height: 50px; margin-top: 4px; }
+}
