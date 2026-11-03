@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '3.0.7';
+const VERSION = '3.0.8';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -1903,6 +1903,11 @@ function editMov(m, preset, opts = {}) {
   const balNow = () => { const b = Object.assign({}, baseBal), A = r2(calc(st.amt) || 0); if (!(A > 0) || !st.acc) return b;
     const f = { 'Ingreso': 1, 'Gasto': -1, 'Transferencia': -1, 'Aporte a meta': -1, 'Retiro de meta': 1 }[st.type] || 0; b[st.acc] = (b[st.acc] || 0) + f * A;
     if (st.type === 'Transferencia' && st.to && st.to !== st.acc) b[st.to] = (b[st.to] || 0) + A; return b; };
+  const accPick = (list, cur, act) => { const bn = balNow(), open = st['open_' + act];
+    const bal = n => { const v = r2(bn[n] || 0), b0 = r2(baseBal[n] || 0); return v !== b0 ? `<span class="n">${money(b0)}</span> → <span class="n ${v < b0 ? 'down' : 'up'}">${money(v)}</span>` : `<span class="n ${v < 0 ? 'down' : ''}">${money(v)}</span>`; };
+    const others = list.filter(n => n !== cur), show = open ? others : others.slice(0, 2);
+    return `<div class="accpick">${cur ? `<button type="button" class="accsel" data-r="open" data-v="${act}" style="--ac:${accStyle(cur).color}" aria-expanded="${open ? 'true' : 'false'}">${accBadge(cur, 'sm')}<span class="as-t"><b>${esc(cur)}</b><small>${bal(cur)}</small></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="as-c" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>` : ''}
+      <div class="accmini">${show.map(n => `<button type="button" class="am" data-r="${act}" data-v="${esc(n)}"><i style="background:${accStyle(n).color}"></i>${esc(n)}<span class="n">${money(r2(bn[n] || 0)).replace('$', '')}</span></button>`).join('')}${!open && others.length > 2 ? `<button type="button" class="am more" data-r="open" data-v="${act}">+${others.length - 2}</button>` : ''}</div></div>`; };
   const chipRow = (list, cur, act) => { const bn = balNow(); return `<div class="reg-chips">${list.map(n => { const ac = act === 'acc' || act === 'to'; const v = r2(bn[n] || 0), d = r2(v - (baseBal[n] || 0));
     return `<button type="button" class="rchip ${ac ? 'accchip' : ''} ${n === cur ? 'on' : ''}" data-r="${act}" data-v="${esc(n)}" ${ac ? `style="--ac:${accStyle(n).color}"` : ''}>${ac ? accBadge(n, 'sm') : ''}${esc(n)}${ac ? `<small class="acc-bal ${v < 0 ? 'neg' : ''} ${d ? (d < 0 ? 'down' : 'up') : ''}" title="${d ? 'Antes ' + money(baseBal[n] || 0) : 'Saldo actual'}">${money(v)}</small>` : ''}</button>`; }).join('')}</div>`; };
   const paint = () => {
@@ -1918,8 +1923,8 @@ function editMov(m, preset, opts = {}) {
       ${k === 'Meta' ? `<div class="seg reg-type sm">${[['Aporte a meta', 'Aportar'], ['Retiro de meta', 'Retirar']].map(([t, l]) => `<button type="button" data-r="type" data-v="${t}" class="${st.type === t ? 'on' : ''}">${l}</button>`).join('')}</div>` : ''}
       <div class="reg-amt ${st.type === 'Gasto' ? 'out' : st.type === 'Ingreso' ? 'in' : ''} ${n ? '' : 'zero'}">${ex ? `<small class="reg-expr">${esc(st.amt.replace(/\*/g, '×').replace(/\//g, '÷'))}</small>` : ''}<span>${sign}$${ex ? (isFinite(calc(st.amt)) ? n.toFixed(2) : '…') : esc(st.amt || '0')}</span></div>
       ${st.type === 'Transferencia' || st.type.includes('meta') ? `<div class="reg-lab">${st.type === 'Retiro de meta' ? 'Entra a' : 'Sale de'}</div>` : ''}
-      ${chipRow(accOrder(), st.acc, 'acc')}
-      ${st.type === 'Transferencia' ? `<div class="reg-lab">Va a</div>${chipRow(accOrder().filter(a => a !== st.acc), st.to, 'to')}` : ''}
+      ${accPick(accOrder(), st.acc, 'acc')}
+      ${st.type === 'Transferencia' ? `<div class="reg-lab">Va a</div>${accPick(accOrder().filter(a => a !== st.acc), st.to, 'to')}` : ''}
       ${st.type.includes('meta') ? `<div class="reg-lab">Meta</div>${chipRow(D.goals.map(g => g.name), st.goal, 'goal')}` : ''}
       ${budgetNote()}
       ${tiles}
@@ -1957,8 +1962,9 @@ function editMov(m, preset, opts = {}) {
     if (r === 'type') { st.type = v; if (v !== 'Gasto' && v !== 'Ingreso') st.sub = ''; else if (st.sub && catMap()[st.sub]?.type !== v) st.sub = ''; st.allCats = false; }
     else if (r === 'sub') st.sub = v;
     else if (r === 'allCats') st.allCats = !st.allCats;
-    else if (r === 'acc') { st.acc = v; if (st.to === v) st.to = ''; }
-    else if (r === 'to') st.to = v;
+    else if (r === 'acc') { st.acc = v; st.open_acc = false; if (st.to === v) st.to = ''; }
+    else if (r === 'to') { st.to = v; st.open_to = false; }
+    else if (r === 'open') st['open_' + v] = !st['open_' + v];
     else if (r === 'goal') st.goal = v;
     else if (r === 'date') st.date = v;
     else if (r === 'more') st.more = !st.more;

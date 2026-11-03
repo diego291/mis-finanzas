@@ -1195,3 +1195,19 @@ body[data-design="c"] .next-step b { color: var(--cta-bg); }
 .accchip .acc-bal.neg { color: #ffb4a8; }
 .accchip .acc-bal.down { color: #ffb4a8; opacity: 1; }
 .accchip .acc-bal.up { color: var(--accent); opacity: 1; }
+
+/* Registro: cuenta en una sola línea */
+.accpick { display: grid; gap: 6px; }
+.accsel { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 7px 10px; border-radius: 12px; border: 1px solid var(--ac); background: color-mix(in srgb, var(--ac) 12%, var(--surface-2)); color: var(--fg); cursor: pointer; }
+.accsel .as-t { flex: 1; min-width: 0; display: grid; line-height: 1.25; }
+.accsel b { font-size: .88rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.accsel small { font-size: .74rem; color: var(--muted); }
+.accsel .as-c { width: 16px; height: 16px; color: var(--muted); transition: transform .2s; }
+.accsel[aria-expanded="true"] .as-c { transform: rotate(180deg); }
+.accpick .n { font-family: var(--f-num); font-weight: 500; }
+.accpick .n.down { color: #ffb4a8; } .accpick .n.up { color: var(--accent); }
+.accmini { display: flex; flex-wrap: wrap; gap: 5px; }
+.accmini .am { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 99px; border: 1px solid var(--line); background: none; color: var(--muted); font-size: .74rem; font-weight: 600; cursor: pointer; }
+.accmini .am i { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.accmini .am .n { font-size: .7rem; opacity: .8; }
+.accmini .am:hover { color: var(--fg); border-color: var(--muted); }
