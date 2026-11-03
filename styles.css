@@ -1211,3 +1211,19 @@ body[data-design="c"] .next-step b { color: var(--cta-bg); }
 .accmini .am i { width: 7px; height: 7px; border-radius: 50%; flex: none; }
 .accmini .am .n { font-size: .7rem; opacity: .8; }
 .accmini .am:hover { color: var(--fg); border-color: var(--muted); }
+
+/* Registro: categoría en una sola línea */
+.catpick { display: grid; gap: 6px; }
+.catsel { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 7px 10px; border-radius: 12px; border: 1px solid var(--accent); background: var(--accent-soft); color: var(--fg); cursor: pointer; }
+.catsel > svg:first-child { width: 20px; height: 20px; color: var(--accent); flex: none; }
+.catsel .as-t { flex: 1; min-width: 0; display: grid; line-height: 1.25; }
+.catsel b { font-size: .88rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.catsel small { font-size: .74rem; color: var(--muted); } .catsel small b { font-size: inherit; font-family: var(--f-num); font-weight: 500; }
+.catsel small.ok b { color: var(--accent); } .catsel small.bad, .catsel small.bad b { color: #ffb4a8; }
+.catsel .as-c { width: 16px; height: 16px; color: var(--muted); transition: transform .2s; }
+.catsel[aria-expanded="true"] .as-c { transform: rotate(180deg); }
+.catmini { display: flex; flex-wrap: wrap; gap: 5px; }
+.catmini .cm { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface-2); color: var(--fg); font-size: .78rem; font-weight: 600; cursor: pointer; }
+.catmini .cm svg { width: 14px; height: 14px; color: var(--muted); flex: none; }
+.catmini .cm.more { color: var(--accent); background: none; }
+.catmini .cm:hover { border-color: var(--muted); }

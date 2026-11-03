@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '3.0.8';
+const VERSION = '3.0.9';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -1914,8 +1914,12 @@ function editMov(m, preset, opts = {}) {
     const n = r2(calc(st.amt) || 0), k = kind(), err = valid(), ex = isExpr(st.amt);
     const sign = st.type === 'Gasto' || st.type === 'Aporte a meta' ? '−' : st.type === 'Ingreso' || st.type === 'Retiro de meta' ? '+' : '';
     const tiles = (st.type === 'Gasto' || st.type === 'Ingreso') ? (() => {
-      let subs = topSubs(st.type, 7); if (st.sub && !subs.includes(st.sub)) subs = [st.sub].concat(subs.slice(0, 6));
-      return `<div class="reg-tiles">${subs.map(s => `<button type="button" class="rtile ${s === st.sub ? 'on' : ''}" data-r="sub" data-v="${esc(s)}" title="${esc(s)}">${gsvg(glyphFor(s, catOf(s)))}<span>${esc(s.replace(/\s*\(.*\)/, ''))}</span></button>`).join('')}<button type="button" class="rtile" data-r="allCats">${gsvg('dots')}<span>Más</span></button></div>
+      const short = x => x.replace(/\s*\(.*\)/, ''), open = !st.sub || st.open_cat, subs = topSubs(st.type, 9).filter(x => x !== st.sub).slice(0, open ? 8 : 4);
+      const bl = (() => { if (st.type !== 'Gasto' || !st.sub) return ['', catOf(st.sub) || '']; const cat = catOf(st.sub), b = (D.budgets.find(x => x.cat === cat) || {}).amount || 0; if (!b) return ['', `${cat} · sin presupuesto`];
+        const ym = ymOf(st.date || today()), spent = month(ym).byCat[cat] || 0, prev = m && m.type === 'Gasto' && catOf(m.sub) === cat && ymOf(m.date) === ym ? m.amount : 0, left = b - (spent - prev) - (calc(st.amt) || 0);
+        return left >= 0 ? ['ok', `${cat} · te quedan <b>${money(left)}</b>`] : ['bad', `${cat} · te pasas por <b>${money(-left)}</b>`]; })();
+      return `<div class="catpick">${st.sub ? `<button type="button" class="catsel" data-r="open" data-v="cat" aria-expanded="${open ? 'true' : 'false'}">${gsvg(glyphFor(st.sub, catOf(st.sub)))}<span class="as-t"><b>${esc(short(st.sub))}</b><small class="${bl[0]}">${bl[0] ? bl[1] : esc(bl[1])}</small></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="as-c" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>` : ''}
+        <div class="catmini">${subs.map(x => `<button type="button" class="cm" data-r="sub" data-v="${esc(x)}" title="${esc(x)}">${gsvg(glyphFor(x, catOf(x)))}${esc(short(x))}</button>`).join('')}<button type="button" class="cm more" data-r="allCats">${open ? 'Todas…' : '+ más'}</button></div></div>
       ${st.allCats ? `<label class="field"><span>Todas las subcategorías</span><select id="rSub">${subOptions(st.type, st.sub)}</select></label>` : ''}`;
     })() : '';
     body.innerHTML = `
@@ -1926,7 +1930,7 @@ function editMov(m, preset, opts = {}) {
       ${accPick(accOrder(), st.acc, 'acc')}
       ${st.type === 'Transferencia' ? `<div class="reg-lab">Va a</div>${accPick(accOrder().filter(a => a !== st.acc), st.to, 'to')}` : ''}
       ${st.type.includes('meta') ? `<div class="reg-lab">Meta</div>${chipRow(D.goals.map(g => g.name), st.goal, 'goal')}` : ''}
-      ${budgetNote()}
+      ${st.type === 'Gasto' || st.type === 'Ingreso' ? '' : budgetNote()}
       ${tiles}
       <div class="reg-chips">${[['Hoy', today()], ['Ayer', (() => { const d = new Date(); d.setDate(d.getDate() - 1); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; })()]].map(([l, v]) => `<button type="button" class="rchip ${st.date === v ? 'on' : ''}" data-r="date" data-v="${v}">${l}</button>`).join('')}<label class="rchip date ${st.date !== today() ? 'on' : ''}"><input type="date" id="rDate" value="${st.date}" aria-label="Fecha"></label></div>
       ${canPhoto ? `<div class="reg-photos">${st.imgs.map((x, i) => `<span class="sim"><img ${x.url ? `src="${x.url}"` : `data-img="${x.id}"`} alt="Foto ${i + 1}" data-r="imgView" data-v="${i}"><button type="button" data-r="imgRm" data-v="${i}" aria-label="Quitar foto">×</button></span>`).join('')}<label class="rchip pbtn">${CAM_I}Tomar foto<input type="file" accept="image/*" capture="environment" id="rCam" hidden></label><label class="rchip pbtn">${GAL_I}${st.imgs.length ? 'Otra' : 'Foto de galería'}<input type="file" accept="image/*" multiple id="rGal" hidden></label></div>` : ''}
@@ -1960,8 +1964,8 @@ function editMov(m, preset, opts = {}) {
     const r = b.dataset.r, v = b.dataset.v;
     if (r !== 'key') readMore();
     if (r === 'type') { st.type = v; if (v !== 'Gasto' && v !== 'Ingreso') st.sub = ''; else if (st.sub && catMap()[st.sub]?.type !== v) st.sub = ''; st.allCats = false; }
-    else if (r === 'sub') st.sub = v;
-    else if (r === 'allCats') st.allCats = !st.allCats;
+    else if (r === 'sub') { st.sub = v; st.open_cat = false; st.allCats = false; }
+    else if (r === 'allCats') { if (st.sub && !st.open_cat) st.open_cat = true; else st.allCats = !st.allCats; }
     else if (r === 'acc') { st.acc = v; st.open_acc = false; if (st.to === v) st.to = ''; }
     else if (r === 'to') { st.to = v; st.open_to = false; }
     else if (r === 'open') st['open_' + v] = !st['open_' + v];
@@ -1992,7 +1996,7 @@ function editMov(m, preset, opts = {}) {
       readMore(); for (const f of e.target.files) { try { st.imgs.push({ url: await compressImage(f, 1400, .7) }); } catch (er) { toast('No pude leer esa foto'); } }
       e.target.value = ''; paint(); return;
     }
-    if (e.target.id === 'rSub') { st.sub = e.target.value; st.allCats = false; readMore(); paint(); }
+    if (e.target.id === 'rSub') { st.sub = e.target.value; st.allCats = false; st.open_cat = false; readMore(); paint(); }
     if (e.target.id === 'rDate' && e.target.value) { st.date = e.target.value; readMore(); paint(); }
   };
   $('#rText').oninput = e => {
