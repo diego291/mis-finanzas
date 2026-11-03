@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '2.8.1';
+const VERSION = '2.8.2';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -2464,7 +2464,7 @@ function vVehiculos() {
   const ym = ymOf(today()), m = vMonth(v, ym), ck = vCostKm(v), ef = vEfficiency(v);
   const T = sortedTasks(v), logs = vLogs(v.id), fuel = vFuel(v.id), docs = vDocs(v.id);
   const goal = v.fund ? S.data.goals.find(g => g.name === v.fund) : null, gs = goal ? goalSaved(goal) : 0;
-  const tabs = L.length > 1 ? `<div class="veh-tabs">${L.map(x => { const bad = vAlerts(x).some(a => a.sev === 'bad'); return `<button type="button" class="${x.id === v.id ? 'on' : ''}" data-act="vehSel" data-v="${x.id}">${vsvg(x.type)}<span>${esc(x.name)}</span>${bad ? '<i class="dot-bad"></i>' : ''}</button>`; }).join('')}<button type="button" class="add" data-act="vehNew" aria-label="Agregar vehículo">+</button></div>` : '';
+  const tabs = L.length >= 1 ? `<div class="veh-tabs">${L.map(x => { const bad = vAlerts(x).some(a => a.sev === 'bad'); return `<button type="button" class="${x.id === v.id ? 'on' : ''}" data-act="vehSel" data-v="${x.id}">${vsvg(x.type)}<span>${esc(x.name)}</span>${bad ? '<i class="dot-bad"></i>' : ''}</button>`; }).join('')}<button type="button" class="add" data-act="vehNew" aria-label="Agregar vehículo">+ Agregar vehículo</button></div>` : '';
   const bud = (lab, spent, b) => b > 0 ? `<div class="mini"><div class="row2"><span>${lab}</span><span class="num ${spent > b ? 'neg' : ''}">${money(spent)} / ${money(b)}</span></div><div class="bar ${spent > b ? 'over' : spent >= b * .85 ? 'near' : 'good'}"><i style="width:${Math.min(100, spent / b * 100)}%"></i></div></div>` : '';
   const hist = S.ui.vHist || 'serv';
   const logItem = x => `<div class="item click" data-act="vehLog" data-v="${x.id}"><span class="ic">${gsvg('work')}</span><div class="t"><b>${esc(x.title || (x.items || []).filter(i => i.on).map(i => i.name).slice(0, 3).join(', ') || 'Mantenimiento')}</b><small>${dLabel(x.date)} · ${fmtKm(x.km)}${x.shop ? ' · ' + esc(x.shop) : ''}${(x.imgs || []).length ? ` · ${x.imgs.length} foto${x.imgs.length > 1 ? 's' : ''}` : ''}${x.movId ? ' · en gastos' : ''}</small></div><span class="amt">${money(x.total)}</span></div>`;
@@ -2473,7 +2473,7 @@ function vVehiculos() {
   const histBody = hist === 'gas' ? (fuel.map(fuelItem).join('') || '<p class="note">Registra cada carga para saber cuánto rinde y cuánto te cuesta cada km.</p>')
     : hist === 'km' ? (vReadings(v).slice().reverse().slice(0, 30).map(kmItem).join('') || '<p class="note">Sin lecturas todavía.</p>')
       : (logs.map(logItem).join('') || '<p class="note">Aún no hay mantenimientos registrados.</p>');
-  return `${head('Vehículos')}${tabs}
+  return `${head('Vehículos', '', '<button class="btn" data-act="vehNew">+ Vehículo</button>')}${tabs}
   <section class="card veh-hero">
     <div class="vh-top"><span class="veh-ic">${vsvg(v.type)}</span><div class="vh-name"><h2>${esc(v.name)}</h2><small class="muted">${esc([v.brand, v.year, v.plate].filter(Boolean).join(' · ') || v.type)}${v.scope && v.scope !== 'Personal' ? ' · ' + esc(v.scope) : ''}</small></div><button type="button" class="btn sm" data-act="vehEdit" data-v="${v.id}">Editar</button></div>
     <button type="button" class="vh-km" data-act="vehKm" data-v="${v.id}"><span class="num">${fmtKm(v.km)}</span><small>${v.kmDate ? 'anotado ' + (daysTo(v.kmDate) === 0 ? 'hoy' : dLabel(v.kmDate)) : 'toca para anotar'} · actualizar</small></button>
