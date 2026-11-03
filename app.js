@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '2.1.0';
+const VERSION = '2.1.1';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -1803,13 +1803,13 @@ function editMov(m, preset, opts = {}) {
       <div class="seg reg-type">${typeTabs.map(([t, l]) => `<button type="button" data-r="type" data-v="${t}" class="${(l === k) ? 'on' : ''}">${l}</button>`).join('')}</div>
       ${k === 'Meta' ? `<div class="seg reg-type sm">${[['Aporte a meta', 'Aportar'], ['Retiro de meta', 'Retirar']].map(([t, l]) => `<button type="button" data-r="type" data-v="${t}" class="${st.type === t ? 'on' : ''}">${l}</button>`).join('')}</div>` : ''}
       <div class="reg-amt ${st.type === 'Gasto' ? 'out' : st.type === 'Ingreso' ? 'in' : ''} ${n ? '' : 'zero'}">${ex ? `<small class="reg-expr">${esc(st.amt.replace(/\*/g, '×').replace(/\//g, '÷'))}</small>` : ''}<span>${sign}$${ex ? (isFinite(calc(st.amt)) ? n.toFixed(2) : '…') : esc(st.amt || '0')}</span></div>
-      ${budgetNote()}
-      ${freq.length ? `<div class="reg-chips">${freq.map((f, i) => `<button type="button" class="rchip dash" data-r="freq" data-v="${i}">${esc(f[3] || f[1])}</button>`).join('')}</div>` : ''}
-      ${tiles}
       ${st.type === 'Transferencia' || st.type.includes('meta') ? `<div class="reg-lab">${st.type === 'Retiro de meta' ? 'Entra a' : 'Sale de'}</div>` : ''}
       ${chipRow(accOrder(), st.acc, 'acc')}
       ${st.type === 'Transferencia' ? `<div class="reg-lab">Va a</div>${chipRow(accOrder().filter(a => a !== st.acc), st.to, 'to')}` : ''}
       ${st.type.includes('meta') ? `<div class="reg-lab">Meta</div>${chipRow(D.goals.map(g => g.name), st.goal, 'goal')}` : ''}
+      ${budgetNote()}
+      ${freq.length ? `<div class="reg-chips">${freq.map((f, i) => `<button type="button" class="rchip dash" data-r="freq" data-v="${i}">${esc(f[3] || f[1])}</button>`).join('')}</div>` : ''}
+      ${tiles}
       <div class="reg-chips">${[['Hoy', today()], ['Ayer', (() => { const d = new Date(); d.setDate(d.getDate() - 1); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; })()]].map(([l, v]) => `<button type="button" class="rchip ${st.date === v ? 'on' : ''}" data-r="date" data-v="${v}">${l}</button>`).join('')}<label class="rchip date ${st.date !== today() ? 'on' : ''}"><input type="date" id="rDate" value="${st.date}" aria-label="Fecha"></label></div>
       <button type="button" class="reg-more" data-r="more">${st.more ? 'Menos detalles' : 'Descripción, notas y más'}</button>
       ${st.more ? `<div class="form">
