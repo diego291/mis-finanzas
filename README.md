@@ -133,13 +133,8 @@ En Ajustes programas horarios (hora, días, correo y/o teléfono, qué incluye) 
 - **Vehículos → Programar:** fecha, hora, taller, tareas del plan (se precargan las vencidas), otras cosas y precio aproximado (suma solo los precios del plan). Se agrega a la agenda con aviso. "Ya lo hice" abre el registro del mantenimiento con todo marcado.
 - **Sección Mantenimientos** para cualquier cosa (aire, laptop, refri, casa, filtro de agua, mascota…): cada cosa con sus mantenimientos (cada X días/semanas/meses/años o una sola vez), precio aproximado e historial. Gráfica de los próximos 12 meses (incluye lo programado y el plan de los vehículos con precio), "aparta X al mes" y fondo de mantenimientos. Al marcar hecho pregunta si lo registras como gasto.
 
-## Conector que se actualiza solo (v6)
+## Conector que se actualiza solo (v7)
 
-Configuración única (en Ajustes → Conectar mi hoja la app te guía con botones para copiar):
+`apps-script/Code.gs` es un **cargador** pequeño que se pega una sola vez. Cada vez que corre descarga `apps-script/nucleo.js` de este repositorio (lo guarda en caché 1 hora y una copia en las Propiedades del script por si GitHub no responde) y lo ejecuta. Las mejoras del conector se hacen en `nucleo.js` y llegan solas a la hoja; no hace falta la API de Apps Script ni volver a implementar.
 
-1. Activa **API de Google Apps Script** en https://script.google.com/home/usersettings.
-2. En Apps Script: ⚙️ Configuración del proyecto → marca **Mostrar el archivo de manifiesto "appsscript.json" en el editor**.
-3. Reemplaza `Code.gs` por `apps-script/Code.gs` y `appsscript.json` por `apps-script/appsscript.json`. Guarda.
-4. Ejecuta **activarTodo** y acepta los permisos. Publica la versión nueva sola.
-
-Desde ahí, cada hora la hoja compara su código con `apps-script/` de este repositorio; si cambió, lo copia, crea una versión y actualiza la implementación de la app web (la URL no cambia). Solo aplica código que tenga `doPost`, `autoActualizar_` y una versión igual o mayor. `actualizarConector` fuerza la revisión; en la app: Ajustes → **Actualizar la hoja ahora**.
+Configuración única: pegar `Code.gs` y `appsscript.json`, ejecutar **activarTodo**, y **Implementar → Administrar implementaciones → Nueva versión** una última vez. `actualizarAhora` toma la última versión al instante (en la app: Ajustes → Actualizar la hoja ahora).

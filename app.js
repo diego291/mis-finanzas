@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '2.8.0';
+const VERSION = '2.8.1';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -3213,21 +3213,20 @@ Object.assign(ACT, {
 /* ---------------- Conector de la hoja: configuración única de la auto-actualización ---------------- */
 function connectorBox() {
   const v = S.cfg.serverV || 0;
-  if (v >= 6) return `<div class="conn-ok"><span class="pill ok">Conector v${v} · se actualiza solo</span><p class="muted" style="margin:6px 0 0;font-size:.82rem">Cuando haya mejoras, tu hoja las instala sola (revisa cada hora). Tus ajustes se comparten entre tus equipos.</p><div class="btns" style="margin-top:8px"><button type="button" class="btn sm" data-act="selfUpdate">Actualizar la hoja ahora</button></div></div>`;
-  return `<div class="conn-setup"><b>Última vez que pegas código (5 minutos)</b><p class="muted" style="margin:4px 0 10px;font-size:.86rem">Tu hoja tiene el conector v${v || '?'}. Con estos pasos se actualiza sola de aquí en adelante: avisos al correo y al teléfono, mantenimientos y todo lo nuevo, sin que vuelvas a tocar Apps Script.</p>
+  if (v >= 6) return `<div class="conn-ok"><span class="pill ok">Conector v${v} · se actualiza solo</span><p class="muted" style="margin:6px 0 0;font-size:.82rem">Cuando haya mejoras, tu hoja las toma sola de tu GitHub (en menos de una hora). Tus ajustes se comparten entre tus equipos.</p><div class="btns" style="margin-top:8px"><button type="button" class="btn sm" data-act="selfUpdate">Actualizar la hoja ahora</button></div></div>`;
+  return `<div class="conn-setup"><b>Última vez que pegas código (3 minutos)</b><p class="muted" style="margin:4px 0 10px;font-size:.86rem">Tu hoja tiene el conector v${v || '?'}. Con estos pasos queda un cargador que toma solo cada mejora desde tu GitHub: avisos al correo y al teléfono, mantenimientos y todo lo nuevo, sin volver a tocar Apps Script.</p>
     <ol class="steps">
-      <li>Abre <a href="https://script.google.com/home/usersettings" target="_blank" rel="noopener">la configuración de Apps Script</a> y enciende <b>API de Google Apps Script</b>.</li>
-      <li>En tu hoja: <b>Extensiones → Apps Script</b>. A la izquierda toca <b>⚙️ Configuración del proyecto</b> y marca <b>Mostrar el archivo de manifiesto "appsscript.json" en el editor</b>.</li>
-      <li>Vuelve al editor (<b>&lt; &gt;</b>). Abre <b>Code.gs</b>, borra todo, toca <b>Copiar código</b> aquí y pégalo.</li>
-      <li>Abre <b>appsscript.json</b>, borra todo, toca <b>Copiar permisos</b> aquí y pégalo. Guarda (💾).</li>
-      <li>Arriba elige la función <b>activarTodo</b> y toca <b>Ejecutar</b>. Acepta los permisos. Si sale "Google no verificó esta app": <b>Configuración avanzada → Ir a (tu proyecto)</b>, es tu propio código.</li>
-      <li>Listo: activarTodo publica la versión nueva sola, no necesitas Implementar. Vuelve aquí y toca <b>Ya lo hice</b>.</li>
+      <li>En tu hoja: <b>Extensiones → Apps Script</b>. Abre <b>Código.gs</b>, borra todo, toca <b>Copiar código</b> aquí, pégalo y guarda (💾).</li>
+      <li>Si en la lista de archivos no ves <b>appsscript.json</b>: <b>⚙️ Configuración del proyecto</b> → marca <b>Mostrar el archivo de manifiesto "appsscript.json"</b>. Ábrelo, borra todo, toca <b>Copiar permisos</b>, pégalo y guarda. (Si ya lo tienes de antes, déjalo así.)</li>
+      <li>Arriba elige <b>activarTodo</b> y toca <b>Ejecutar</b>. Acepta los permisos si los pide. Te llega un correo de confirmación.</li>
+      <li><b>Implementar → Administrar implementaciones → ✏️ → Versión: Nueva versión → Implementar.</b> Es la última vez; la URL no cambia.</li>
+      <li>Vuelve aquí y toca <b>Ya lo hice</b>.</li>
     </ol>
     <div class="btns" style="margin-top:10px"><button type="button" class="btn pri" data-act="copyGs">Copiar código</button><button type="button" class="btn" data-act="copyMan">Copiar permisos</button><button type="button" class="btn" data-act="syncNow">Ya lo hice</button></div></div>`;
 }
 Object.assign(ACT, {
   copyMan: async () => { try { const t = await (await fetch('apps-script/appsscript.json', { cache: 'no-store' })).text(); await navigator.clipboard.writeText(t); toast('Permisos copiados. Pégalos en appsscript.json'); } catch (e) { toast('No pude copiarlos aquí. Ábrelos en GitHub: apps-script/appsscript.json'); } },
-  selfUpdate: () => { op('self.update', {}); sync(true); toast('Pidiéndole a tu hoja que se actualice…'); }
+  selfUpdate: () => { op('self.update', {}); sync(true); toast('Listo: tu hoja toma la versión más nueva en la próxima sincronización'); }
 });
 
 /* ---------------- Arranque ---------------- */
