@@ -138,3 +138,7 @@ En Ajustes programas horarios (hora, días, correo y/o teléfono, qué incluye) 
 `apps-script/Code.gs` es un **cargador** pequeño que se pega una sola vez. Cada vez que corre descarga `apps-script/nucleo.js` de este repositorio (lo guarda en caché 1 hora y una copia en las Propiedades del script por si GitHub no responde) y lo ejecuta. Las mejoras del conector se hacen en `nucleo.js` y llegan solas a la hoja; no hace falta la API de Apps Script ni volver a implementar.
 
 Configuración única: pegar `Code.gs` y `appsscript.json`, ejecutar **activarTodo**, y **Implementar → Administrar implementaciones → Nueva versión** una última vez. `actualizarAhora` toma la última versión al instante (en la app: Ajustes → Actualizar la hoja ahora).
+
+## Calendario (Google Calendar)
+
+La pestaña **Calendario** de la Agenda tiene vistas Día, Semana (3 días en el teléfono), Mes y Lista; arrastrar para crear, mover o estirar eventos; repetición (diaria, lunes a viernes, semanal, mensual, anual o personalizada); hasta 5 recordatorios; calendarios por color (cada uno es un color de Google Calendar); ubicación y descripción. Lee y escribe en tu Google Calendar principal (conector v8, servicio avanzado Calendar en `appsscript.json`). También muestra tus pendientes, pagos fijos y mantenimientos. Los recordatorios de tus eventos llegan como notificación de la app y por correo, y el resumen diario incluye los eventos de hoy y mañana.

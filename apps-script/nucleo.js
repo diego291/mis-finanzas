@@ -31,7 +31,7 @@ const PAG = { sheet: 'Pagos fijos', first: 6, last: 30 };                       
 const PRE = { sheet: 'Presupuesto', first: 6, last: 45 };                           // A categoría (fórmula), B monto
 const CAT = { sheet: 'Categorias', first: 5, last: 400 };                           // A sub, B categoría, C tipo; E gasto, G ingreso, K métodos, M ámbitos, O tipos de cuenta
 const NOT = { sheet: 'Notas', first: 6, last: 1005, idCol: 7, extra: 4 };          // A..F, G = ID de la app, H tipo, I hora, J color, K fijada
-const API_VERSION = 7;
+const API_VERSION = 8;
 const APP = { sheet: 'AppData' };                                                  // almacén genérico: Colección | ID | Datos (JSON) | Actualizado
 
 const TZ = 'America/El_Salvador';
@@ -159,6 +159,8 @@ function applyOp_(ss, op) {
     case 'notif.install': return instalarDisparador_();
     case 'notif.test': return notifTest_(ss, d);
     case 'notif.send': return notifSendNow_(ss, d);
+    case 'cal.upsert': return calUpsert_(d);
+    case 'cal.delete': return calDelete_(d);
     case 'self.update': { CacheService.getScriptCache().remove('MF_SRC_N'); return 'La hoja tomará la versión nueva en la siguiente sincronización'; }
     default: throw new Error('Operación desconocida: ' + op.type);
   }
@@ -252,7 +254,7 @@ function snapshot_(ss) {
   }
 
   return {
-    accounts, goals, debts, fixed, budgets, cats, notes, movs, store,
+    accounts, goals, debts, fixed, budgets, cats, notes, movs, store, calendar: calSnapshot_(),
     lists: { expenseCats: list(4), incomeCats: list(6), types: list(8), methods: list(10), scopes: list(12), accTypes: list(14) }
   };
 }
@@ -396,6 +398,8 @@ function revisarAvisos() {
         sent[key] = Date.now();
       });
     }
+    // 3) recordatorios de los eventos de tu Google Calendar
+    if (ex.on) { try { calReminders_(cfg, ex, sent, nowMin, today); } catch (e) { Logger.log('Calendar avisos: ' + e); } }
     // limpia registros de más de 10 días
     const lim = Date.now() - 10 * 864e5; Object.keys(sent).forEach(k => { if (sent[k] < lim) delete sent[k]; });
     props.setProperty('NOTIF_SENT', JSON.stringify(sent));
@@ -448,7 +452,9 @@ function digest_(D, content, today, allPend) {
   if (content.indexOf('agenda') >= 0) {
     const N = D.notes.filter(n => n.status !== 'Hecho' && n.text && (n.kind === 'pendiente' || n.kind === 'evento' || n.due));
     const line = n => { const when = n.due ? (n.due === today ? 'hoy' : n.due === tomorrow ? 'mañana' : fechaCorta_(n.due)) : ''; const t = (n.time ? n.time + ' · ' : '') + n.text + (n.action ? ' (' + n.action + ')' : ''); return { h: '<b>' + esc_(t) + '</b>' + (when && n.due !== today ? ' <span style="color:#888">· ' + when + '</span>' : ''), t: t + (when && n.due !== today ? ' · ' + when : ''), bad: n.due && n.due < today }; };
-    const late = N.filter(n => n.due && n.due < today), hoy = N.filter(n => n.due === today).sort((a, b) => (a.time || '99').localeCompare(b.time || '99')), man = N.filter(n => n.due === tomorrow);
+    const C = calDayItems_(today, tomorrow);
+    N.push.apply(N, C);
+    const late = N.filter(n => n.due && n.due < today), hoy = N.filter(n => n.due === today).sort((a, b) => (a.time || '99').localeCompare(b.time || '99')), man = N.filter(n => n.due === tomorrow).sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
     if (late.length) urgent = true;
     add('Atrasado', late.map(line)); add('Hoy', hoy.map(line)); add('Mañana', man.map(line));
     const sinFecha = N.filter(n => !n.due && n.kind === 'pendiente');
@@ -627,3 +633,95 @@ function bytesToBig_(b) { let x = bi_(0); for (let i = 0; i < b.length; i++) x =
 function bigToBytes_(x, n) { const out = []; for (let i = 0; i < n; i++) { out.unshift(Number(x & bi_(255))); x >>= bi_(8); } return out; }
 function b64u_(bytes) { return Utilities.base64EncodeWebSafe(bytes.map(b => b > 127 ? b - 256 : b)).replace(/=+$/, ''); }
 function b64uDecode_(s) { s = String(s).replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return Utilities.base64Decode(s).map(b => b & 255); }
+
+
+// =====================================================================
+//  Google Calendar (v8): la agenda de la app lee y escribe en tu calendario principal.
+//  Usa el servicio avanzado "Calendar" (se activa desde appsscript.json).
+// =====================================================================
+const CAL_ID = 'primary';
+function calAvail_() { return typeof Calendar !== 'undefined' && Calendar.Events; }
+function calLocal_(o) { if (!o) return ''; if (o.date) return o.date; return Utilities.formatDate(new Date(o.dateTime), TZ, "yyyy-MM-dd'T'HH:mm"); }
+function calSnapshot_() {
+  if (!calAvail_()) return { ok: false, error: 'sin-permiso' };
+  const cache = CacheService.getScriptCache(), hit = cache.get('MF_CAL');
+  if (hit) { try { return JSON.parse(hit); } catch (e) { } }
+  try {
+    const now = new Date(), from = new Date(now.getTime() - 62 * 864e5), to = new Date(now.getTime() + 190 * 864e5);
+    let items = [], token = null, guard = 0;
+    do {
+      const r = Calendar.Events.list(CAL_ID, { timeMin: from.toISOString(), timeMax: to.toISOString(), singleEvents: true, orderBy: 'startTime', maxResults: 2500, pageToken: token || undefined });
+      items = items.concat(r.items || []); token = r.nextPageToken;
+    } while (token && ++guard < 4);
+    const masters = {};
+    [...new Set(items.filter(e => e.recurringEventId).map(e => e.recurringEventId))].slice(0, 40).forEach(id => { try { const m = Calendar.Events.get(CAL_ID, id); masters[id] = (m.recurrence || []).find(x => /^RRULE:/.test(x)) || ''; } catch (e) { } });
+    const events = items.filter(e => e.status !== 'cancelled').map(e => ({
+      id: e.id, sid: e.recurringEventId || '', title: e.summary || '(Sin título)', allDay: !!(e.start && e.start.date),
+      start: calLocal_(e.start), end: calLocal_(e.end), desc: e.description || '', loc: e.location || '', color: e.colorId || '',
+      rem: e.reminders && !e.reminders.useDefault ? (e.reminders.overrides || []).map(x => x.minutes) : null,
+      rrule: e.recurringEventId ? (masters[e.recurringEventId] || '') : ((e.recurrence || []).find(x => /^RRULE:/.test(x)) || ''),
+      mf: (e.extendedProperties && e.extendedProperties.private && e.extendedProperties.private.mf) || '', link: e.htmlLink || '', owner: !!(e.organizer && e.organizer.self)
+    }));
+    const out = { ok: true, from: Utilities.formatDate(from, TZ, 'yyyy-MM-dd'), to: Utilities.formatDate(to, TZ, 'yyyy-MM-dd'), events: events };
+    try { const j = JSON.stringify(out); if (j.length < 95000) cache.put('MF_CAL', j, 90); } catch (e) { }
+    return out;
+  } catch (e) { return { ok: false, error: String(e.message || e).slice(0, 200) }; }
+}
+function calRes_(d, withRecur) {
+  const r = { summary: d.title || '(Sin título)', description: d.desc || '', location: d.loc || '', colorId: d.color || null };
+  if (d.allDay) { r.start = { date: d.start.slice(0, 10), dateTime: null }; r.end = { date: (d.end || '').slice(0, 10) || d.start.slice(0, 10), dateTime: null }; if (r.end.date <= r.start.date) r.end.date = addDays_(r.start.date, 1); }
+  else { r.start = { dateTime: d.start + ':00', timeZone: TZ, date: null }; r.end = { dateTime: (d.end || d.start) + ':00', timeZone: TZ, date: null }; }
+  r.reminders = Array.isArray(d.rem) ? { useDefault: false, overrides: d.rem.slice(0, 5).map(m => ({ method: 'popup', minutes: Number(m) || 0 })) } : { useDefault: true };
+  if (withRecur) r.recurrence = d.rrule ? [d.rrule] : [];
+  return r;
+}
+function calUpsert_(d) {
+  if (!calAvail_()) throw new Error('Falta el permiso de Google Calendar: pega el appsscript.json nuevo y ejecuta activarTodo.');
+  CacheService.getScriptCache().remove('MF_CAL');
+  if (!d.id || /^tmp:/.test(d.id)) {
+    const prev = d.mf ? (Calendar.Events.list(CAL_ID, { privateExtendedProperty: 'mf=' + d.mf, maxResults: 1 }).items || [])[0] : null;
+    const res = calRes_(d, true); res.extendedProperties = { private: { mf: d.mf || '' } };
+    if (prev) Calendar.Events.patch(res, CAL_ID, prev.id); else Calendar.Events.insert(res, CAL_ID);
+    return 'ok';
+  }
+  if (d.scope === 'all' && d.sid) {
+    const m = Calendar.Events.get(CAL_ID, d.sid), res = calRes_(d, true);
+    if (!d.allDay && m.start && m.start.dateTime) { const md = calLocal_(m.start).slice(0, 10), ed = d.end.slice(0, 10) === d.start.slice(0, 10) ? md : addDays_(md, daysBetween_(d.start.slice(0, 10), d.end.slice(0, 10))); res.start.dateTime = md + d.start.slice(10) + ':00'; res.end.dateTime = ed + d.end.slice(10) + ':00'; }
+    else if (d.allDay && m.start && m.start.date) { const span = daysBetween_(d.start.slice(0, 10), (d.end || d.start).slice(0, 10)); res.start.date = m.start.date; res.end.date = addDays_(m.start.date, Math.max(1, span)); }
+    Calendar.Events.patch(res, CAL_ID, d.sid);
+    return 'ok';
+  }
+  Calendar.Events.patch(calRes_(d, false), CAL_ID, d.id);
+  return 'ok';
+}
+function calDelete_(d) {
+  if (!calAvail_()) throw new Error('Falta el permiso de Google Calendar.');
+  CacheService.getScriptCache().remove('MF_CAL');
+  if (/^tmp:/.test(d.id || '')) { const prev = d.mf ? (Calendar.Events.list(CAL_ID, { privateExtendedProperty: 'mf=' + d.mf, maxResults: 1 }).items || [])[0] : null; if (prev) Calendar.Events.remove(CAL_ID, prev.id); return 'ok'; }
+  try { Calendar.Events.remove(CAL_ID, d.scope === 'all' && d.sid ? d.sid : d.id); } catch (e) { if (!/410|404|deleted/i.test(String(e))) throw e; }
+  return 'ok';
+}
+function calDayItems_(today, tomorrow) {
+  if (!calAvail_()) return [];
+  try {
+    const r = Calendar.Events.list(CAL_ID, { timeMin: new Date(today + 'T00:00:00-06:00').toISOString(), timeMax: new Date(addDays_(tomorrow, 1) + 'T00:00:00-06:00').toISOString(), singleEvents: true, orderBy: 'startTime', maxResults: 100 });
+    return (r.items || []).filter(e => e.status !== 'cancelled').map(e => { const st = calLocal_(e.start); return { text: e.summary || '(Sin título)', due: st.slice(0, 10), time: st.length > 10 ? st.slice(11) : '', action: e.location || '', status: '', kind: 'evento' }; });
+  } catch (e) { return []; }
+}
+function calReminders_(cfg, ex, sent, nowMin, today) {
+  if (!calAvail_()) return;
+  const now = new Date();
+  const r = Calendar.Events.list(CAL_ID, { timeMin: new Date(now.getTime() - 3600e3).toISOString(), timeMax: new Date(now.getTime() + 26 * 3600e3).toISOString(), singleEvents: true, orderBy: 'startTime', maxResults: 100 });
+  (r.items || []).forEach(e => {
+    if (e.status === 'cancelled' || !e.start || !e.start.dateTime) return;
+    const st = calLocal_(e.start); if (st.slice(0, 10) !== today && st.slice(0, 10) !== addDays_(today, 1)) return;
+    const startMin = toMin_(st.slice(11)) + (st.slice(0, 10) === today ? 0 : 1440);
+    const mins = e.reminders && !e.reminders.useDefault ? (e.reminders.overrides || []).map(x => x.minutes) : [Number(ex.before) || 10];
+    mins.forEach(m => {
+      const at = startMin - m; if (nowMin < at || nowMin - at > 60) return;
+      const key = 'C|' + e.id + '|' + m; if (sent[key]) return;
+      deliverOne_(cfg, ex.channels || ['phone'], (m ? 'En ' + (m >= 60 ? Math.round(m / 60) + ' h' : m + ' min') + ': ' : 'Ahora: ') + (e.summary || 'Evento'), st.slice(11) + (e.location ? ' · ' + e.location : ''), 'high', ['calendar']);
+      sent[key] = Date.now();
+    });
+  });
+}
