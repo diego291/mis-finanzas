@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '3.1.1';
+const VERSION = '3.1.2';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -1210,11 +1210,19 @@ function absorbImages() {
   Object.keys(s).filter(k => k.endsWith(':0')).forEach(k => { const id = k.slice(0, -2); if (!IMG.has(id)) { const v = blobGet('img', id); if (v) { IMG.set(id, v); IDB.put(id, v); } } });
 }
 function compressImage(file, max = 1100, q = 0.66) {
-  return new Promise((res, rej) => {
-    const fr = new FileReader();
-    fr.onload = () => { const im = new Image(); im.onload = () => { const k = Math.min(1, max / Math.max(im.width, im.height)); const c = document.createElement('canvas'); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k); const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(im, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', q)); }; im.onerror = rej; im.src = fr.result; };
-    fr.onerror = rej; fr.readAsDataURL(file);
-  });
+  /* Las fotos del teléfono pesan 12–50 MP: se decodifican ya reducidas para no agotar la memoria del navegador. */
+  const draw = (src, w, h) => { const k = Math.min(1, max / Math.max(w, h)); const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k)); const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(src, 0, 0, c.width, c.height); const out = c.toDataURL('image/jpeg', q); c.width = c.height = 0; return out; };
+  const viaImg = () => new Promise((res, rej) => { const u = URL.createObjectURL(file), im = new Image(); im.decoding = 'async';
+    im.onload = () => { try { res(draw(im, im.naturalWidth, im.naturalHeight)); } catch (e) { rej(e); } finally { URL.revokeObjectURL(u); im.src = ''; } };
+    im.onerror = e => { URL.revokeObjectURL(u); rej(e); }; im.src = u; });
+  if (typeof createImageBitmap !== 'function') return viaImg();
+  return (async () => {
+    try {
+      let bm = await createImageBitmap(file, { resizeWidth: max, resizeQuality: 'medium', imageOrientation: 'from-image' });
+      if (bm.height > bm.width) { const r = bm.height / bm.width; bm.close(); bm = await createImageBitmap(file, { resizeHeight: max, resizeWidth: Math.round(max / r), resizeQuality: 'medium', imageOrientation: 'from-image' }); }
+      const out = draw(bm, bm.width, bm.height); bm.close(); return out;
+    } catch (e) { return viaImg(); }
+  })();
 }
 function storeImage(dataUrl) {
   const id = 'i' + uid(); IMG.set(id, dataUrl); IDB.put(id, dataUrl);
