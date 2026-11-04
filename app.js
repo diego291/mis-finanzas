@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '3.1.0';
+const VERSION = '3.1.1';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -1350,6 +1350,7 @@ function editorHTML(p) {
       ${tb('insertUnorderedList', ic('<path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/>'), 'Viñetas')}${tb('insertOrderedList', ic('<path d="M10 6h10M10 12h10M10 18h10M4 4v4M3 18h3l-3 2h3M3 11c1-1 3-1 3 1l-3 2h3"/>'), 'Numeración')}${tb('check', ic('<rect x="3" y="4" width="7" height="7" rx="1.5"/><path d="M4.5 7.5l1.5 1.5 3-3M13 7h8M13 17h8"/><rect x="3" y="13" width="7" height="7" rx="1.5"/>'), 'Lista de tareas')}
       <span class="ed-sep"></span>
       <label class="tb" title="Insertar imagen">${ic('<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>')}<input type="file" id="edImg" accept="image/*" multiple hidden></label>
+      <label class="tb" title="Tomar foto">${ic('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>')}<input type="file" id="edCam" accept="image/*" capture="environment" hidden></label>
       ${tb('draw', ic('<path d="M4 20c4 0 4-6 8-6s4 4 8 4M15 4l5 5-7 7H8v-5z"/>'), 'Dibujar a mano')}${tb('table', ic('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16M15 4v16"/>'), 'Insertar tabla')}${tb('link', ic('<path d="M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1"/>'), 'Enlace')}
       <span class="ed-sep"></span>
       ${tb('justifyLeft', ic('<path d="M4 6h16M4 12h10M4 18h14"/>'), 'Alinear a la izquierda')}${tb('justifyCenter', ic('<path d="M4 6h16M7 12h10M5 18h14"/>'), 'Centrar')}${tb('removeFormat', ic('<path d="M6 4h12M10 4l-4 16M14 20H6M17 14l4 4M21 14l-4 4"/>'), 'Quitar formato')}${tb('undo', ic('<path d="M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3"/>'), 'Deshacer')}${tb('redo', ic('<path d="M15 14l5-5-5-5M20 9H9a5 5 0 0 0 0 10h3"/>'), 'Rehacer')}
@@ -1598,7 +1599,7 @@ function edBind() {
     if (t.id === 'edBlock') { edFocus(); document.execCommand('formatBlock', false, '<' + t.value + '>'); pgSaveSoon(); }
     if (t.id === 'edHl' && t.value) { edFocus(); document.execCommand('styleWithCSS', false, true); document.execCommand('hiliteColor', false, t.value); document.execCommand('styleWithCSS', false, false); t.value = ''; pgSaveSoon(); }
     if (t.id === 'edFc' && t.value) { edFocus(); document.execCommand('styleWithCSS', false, true); document.execCommand('foreColor', false, t.value === 'inherit' ? getComputedStyle(ed).color : t.value); document.execCommand('styleWithCSS', false, false); t.value = ''; pgSaveSoon(); }
-    if (t.id === 'edImg' && t.files.length) { insertImageFiles([...t.files]); t.value = ''; }
+    if ((t.id === 'edImg' || t.id === 'edCam') && t.files.length) { insertImageFiles([...t.files]); t.value = ''; }
   });
 }
 document.addEventListener('selectionchange', () => {
@@ -2688,7 +2689,7 @@ function editServ(vid, log, appt) {
   T.forEach(({ t, s }) => { if (!fromTask.has(t.id)) rows.push({ task: t.id, name: t.name, action: t.action || 'Cambiado', cost: '', detail: '', on: false, sev: s.sev, label: s.label }); });
   if (appt) { rows.forEach(r => { if (r.task && (appt.tasks || []).includes(r.task)) { r.on = true; r.cost = r.cost || (store('vtask')[r.task] || {}).cost || ''; } }); (appt.extras || []).forEach(n => rows.push({ name: n, action: 'Reparado', cost: '', detail: '', on: true })); log.shop = log.shop || appt.shop || ''; if (appt.date && appt.date < today()) log.date = today(); }
   const rowHTML = (r, i) => `<div class="srow ${r.on ? 'on' : ''} ${r.task && !r.on && !['bad', 'mid'].includes(r.sev) && isNew ? 'later' : ''}" data-i="${i}" data-task="${esc(r.task || '')}" data-name="${esc(r.task ? r.name : '')}">
-    <label class="sr-main"><input type="checkbox" ${r.on ? 'checked' : ''}><span class="sr-name">${r.task ? esc(r.name) : `<input class="sr-nm" value="${esc(r.name)}" placeholder="Pieza o arreglo">`}${r.task && r.sev && (r.sev === 'bad' || r.sev === 'mid') ? ` <span class="pill ${r.sev}">${esc(r.label)}</span>` : ''}</span><input class="calc sr-cost" type="text" inputmode="decimal" placeholder="$0" value="${r.cost || ''}"></label>
+    <div class="sr-main">${r.task ? `<label class="sr-lab"><input type="checkbox" ${r.on ? 'checked' : ''}><span class="sr-name">${esc(r.name)}${r.sev && (r.sev === 'bad' || r.sev === 'mid') ? ` <span class="pill ${r.sev}">${esc(r.label)}</span>` : ''}</span></label>` : `<label class="sr-lab sr-cb"><input type="checkbox" ${r.on ? 'checked' : ''} aria-label="Hecho"></label><span class="sr-name"><input class="sr-nm" value="${esc(r.name)}" placeholder="Pieza o arreglo"></span>`}<input class="calc sr-cost" type="text" inputmode="decimal" placeholder="$0" value="${r.cost || ''}" aria-label="Precio"></div>
     <div class="sr-more"><div class="seg sr-act">${ACTIONS.map(a => `<button type="button" class="${(r.action || 'Cambiado') === a ? 'on' : ''}">${a}</button>`).join('')}</div><div class="sr-two"><input class="sr-det" placeholder="Marca, medida o detalle (opcional)" value="${esc(r.detail || '')}"><input class="sr-shop" list="sShops" placeholder="Comprado en (opcional)" value="${esc(r.shop || '')}"></div></div></div>`;
   const mBud = vMonth(v, ymOf(log.date)).mant - (isNew ? 0 : Number(log.total) || 0);
   openSheet(isNew ? 'Mantenimiento · ' + esc(v.name) : 'Editar mantenimiento', `
@@ -2728,7 +2729,7 @@ function editServ(vid, log, appt) {
       const b = $('#sBud'); if (v.budMant > 0) { const after = mBud + tot; b.textContent = after > v.budMant ? `Te pasas ${money(after - v.budMant)} del presupuesto de mantenimiento este mes (${money(after)} de ${money(v.budMant)}).` : `Presupuesto de mantenimiento: ${money(after)} de ${money(v.budMant)} este mes.`; b.classList.toggle('neg', after > v.budMant); } else b.textContent = '';
     };
     box.addEventListener('change', e => { const r = e.target.closest('.srow'); if (r && e.target.type === 'checkbox') { r.classList.toggle('on', e.target.checked); if (e.target.checked) { r.classList.remove('later'); const t = store('vtask')[r.dataset.task]; const c = r.querySelector('.sr-cost'); if (t && t.cost && !c.value) c.value = t.cost; } } upd(); });
-    box.addEventListener('input', upd);
+    box.addEventListener('input', e => { if (e.target.classList.contains('sr-cost') && calc(e.target.value) > 0) { const r = e.target.closest('.srow'), cb = r.querySelector('input[type=checkbox]'); if (!cb.checked) { cb.checked = true; r.classList.add('on'); r.classList.remove('later'); } } upd(); });
     box.addEventListener('click', e => { const b = e.target.closest('.sr-act button'); if (!b) return; b.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); const r = b.closest('.srow'); const cb = r.querySelector('input[type=checkbox]'); if (!cb.checked) { cb.checked = true; r.classList.add('on'); upd(); } });
     f.querySelector('#sLabor').addEventListener('input', upd);
     f.querySelector('#sAdd').onclick = () => { rows.push({ name: '', action: 'Cambiado', cost: '', on: true }); box.insertAdjacentHTML('beforeend', rowHTML(rows[rows.length - 1], rows.length - 1)); box.lastElementChild.querySelector('.sr-nm').focus(); };

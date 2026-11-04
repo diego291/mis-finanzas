@@ -1243,3 +1243,9 @@ body[data-design="c"] .next-step b { color: var(--cta-bg); }
   .reg-l .reg-keys button { height: 48px; }
   .reg-r .reg-save { position: static; box-shadow: none; height: 50px; margin-top: 4px; }
 }
+
+/* Mantenimiento: el precio queda fuera de la etiqueta para poder escribirlo en el teléfono */
+.sr-main { cursor: default; }
+.sr-lab { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; cursor: pointer; }
+.sr-lab.sr-cb { flex: none; }
+.sr-lab input[type=checkbox] { width: 20px !important; height: 20px; accent-color: var(--accent); flex: none; margin: 0; min-height: 0; padding: 0; }
