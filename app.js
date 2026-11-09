@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '3.1.2';
+const VERSION = '3.2.0';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -134,7 +134,7 @@ const accBadge = (name, cls) => { if (!name) return ''; const s = accStyle(name)
 /* ---------------- Estado ---------------- */
 const S = {
   data: null, outbox: [],
-  cfg: { url: '', token: '', name: '', lastCount: 0, envelope: { on: false, amount: 0, acc: '' }, design: 'a', theme: 'auto', lastSync: 0, needs: NEEDS.slice(), scope: 'Todos', emergencyMonths: 6 },
+  cfg: { url: '', token: '', name: '', lastCount: 0, envelope: { on: false, amount: 0, acc: '' }, design: 'a', theme: 'auto', lastSync: 0, needs: NEEDS.slice(), scope: 'Todos', emergencyMonths: 6, salNext: 4 },
   ui: { view: 'inicio', ym: ymOf(today()), q: '', fType: '', fAcc: '', fCat: '', fPeriod: 'mes', stPeriod: 'mes', mTab: 'dia', calDay: '', homeDay: '' },
   syncing: false, syncErr: '', installEvt: null
 };
@@ -208,7 +208,7 @@ function applyLocal({ type, data: d }) {
 }
 
 /* ---------------- Ajustes compartidos entre dispositivos (hoja AppData) ---------------- */
-const SHARED = ['name', 'emergencyMonths', 'needs', 'envelope', 'design'];
+const SHARED = ['name', 'emergencyMonths', 'needs', 'envelope', 'design', 'salNext'];
 function pushSettings() {
   if (!S.cfg.url || !(S.cfg.serverV >= 3)) { save(); return; }
   const data = { stamp: Date.now() }; SHARED.forEach(k => data[k] = S.cfg[k]);
@@ -297,7 +297,11 @@ function agg(filterFn) {
   r.bal = r.inc - r.exp; r.rate = r.inc ? r.bal / r.inc : null;
   return r;
 }
-const month = ym => agg(m => ymOf(m.date) === ym);
+/* Mes al que se suma un movimiento: el salario cobrado en los últimos días del mes cubre el mes siguiente. La fecha real no cambia (saldos exactos). */
+const salDays = () => { const n = Number(S.cfg.salNext); return Number.isFinite(n) ? n : 4; };
+const salShift = m => { const n = salDays(); if (!(n > 0) || m.type !== 'Ingreso' || m.sub !== 'Salario' || !m.date) return false; const ym = ymOf(m.date); return Number(m.date.slice(8, 10)) > daysIn(ym) - n; };
+const mymOf = m => salShift(m) ? addM(ymOf(m.date), 1) : ymOf(m.date);
+const month = ym => agg(m => mymOf(m) === ym);
 
 function balances(until) {
   const b = {}; S.data.accounts.forEach(a => b[a.name] = Number(a.initial) || 0);
@@ -756,7 +760,7 @@ function vMovs() {
   }
   if (tab === 'mes') {
     const y = u.ym.slice(0, 4), keep = u.fPeriod; u.fPeriod = 'año'; const L = filteredMovs(); u.fPeriod = keep;
-    const rows = MONTHS.map((n, i) => { const k = `${y}-${pad(i + 1)}`, ms = L.filter(x => ymOf(x.date) === k); return { k, n, inc: sum(ms.filter(x => x.type === 'Ingreso'), x => x.amount), exp: sum(ms.filter(x => x.type === 'Gasto'), x => x.amount), c: ms.length }; });
+    const rows = MONTHS.map((n, i) => { const k = `${y}-${pad(i + 1)}`, ms = L.filter(x => mymOf(x) === k); return { k, n, inc: sum(ms.filter(x => x.type === 'Ingreso'), x => x.amount), exp: sum(ms.filter(x => x.type === 'Gasto'), x => x.amount), c: ms.length }; });
     return `${head0}${tabs}${filters}${trio(sum(rows, r => r.inc), sum(rows, r => r.exp))}
     <div class="card"><div class="list">${rows.map(r => `<button type="button" class="mrow ${r.k === u.ym ? 'on' : ''}" data-act="goMonth" data-v="${r.k}"><span><b>${r.n}</b><small>${r.c ? r.c + ' movimientos' : 'Sin movimientos'}</small></span><span class="pos num">${r.inc ? money(r.inc) : ''}</span><span class="neg num">${r.exp ? money(r.exp) : ''}</span><span class="num ${r.inc - r.exp < 0 ? 'neg' : ''}">${r.c ? money(r.inc - r.exp, true) : '—'}</span></button>`).join('')}</div></div>`;
   }
@@ -835,7 +839,7 @@ function vMetas() {
 /* ---- Presupuesto ---- */
 function vPresupuesto() {
   const ym = S.ui.ym, cur = month(ym), y = ym.slice(0, 4);
-  const yearAgg = agg(m => m.date.slice(0, 4) === y);
+  const yearAgg = agg(m => mymOf(m).slice(0, 4) === y);
   const monthsWithExp = Math.max(1, MONTHS.filter((_, i) => month(`${y}-${pad(i + 1)}`).exp > 0).length);
   const rows = S.data.lists.expenseCats.map(c => { const b = (S.data.budgets.find(x => x.cat === c) || {}).amount || 0; return { c, b, sp: cur.byCat[c] || 0, avg: (yearAgg.byCat[c] || 0) / monthsWithExp }; });
   const tb = sum(rows, r => r.b), ts = sum(rows.filter(r => r.b), r => r.sp);
@@ -892,10 +896,10 @@ function vStats() {
   const ym = S.ui.ym, y = ym.slice(0, 4), mi = Number(ym.slice(5));
   const ms = MONTHS.map((_, i) => ({ ym: `${y}-${pad(i + 1)}`, ...month(`${y}-${pad(i + 1)}`) }));
   const totInc = sum(ms, m => m.inc), totExp = sum(ms, m => m.exp), active = ms.filter(m => m.exp || m.inc).length || 1;
-  const yearAgg = agg(m => m.date.slice(0, 4) === y);
+  const yearAgg = agg(m => mymOf(m).slice(0, 4) === y);
   const cur = ms[mi - 1];
   const wd = Array(7).fill(0); S.data.movs.filter(m => m.type === 'Gasto' && ymOf(m.date) === ym && scopeOk(m)).forEach(m => wd[(new Date(m.date + 'T12:00').getDay() + 6) % 7] += m.amount);
-  const sc = {}; S.data.movs.filter(m => ymOf(m.date) === ym && (m.type === 'Gasto' || m.type === 'Ingreso')).forEach(m => { const k = m.scope || 'Personal'; sc[k] = sc[k] || { i: 0, g: 0 }; sc[k][m.type === 'Ingreso' ? 'i' : 'g'] += m.amount; });
+  const sc = {}; S.data.movs.filter(m => mymOf(m) === ym && (m.type === 'Gasto' || m.type === 'Ingreso')).forEach(m => { const k = m.scope || 'Personal'; sc[k] = sc[k] || { i: 0, g: 0 }; sc[k][m.type === 'Ingreso' ? 'i' : 'g'] += m.amount; });
   const nw = ms.map((m, i) => ({ label: MSHORT[i], v: worth(`${m.ym}-31`).net })).filter((_, i) => `${y}-${pad(i + 1)}` <= ymOf(today()) || i < mi);
   // gasto acumulado del mes vs ritmo del mes anterior
   const dim = daysIn(ym), cum = [], prevCum = []; let a = 0, b = 0;
@@ -926,7 +930,7 @@ function vStats() {
 const acct = n => { n = r2(n); const s = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); return n < 0 ? `(${s})` : s; };
 function vEstados() {
   const ym = S.ui.ym, yr = ym.slice(0, 4), annual = S.ui.stPeriod === 'año';
-  const A = annual ? agg(x => x.date.slice(0, 4) === yr) : month(ym);
+  const A = annual ? agg(x => mymOf(x).slice(0, 4) === yr) : month(ym);
   const until = annual ? (yr === today().slice(0, 4) ? today() : `${yr}-12-31`) : (ym === ymOf(today()) ? today() : `${ym}-31`);
   const W = worth(until), avg = avgExpense(ym), st = stages();
   const period = annual ? `Año ${yr}` : `Del 1 al ${until.slice(8) * 1} de ${MONTHS[Number(ym.slice(5)) - 1].toLowerCase()} de ${yr}`;
@@ -1775,7 +1779,7 @@ function vAjustes() {
     ${c.url ? connectorBox() : ''}
     <p class="muted" style="font-size:.82rem;margin:12px 0 0">La hoja es la fuente de verdad: lo que cambies directo en Sheets también aparece aquí. ${S.outbox.length ? `<b>${S.outbox.length} cambio(s) esperan para enviarse.</b>` : ''}</p></section>
   ${notifCard()}
-  <section class="card"><header><h2>Personal y análisis</h2></header><form class="form" id="anaForm"><label class="field"><span>Tu nombre (para el saludo)</span><input id="aName" value="${esc(c.name)}" placeholder="Diego"></label><label class="field"><span>Meses de gastos para el fondo de emergencia</span><input id="aEm" type="number" min="1" max="12" value="${c.emergencyMonths}"></label>
+  <section class="card"><header><h2>Personal y análisis</h2></header><form class="form" id="anaForm"><label class="field"><span>Tu nombre (para el saludo)</span><input id="aName" value="${esc(c.name)}" placeholder="Diego"></label><label class="field"><span>Meses de gastos para el fondo de emergencia</span><input id="aEm" type="number" min="1" max="12" value="${c.emergencyMonths}"></label><label class="field"><span>El salario cobrado en los últimos días del mes cuenta para el mes siguiente</span><select id="aSal">${[[0, 'No, cuenta en el mes que llega'], [2, 'Últimos 2 días'], [3, 'Últimos 3 días'], [4, 'Últimos 4 días'], [5, 'Últimos 5 días'], [7, 'Última semana']].map(([v, t]) => `<option value="${v}" ${salDays() === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
     <div class="field"><span>Categorías que cuentan como necesidad (regla 50/30/20)</span><div class="chips" style="flex-wrap:wrap">${S.data.lists.expenseCats.map(k => `<label class="chip" style="border-style:solid;${c.needs.includes(k) ? 'color:var(--accent);border-color:var(--accent)' : ''}"><input type="checkbox" name="need" value="${esc(k)}" ${c.needs.includes(k) ? 'checked' : ''} style="margin-right:5px">${esc(k)}</label>`).join('')}</div></div><div><button class="btn" type="submit">Guardar</button></div></form></section>
   <section class="card"><header><h2>Sobre semanal de efectivo</h2>${c.envelope && c.envelope.on ? '<span class="pill ok">Activo</span>' : ''}</header><form class="form" id="envForm">
     <p class="muted" style="margin:0;font-size:.86rem">Cada semana registras el efectivo para gastos pequeños como un solo gasto. Ya no tienes que anotar cada pupusa ni cada pasaje.</p>
@@ -2255,7 +2259,7 @@ document.addEventListener('submit', e => {
   if (e.target.id === 'connForm') { e.preventDefault(); S.cfg.url = $('#cUrl').value.trim(); S.cfg.token = $('#cTok').value.trim(); S.syncErr = ''; save(); sync(true); }
   if (e.target.id === 'agQuick' || e.target.id === 'agQuickHome' || e.target.id === 'agpQuick') { e.preventDefault(); const inp = e.target.querySelector('input'); const p = parseTodo(inp.value); if (!p.text) return toast('Escribe el pendiente'); noteSave({ id: uid(), date: today(), tag: '', text: p.text, action: '', due: p.due, status: 'Pendiente', kind: 'pendiente', time: p.time, color: 'verde', pinned: false }); toast(p.due ? `Pendiente para ${agDueLabel(p.due).toLowerCase()}${p.time ? ' a las ' + p.time : ''}` : 'Pendiente agregado'); setTimeout(() => { if (inp.id === 'agpQ') { $('#agPanel').innerHTML = agPanelHTML(); } const n = $('#' + inp.id); n && n.focus(); }, 30); return; }
   if (e.target.id === 'envForm') { e.preventDefault(); const amt = $('#eAmt').value.trim() ? calcVal('#eAmt') : r2($('#eAmt').placeholder); if (!(amt > 0)) return toast('Escribe el monto por semana'); S.cfg.envelope = { on: true, amount: amt, acc: $('#eAcc').value }; pushSettings(); render(); toast('Sobre semanal activado'); }
-  if (e.target.id === 'anaForm') { e.preventDefault(); S.cfg.emergencyMonths = Number($('#aEm').value) || 6; S.cfg.name = $('#aName').value.trim(); pushSettings(); S.cfg.needs = [...e.target.querySelectorAll('input[name=need]:checked')].map(i => i.value); save(); render(); toast('Guardado'); }
+  if (e.target.id === 'anaForm') { e.preventDefault(); S.cfg.emergencyMonths = Number($('#aEm').value) || 6; S.cfg.salNext = Number($('#aSal').value); S.cfg.name = $('#aName').value.trim(); pushSettings(); S.cfg.needs = [...e.target.querySelectorAll('input[name=need]:checked')].map(i => i.value); save(); render(); toast('Guardado'); }
   if (e.target.id === 'catForm') { e.preventDefault(); const sub = $('#nSub').value.trim(), cat = $('#nCat').value.trim(); if (!sub || !cat) return; if (catMap()[sub]) return toast('Esa subcategoría ya existe'); op('cat.add', { sub, cat, type: $('#nType').value }); toast('Subcategoría agregada'); }
 });
 $('#sheetBg').addEventListener('click', e => { if (e.target.id === 'sheetBg') closeSheet(); });
