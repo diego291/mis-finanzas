@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '3.2.0';
+const VERSION = '3.2.1';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -2468,7 +2468,16 @@ const vGet = id => { const v = store('veh')[id]; return v ? Object.assign({ id }
 const vList = (coll, vid) => Object.entries(store(coll)).map(([id, x]) => Object.assign({ id }, x)).filter(x => x.veh === vid);
 const vTasks = vid => vList('vtask', vid);
 const vLogs = vid => vList('vlog', vid).sort((a, b) => b.date.localeCompare(a.date) || (b.km || 0) - (a.km || 0));
-const vFuel = vid => vList('fuel', vid).sort((a, b) => b.date.localeCompare(a.date) || (b.km || 0) - (a.km || 0));
+/* Gasolina registrada desde Registrar (sin pasar por Vehículos): se muestra como carga del vehículo que usa esa subcategoría. */
+function vFuelMovs(vid) {
+  const v = vGet(vid); if (!v) return [];
+  const sub = v.subFuel || defaultSubs().fuel, same = VEHS().filter(z => (z.subFuel || defaultSubs().fuel) === sub);
+  const linked = new Set(Object.values(store('fuel')).map(f => f.movId).filter(Boolean));
+  const nm = (v.name || '').toLowerCase();
+  return S.data.movs.filter(m => m.type === 'Gasto' && m.sub === sub && !linked.has(m.id) && (same.length < 2 || (nm && ((m.desc || '') + ' ' + (m.notes || '')).toLowerCase().includes(nm))))
+    .map(m => ({ id: 'mv_' + m.id, veh: vid, date: m.date, total: m.amount, km: '', gal: 0, price: 0, movId: m.id, fromMov: true }));
+}
+const vFuel = vid => vList('fuel', vid).concat(vFuelMovs(vid)).sort((a, b) => b.date.localeCompare(a.date) || (b.km || 0) - (a.km || 0));
 const vDocs = vid => vList('vdoc', vid).sort((a, b) => (a.due || '9').localeCompare(b.due || '9'));
 const vKms = vid => vList('vkm', vid);
 const daysTo = d => Math.round((new Date(d + 'T12:00') - new Date(today() + 'T12:00')) / 864e5);
@@ -2564,7 +2573,7 @@ function vVehiculos() {
   const bud = (lab, spent, b) => b > 0 ? `<div class="mini"><div class="row2"><span>${lab}</span><span class="num ${spent > b ? 'neg' : ''}">${money(spent)} / ${money(b)}</span></div><div class="bar ${spent > b ? 'over' : spent >= b * .85 ? 'near' : 'good'}"><i style="width:${Math.min(100, spent / b * 100)}%"></i></div></div>` : '';
   const hist = S.ui.vHist || 'serv';
   const logItem = x => `<div class="item click" data-act="vehLog" data-v="${x.id}"><span class="ic">${gsvg('work')}</span><div class="t"><b>${esc(x.title || (x.items || []).filter(i => i.on).map(i => i.name).slice(0, 3).join(', ') || 'Mantenimiento')}</b><small>${dLabel(x.date)} · ${fmtKm(x.km)}${x.shop ? ' · ' + esc(x.shop) : ''}${(x.imgs || []).length ? ` · ${x.imgs.length} foto${x.imgs.length > 1 ? 's' : ''}` : ''}${x.movId ? ' · en gastos' : ''}</small></div><span class="amt">${money(x.total)}</span></div>`;
-  const fuelItem = x => `<div class="item click" data-act="vehFuelEdit" data-v="${x.id}"><span class="ic">${gsvg('fuel')}</span><div class="t"><b>${x.gal ? (+x.gal).toFixed(2) + ' gal' : 'Gasolina'}${x.price ? ' · ' + money(x.price) + '/gal' : ''}</b><small>${dLabel(x.date)} · ${fmtKm(x.km)}${x.station ? ' · ' + esc(x.station) : ''}${x.full === false ? ' · parcial' : ''}${x.movId ? ' · en gastos' : ''}</small></div><span class="amt">${money(x.total)}</span></div>`;
+  const fuelItem = x => `<div class="item click" data-act="vehFuelEdit" data-v="${x.id}"><span class="ic">${gsvg('fuel')}</span><div class="t"><b>${x.gal ? (+x.gal).toFixed(2) + ' gal' : 'Gasolina'}${x.price ? ' · ' + money(x.price) + '/gal' : ''}</b><small>${dLabel(x.date)} · ${fmtKm(x.km)}${x.station ? ' · ' + esc(x.station) : ''}${x.full === false ? ' · parcial' : ''}${x.fromMov ? ' · desde Registrar, toca para anotar km' : x.movId ? ' · en gastos' : ''}</small></div><span class="amt">${money(x.total)}</span></div>`;
   const kmItem = x => `<div class="item"><span class="ic">${svgI('estadisticas')}</span><div class="t"><b>${fmtKm(x[1])}</b><small>${dLabel(x[0])}</small></div><span></span></div>`;
   const histBody = hist === 'gas' ? (fuel.map(fuelItem).join('') || '<p class="note">Registra cada carga para saber cuánto rinde y cuánto te cuesta cada km.</p>')
     : hist === 'km' ? (vReadings(v).slice().reverse().slice(0, 30).map(kmItem).join('') || '<p class="note">Sin lecturas todavía.</p>')
@@ -2794,7 +2803,8 @@ function askExpense(o) {
 
 /* ---- gasolina ---- */
 function editFuelRec(vid, x) {
-  const v = vGet(vid), isNew = !x, last = vFuel(vid).find(f => f.price);
+  const v = vGet(vid), isNew = !x || x.fromMov, last = vFuel(vid).find(f => f.price);
+  if (x && x.fromMov) x = Object.assign({}, x, { id: 'f' + uid() });
   x = Object.assign({ id: 'f' + uid(), veh: vid, date: today(), km: '', total: '', price: last ? last.price : '', gal: '', full: true, station: last ? last.station : '' }, x || {});
   openSheet(isNew ? 'Gasolina · ' + esc(v.name) : 'Editar carga', `
     <div class="two"><label class="field"><span>Total pagado</span><input id="gTot" class="calc" type="text" inputmode="decimal" value="${x.total || ''}" autofocus></label><label class="field"><span>Precio por galón</span><input id="gPrice" class="calc" type="text" inputmode="decimal" value="${x.price || ''}"></label></div>
@@ -2805,7 +2815,7 @@ function editFuelRec(vid, x) {
     const total = calcVal('#gTot'), price = calcVal('#gPrice'), km = Number($('#gKm').value) || 0, date = $('#gDate').value || today();
     if (!(total > 0)) return 'Escribe cuánto pagaste.';
     if (!km) return 'Anota el kilometraje: con eso calculo cuánto rinde.';
-    const rec = Object.assign({}, x, { total, price, gal: price ? r2(total / price * 1000) / 1000 : 0, km, date, station: $('#gSt').value.trim(), full: $('#gFull').checked }); const id = rec.id; delete rec.id;
+    const rec = Object.assign({}, x, { total, price, gal: price ? r2(total / price * 1000) / 1000 : 0, km, date, station: $('#gSt').value.trim(), full: $('#gFull').checked }); const id = rec.id; delete rec.id; delete rec.fromMov;
     vPut('fuel', id, rec);
     if (km >= (Number(v.km) || 0)) vSave(Object.assign({}, vGet(v.id), { km, kmDate: date }));
     const desc = `Gasolina ${v.name}`;
@@ -2879,7 +2889,7 @@ Object.assign(ACT, {
   vehNew: () => editVeh(), vehEdit: el => editVeh(vGet(el.dataset.v)), vehSel: el => { S.ui.veh = el.dataset.v; render(); },
   vehGo: el => { if (el.dataset.v) S.ui.veh = el.dataset.v; go('vehiculos'); },
   vehKm: el => editKm(el.dataset.v || curVeh().id), vehServ: el => editServ(el.dataset.v || curVeh().id), vehFuel: el => editFuelRec(el.dataset.v || curVeh().id),
-  vehFuelEdit: el => { const x = Object.assign({ id: el.dataset.v }, store('fuel')[el.dataset.v]); editFuelRec(x.veh, x); },
+  vehFuelEdit: el => { const id = el.dataset.v; if (id.startsWith('mv_')) { const x = VEHS().flatMap(v => vFuelMovs(v.id)).find(z => z.id === id); if (x) editFuelRec(x.veh, x); return; } const x = Object.assign({ id }, store('fuel')[id]); editFuelRec(x.veh, x); },
   vehTask: el => { const v = curVeh(); editTask(el.dataset.v ? Object.assign({ id: el.dataset.v }, store('vtask')[el.dataset.v]) : null, v.id); },
   vehDoc: el => { const v = curVeh(); editDoc(v.id, el.dataset.v ? Object.assign({ id: el.dataset.v }, store('vdoc')[el.dataset.v]) : null); },
   vehLog: el => showLog(el.dataset.v), vehHist: el => { S.ui.vHist = el.dataset.v; render(); },
