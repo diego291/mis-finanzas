@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '3.2.1';
+const VERSION = '3.3.0';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -2451,10 +2451,38 @@ const VEH_TYPES = ['Moto', 'Carro', 'Pick-up', 'Otro'];
 const ACTIONS = ['Cambiado', 'Ajustado', 'Revisado', 'Reparado', 'Limpiado'];
 const DOC_NAMES = ['Tarjeta de circulación', 'Seguro', 'Licencia de conducir', 'Revisión técnica', 'Póliza de garantía'];
 const PLAN_TPL = {
-  Moto: [['Aceite de motor', 3000, 4, 'Cambiado'], ['Filtro de aceite', 6000, 8, 'Cambiado'], ['Lubricar y tensar cadena', 1000, 1, 'Ajustado'], ['Kit de arrastre (cadena, piñón, corona)', 20000, 0, 'Cambiado'], ['Pastillas / zapatas de freno', 5000, 0, 'Revisado'], ['Líquido de frenos', 0, 12, 'Cambiado'], ['Bujía', 8000, 12, 'Cambiado'], ['Filtro de aire', 5000, 6, 'Limpiado'], ['Llantas (desgaste y presión)', 3000, 1, 'Revisado'], ['Batería', 0, 6, 'Revisado'], ['Ajuste de válvulas', 12000, 0, 'Ajustado'], ['Luces, cables y clutch', 2000, 2, 'Revisado']],
+  Moto: [
+    ['Cambio de aceite', 3000, 3, 'Cambiado', 'Motor'], ['Limpiar malla y filtro centrífugo de aceite', 10000, 0, 'Limpiado', 'Motor'], ['Limpiar filtro de aire', 4000, 0, 'Limpiado', 'Motor'], ['Filtro de aire nuevo', 12000, 0, 'Cambiado', 'Motor'],
+    ['Limpiar bujía', 5000, 0, 'Limpiado', 'Motor'], ['Bujía nueva', 10000, 0, 'Cambiado', 'Motor'], ['Calibrar válvulas', 10000, 0, 'Ajustado', 'Motor'], ['Limpiar carburador y ajustar mezcla', 10000, 0, 'Limpiado', 'Motor'],
+    ['Cadena de distribución', 20000, 0, 'Revisado', 'Motor'], ['Filtro de gasolina en línea', 5000, 0, 'Cambiado', 'Motor'], ['Mangueras de combustible', 0, 30, 'Cambiado', 'Motor'], ['Grifo y tanque de gasolina', 0, 24, 'Limpiado', 'Motor'],
+    ['Cable del acelerador (juego y lubricar)', 5000, 0, 'Ajustado', 'Motor'], ['Escape: empaque y tornillos', 10000, 0, 'Revisado', 'Motor'],
+    ['Lubricar cadena y revisar tensión', 800, 0, 'Ajustado', 'Transmisión'], ['Cable de embrague (juego)', 4000, 0, 'Ajustado', 'Transmisión'], ['Kit de arrastre', 25000, 0, 'Cambiado', 'Transmisión'], ['Cauchos del cubo y guía de cadena', 12000, 0, 'Revisado', 'Transmisión'],
+    ['Pastillas o zapatas', 5000, 0, 'Revisado', 'Frenos y llantas'], ['Disco de freno (espesor)', 10000, 0, 'Revisado', 'Frenos y llantas'], ['Líquido de frenos', 0, 24, 'Cambiado', 'Frenos y llantas'], ['Llantas', 0, 48, 'Cambiado', 'Frenos y llantas'],
+    ['Reapriete general y lubricar cables', 5000, 0, 'Ajustado', 'Chasis y suspensión'], ['Pata lateral y su switch', 5000, 0, 'Revisado', 'Chasis y suspensión'], ['Pivote del basculante (grasa)', 10000, 0, 'Ajustado', 'Chasis y suspensión'],
+    ['Rodamientos de dirección', 20000, 0, 'Ajustado', 'Chasis y suspensión'], ['Rodamientos de ruedas', 25000, 0, 'Revisado', 'Chasis y suspensión'], ['Aceite de horquilla y retenes', 25000, 24, 'Cambiado', 'Chasis y suspensión'], ['Amortiguadores traseros y bujes', 25000, 0, 'Revisado', 'Chasis y suspensión'],
+    ['Batería y voltaje de carga', 0, 6, 'Revisado', 'Eléctrico'], ['Conectores e interruptores', 10000, 0, 'Revisado', 'Eléctrico']
+  ],
   Carro: [['Aceite y filtro', 5000, 6, 'Cambiado'], ['Filtro de aire', 15000, 12, 'Cambiado'], ['Rotación de llantas', 10000, 0, 'Ajustado'], ['Alineación y balanceo', 10000, 12, 'Ajustado'], ['Frenos', 10000, 0, 'Revisado'], ['Refrigerante', 40000, 24, 'Cambiado'], ['Batería', 0, 12, 'Revisado'], ['Bujías', 40000, 0, 'Cambiado'], ['Filtro de cabina', 15000, 12, 'Cambiado'], ['Correa de distribución', 60000, 0, 'Cambiado']]
 };
 PLAN_TPL['Pick-up'] = PLAN_TPL.Carro;
+/* Nombres del plan anterior de moto → plan nuevo (se conserva el historial al completar el plan). */
+const TPL_ALIAS = { 'Aceite de motor': 'Cambio de aceite', 'Filtro de aceite': 'Limpiar malla y filtro centrífugo de aceite', 'Lubricar y tensar cadena': 'Lubricar cadena y revisar tensión', 'Kit de arrastre (cadena, piñón, corona)': 'Kit de arrastre', 'Pastillas / zapatas de freno': 'Pastillas o zapatas', 'Bujía': 'Bujía nueva', 'Filtro de aire': 'Limpiar filtro de aire', 'Llantas (desgaste y presión)': 'Llantas', 'Batería': 'Batería y voltaje de carga', 'Ajuste de válvulas': 'Calibrar válvulas', 'Luces, cables y clutch': 'Cable de embrague (juego)' };
+const SYS = ['Motor', 'Transmisión', 'Frenos y llantas', 'Chasis y suspensión', 'Eléctrico', 'Otros'];
+const SYS_RX = [[/aceite de horquilla|amortigu|basculante|rodamiento|direcci|reapriete|pata|chasis|suspens/i, 'Chasis y suspensión'], [/bater|el[eé]ctric|luces|conector|interrupt|voltaje/i, 'Eléctrico'], [/fren|pastilla|zapata|llanta|disco|rotaci|alineaci/i, 'Frenos y llantas'], [/cadena(?! de distrib)|arrastre|embrague|clutch|cubo|transmisi/i, 'Transmisión'], [/aceite|filtro|buj[ií]a|v[aá]lvula|carbura|distribuci|gasolina|combust|escape|acelerador|refrigerante|correa|motor/i, 'Motor']];
+const taskSys = t => t.sys || (SYS_RX.find(([rx]) => rx.test(t.name || '')) || [0, 'Otros'])[1];
+const vFactor = v => v && v.intense ? .75 : 1;
+/* Revisión semanal rápida */
+const WEEK_CHECKS = ['Nivel de aceite', 'Presión de llantas', 'Luces, bocina y freno', 'Cadena: tensión y lubricación'];
+const vWeeks = vid => vList('vweek', vid).sort((a, b) => b.date.localeCompare(a.date));
+const wkKey = d => { const x = new Date(d + 'T12:00'); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x.toISOString().slice(0, 10); };
+function vStreak(vid) { const W = new Set(vWeeks(vid).map(w => wkKey(w.date))); let n = 0, k = wkKey(today()); if (!W.has(k)) k = addDays(k, -7); while (W.has(k)) { n++; k = addDays(k, -7); } return n; }
+function tplMissing(v) { const have = new Set(vTasks(v.id).map(t => TPL_ALIAS[t.name] || t.name)); return (PLAN_TPL[v.type] || []).filter(x => !have.has(x[0])); }
+function completeTpl(v) {
+  const tpl = PLAN_TPL[v.type] || [], byName = Object.fromEntries(tpl.map(x => [x[0], x]));
+  vTasks(v.id).forEach(t => { const nn = TPL_ALIAS[t.name]; const x = byName[nn || t.name]; if (!x || (!nn && t.sys)) return; const d = Object.assign({}, t, { name: x[0], everyKm: x[1], everyMonths: x[2], action: x[3], sys: x[4] }); delete d.id; opq('rec.upsert', { coll: 'vtask', id: t.id, data: d }); });
+  const n = tplMissing(v); n.forEach(([name, everyKm, everyMonths, action, sys], i) => opq('rec.upsert', { coll: 'vtask', id: 't' + uid(), data: { veh: v.id, name, everyKm, everyMonths, action, sys, order: 100 + i } }));
+  save(); render(); scheduleSync(); toast(`Plan completado: ${n.length} tarea${n.length === 1 ? '' : 's'} nueva${n.length === 1 ? '' : 's'}`);
+}
 const VICON = {
   Moto: '<circle cx="5.5" cy="16.5" r="3.5"/><circle cx="18.5" cy="16.5" r="3.5"/><path d="M5.5 16.5l4-6h5l4 6M9.5 10.5L8 7H5.5M14.5 10.5l2-3.5H19"/>',
   Carro: '<path d="M5 17H3v-5l2-5h14l2 5v5h-2M5 12h14"/><circle cx="7.5" cy="17" r="2"/><circle cx="16.5" cy="17" r="2"/>',
@@ -2489,26 +2517,31 @@ function curVeh() { const L = VEHS(); if (!L.find(v => v.id === S.ui.veh)) S.ui.
 
 /* ---- estado de cada tarea del plan ---- */
 function taskState(t, v) {
-  const km = Number(v.km) || 0, every = Number(t.everyKm) || 0, months = Number(t.everyMonths) || 0;
+  const f = vFactor(v), km = Number(v.km) || 0, every = Math.round((Number(t.everyKm) || 0) * f), months = (Number(t.everyMonths) || 0) * f;
   const lastKm = t.lastKm != null && t.lastKm !== '' ? Number(t.lastKm) : null, lastDate = t.lastDate || '';
   let remKm = null, dueDate = '', p = 0, sev = 'ok';
   if (every && lastKm != null) { remKm = lastKm + every - km; p = Math.max(p, (km - lastKm) / every); }
-  if (months && lastDate) { dueDate = addMonthsD(lastDate, months); const tot = daysTo(dueDate) - daysTo(lastDate); p = Math.max(p, tot > 0 ? -daysTo(lastDate) / tot : 1); }
-  const never = lastKm == null && !lastDate;
+  if (months && lastDate) { dueDate = f === 1 ? addMonthsD(lastDate, months) : addDays(lastDate, Math.round(months * 30.44)); const tot = daysTo(dueDate) - daysTo(lastDate); p = Math.max(p, tot > 0 ? -daysTo(lastDate) / tot : 1); }
+  const never = lastKm == null && !lastDate, overdueNew = never && every > 0 && km >= every;
   const dd = dueDate ? daysTo(dueDate) : null;
-  if (never) sev = 'new';
+  if (overdueNew) { sev = 'bad'; p = 1; }
+  else if (never) sev = 'new';
   else if ((remKm != null && remKm <= 0) || (dd != null && dd <= 0)) sev = 'bad';
   else if ((remKm != null && remKm <= Math.max(150, every * .1)) || (dd != null && dd <= 15)) sev = 'mid';
   let label;
-  if (never) label = 'Sin registro';
+  if (overdueNew) label = 'Sin registro · toca revisar';
+  else if (never) label = 'Sin registro';
   else if (sev === 'bad') label = remKm != null && remKm <= 0 ? `Vencido hace ${fmtKm(-remKm)}` : `Vencido el ${dLabel(dueDate)}`;
   else {
     const rate = vRate(v), useKm = remKm != null && (dd == null || (rate ? remKm / rate <= dd : remKm / every <= dd / (months * 30.4)));
     label = useKm ? `Faltan ${fmtKm(remKm)}` : dd <= 60 ? `En ${dd} día${dd === 1 ? '' : 's'}` : dLabel(dueDate);
   }
-  return { remKm, dueDate, dd, p: Math.max(0, Math.min(1, p)), sev, label, never };
+  return { remKm, dueDate, dd, p: Math.max(0, Math.min(1, p)), sev, label, never: never && !overdueNew, unreg: overdueNew, every, months };
 }
 const SEV_ORDER = { bad: 0, mid: 1, ok: 2, new: 3 };
+function taskEta(s, v) { if (s.sev === 'bad') return 0; const r = vRate(v); let d = s.dd; if (s.remKm != null && r > 0) d = d == null ? Math.round(s.remKm / r) : Math.min(d, Math.round(s.remKm / r)); return d; }
+function vUpcoming(v, days = 90) { return sortedTasks(v).filter(x => x.s.sev !== 'new').map(x => Object.assign(x, { eta: taskEta(x.s, v) })).filter(x => x.eta != null && x.eta <= days).sort((a, b) => a.eta - b.eta); }
+function vHealth(v) { const T = sortedTasks(v).filter(x => x.s.sev !== 'new'); if (!T.length) return null; return Math.round(sum(T, x => x.s.sev === 'ok' ? 1 : x.s.sev === 'mid' ? .5 : 0) / T.length * 100); }
 function sortedTasks(v) { return vTasks(v.id).map(t => ({ t, s: taskState(t, v) })).sort((a, b) => SEV_ORDER[a.s.sev] - SEV_ORDER[b.s.sev] || (a.s.remKm ?? 1e9) - (b.s.remKm ?? 1e9) || a.t.name.localeCompare(b.t.name)); }
 
 /* ---- números del vehículo ---- */
@@ -2548,8 +2581,13 @@ function vEfficiency(v) {
 }
 function vAlerts(v) {
   const out = [];
-  sortedTasks(v).forEach(({ t, s }) => { if (s.sev === 'bad' || s.sev === 'mid') out.push({ sev: s.sev, text: `${esc(v.name)}: ${esc(t.name)} · ${esc(s.label)}`, veh: v.id }); });
+  const ST = sortedTasks(v), un = ST.filter(x => x.s.unreg);
+  ST.forEach(({ t, s }) => { if (!s.unreg && (s.sev === 'bad' || s.sev === 'mid')) out.push({ sev: s.sev, text: `${esc(v.name)}: ${esc(t.name)} · ${esc(s.label)}`, veh: v.id }); });
+  if (un.length) out.push({ sev: 'bad', text: `${esc(v.name)}: ${un.length} tarea${un.length > 1 ? 's' : ''} sin registro ya pasaron su kilometraje. Marca las que ya hiciste y agenda el resto.`, veh: v.id });
   vDocs(v.id).forEach(d => { if (!d.due) return; const n = daysTo(d.due); if (n <= 30) out.push({ sev: n < 0 ? 'bad' : 'mid', text: `${esc(v.name)}: ${esc(d.name)} ${n < 0 ? 'venció' : n === 0 ? 'vence hoy' : `vence en ${n} día${n > 1 ? 's' : ''}`}`, veh: v.id }); });
+  if (v.type === 'Moto' || vWeeks(v.id).length) { const w = vWeeks(v.id)[0], n = w ? -daysTo(w.date) : null;
+    if (!w || n >= 7) out.push({ sev: new Date().getDay() === 0 || (n != null && n >= 10) ? 'mid' : 'info', text: `Revisión semanal de ${esc(v.name)}${w ? ` (última hace ${n} días)` : ''}: aceite, llantas, luces y cadena`, veh: v.id });
+    if (w) Object.entries(w.items || {}).filter(([, r]) => r === 'bad').forEach(([k]) => out.push({ sev: 'mid', text: `${esc(v.name)}: revisar ${esc(k.toLowerCase())} (salió mal en la revisión del ${dLabel(w.date)})`, veh: v.id })); }
   const R = vReadings(v), last = R.length ? R[R.length - 1][0] : '';
   if (vTasks(v.id).length && (!last || daysTo(last) <= -8)) out.push({ sev: 'info', text: `Anota el kilometraje de ${esc(v.name)}${last ? ` (última vez hace ${-daysTo(last)} días)` : ''}`, act: 'vehKm', veh: v.id });
   const m = vMonth(v, ymOf(today()));
@@ -2561,6 +2599,44 @@ function vAlerts(v) {
 function vehNotifs() { if (!S.data || !S.data.store || !S.data.store.veh) return []; return VEHS().flatMap(vAlerts).map(a => Object.assign(a, a.act ? { act: a.act } : { act: 'vehGo' })); }
 
 /* ---- vista ---- */
+const taskRow = ({ t, s }) => `<button type="button" class="vtask" data-act="vehTask" data-v="${t.id}"><div class="row2"><span>${esc(t.name)}</span><span class="pill ${s.sev === 'new' ? '' : s.sev}">${esc(s.label)}</span></div><div class="bar ${s.sev === 'bad' ? 'over' : s.sev === 'mid' ? 'near' : 'good'}"><i style="width:${s.never ? 0 : Math.max(4, s.p * 100)}%"></i></div><small class="muted">${[s.every ? 'cada ' + fmtKm(s.every) : '', s.months ? `cada ${+s.months.toFixed(1)} mes${s.months > 1 ? 'es' : ''}` : ''].filter(Boolean).join(' o ')}${t.lastDate ? ` · último ${dLabel(t.lastDate)}${t.lastKm ? ' a ' + fmtKm(t.lastKm) : ''}` : ''}</small></button>`;
+function planBody(v, T) {
+  const h = vHealth(v), cnt = L => { const b = L.filter(x => x.s.sev === 'bad').length, m = L.filter(x => x.s.sev === 'mid').length; return b ? `<span class="pill bad">${b} vencida${b > 1 ? 's' : ''}</span>` : m ? `<span class="pill mid">${m} pronto</span>` : L.every(x => x.s.sev === 'new') ? '<span class="pill">sin registro</span>' : '<span class="pill good">al día</span>'; };
+  const G = SYS.map(k => [k, T.filter(x => taskSys(x.t) === k)]).filter(([, L]) => L.length);
+  return `<div class="vhealth">${h != null ? `<b class="num">${h}</b><div><small class="muted">Salud general</small><div class="bar ${h < 50 ? 'over' : h < 80 ? 'near' : 'good'}"><i style="width:${Math.max(4, h)}%"></i></div></div>` : '<small class="muted">Marca lo que ya hiciste para calcular la salud general.</small>'}
+    <button type="button" class="chip ${v.intense ? 'on' : ''}" data-act="vehIntense" data-v="${v.id}" title="Trabajo diario, Uber, tráfico o lluvia: los intervalos bajan al 75%">Uso intenso${v.intense ? ' · 75%' : ''}</button></div>
+    ${G.map(([k, L]) => `<details class="vsys" ${L.some(x => x.s.sev === 'bad' || x.s.sev === 'mid') ? 'open' : ''}><summary><span>${k}</span>${cnt(L)}</summary><div class="vtasks">${L.map(taskRow).join('')}</div></details>`).join('')}`;
+}
+function upcomingCard(v, goal, gs) {
+  const U = vUpcoming(v), tot = sum(U, x => Number(x.t.cost) || 0), r = vRate(v), late = U.filter(x => x.eta === 0).length, booked = VAPPTS(v.id).length;
+  const when = e => e === 0 ? 'Ya' : e <= 13 ? `${e} día${e === 1 ? '' : 's'}` : dLabel(addDays(today(), e));
+  return `<section class="card side-card"><header style="margin:0"><h2>Lo que viene · 3 meses</h2><span class="num">${tot ? '≈ ' + money(tot) : ''}</span></header>
+    <small class="muted">${r ? `Ruedas unos ${fmtKm(Math.round(r * 30.4))} al mes; las fechas se estiman con eso.` : 'Anota el kilometraje un par de veces para estimar fechas.'}</small>
+    ${U.length ? `<div class="vup">${U.slice(0, 8).map(x => `<button type="button" class="vup-r" data-act="vehTask" data-v="${x.t.id}"><span class="pill ${x.eta === 0 ? 'bad' : x.eta <= 30 ? 'mid' : ''}">${when(x.eta)}</span><span>${esc(x.t.name)}</span><span class="num">${x.t.cost ? money(x.t.cost) : '—'}</span></button>`).join('')}</div>${U.length > 8 ? `<small class="muted">y ${U.length - 8} más</small>` : ''}` : '<p class="note">Nada pendiente en los próximos 3 meses.</p>'}
+    ${tot && U.some(x => !x.t.cost) ? '<small class="muted">Las tareas sin costo no suman; toca una para ponerle precio.</small>' : ''}
+    ${goal && tot ? `<small>Fondo ${esc(goal.name)}: ${money(gs)} de ${money(tot)}${gs < tot ? ` · aparta ${money(Math.ceil((tot - gs) / 3))} al mes` : ' · cubierto'}</small>` : ''}
+    ${late && !booked ? `<button class="btn pri sm" data-act="apptNew" data-v="${v.id}">Agendar ${late === 1 ? 'la vencida' : `las ${late} vencidas`} en una visita</button>` : ''}
+  </section>`;
+}
+function weekCard(v) {
+  if (v.type !== 'Moto' && !vWeeks(v.id).length) return '';
+  S.ui.wk = S.ui.wk || {}; const st = S.ui.wk[v.id] = S.ui.wk[v.id] || {}, w = vWeeks(v.id)[0], streak = vStreak(v.id), done = w && wkKey(w.date) === wkKey(today());
+  return `<section class="card side-card"><header style="margin:0"><h2>Revisión semanal</h2><small class="muted">${streak ? `racha: ${streak} semana${streak > 1 ? 's' : ''}` : 'cada domingo, 1 minuto'}</small></header>
+    ${done ? `<p class="note" style="margin:0">Hecha el ${dLabel(w.date)}. La próxima, el domingo.</p>` : ''}
+    <div class="wk">${WEEK_CHECKS.map(k => `<button type="button" class="wk-r" data-act="wkTog" data-v="${v.id}" data-k="${esc(k)}"><span class="wk-b ${st[k] || ''}">${st[k] === 'ok' ? '✓' : st[k] === 'bad' ? '✕' : ''}</span><span>${esc(k)}</span></button>`).join('')}
+      <label class="wk-r"><span class="wk-b"></span><span>Kilometraje</span><input id="wkKm" type="number" inputmode="numeric" placeholder="${esc(v.km || '')}"></label></div>
+    <small class="muted">Toca una vez si está bien y dos si está mal; lo malo queda como aviso.</small>
+    <button class="btn sm ${done ? '' : 'pri'}" data-act="wkSave" data-v="${v.id}">Guardar revisión</button></section>`;
+}
+function wkSave(vid) {
+  const v = vGet(vid), st = (S.ui.wk || {})[vid] || {}, km = Number(($('#wkKm') || {}).value) || 0;
+  if (!Object.keys(st).length && !km) return toast('Marca al menos una revisión');
+  if (km && v.km && km < Number(v.km)) return toast(`El kilometraje es menor que el último (${fmtKm(v.km)})`);
+  vPut('vweek', 'w' + uid(), { veh: vid, date: today(), items: Object.assign({}, st), km: km || '' });
+  if (km) { vPut('vkm', 'k' + uid(), { veh: vid, date: today(), km }); vSave(Object.assign({}, vGet(vid), { km, kmDate: today() })); }
+  S.ui.wk[vid] = {}; const bad = Object.values(st).filter(x => x === 'bad').length;
+  toast(bad ? `Guardada · ${bad} cosa${bad > 1 ? 's' : ''} por revisar` : 'Revisión guardada');
+}
 function vVehiculos() {
   if (vehBlocked() && !VEHS().length) return `${head('Vehículos')}<div class="alert"><span></span><div><b>Actualiza el conector de tu hoja para usar Vehículos</b><p>Los vehículos se guardan en la hoja AppData, que necesita el conector v3. Pégalo una vez en Apps Script (Ajustes te dice cómo) y vuelve aquí.</p></div><div class="acts"><a class="btn sm" href="#ajustes">Ir a Ajustes</a></div></div>`;
   const L = VEHS(), v = curVeh();
@@ -2590,11 +2666,12 @@ function vVehiculos() {
     <div class="kpi"><span class="label">Rendimiento</span><span class="v ${ef && ef.drop ? 'neg' : ''}">${ef ? ef.last.toFixed(1) + ' km/gal' : '—'}</span><span class="d">${ef ? `promedio ${ef.avg.toFixed(1)}${ef.drop ? ' · bajó, revisa' : ''}` : 'Registra dos cargas con tanque lleno'}</span></div></div>
   <div class="grid-2 veh-grid">
     <section class="card side-card"><header style="margin:0"><h2>Plan de mantenimiento</h2><button type="button" class="linkbtn" data-act="vehTask" data-v="">+ Tarea</button></header>
-      ${T.length ? `<div class="vtasks">${T.map(({ t, s }) => `<button type="button" class="vtask" data-act="vehTask" data-v="${t.id}"><div class="row2"><span>${esc(t.name)}</span><span class="pill ${s.sev === 'new' ? '' : s.sev}">${esc(s.label)}</span></div><div class="bar ${s.sev === 'bad' ? 'over' : s.sev === 'mid' ? 'near' : 'good'}"><i style="width:${s.never ? 0 : Math.max(4, s.p * 100)}%"></i></div><small class="muted">${[t.everyKm ? 'cada ' + fmtKm(t.everyKm) : '', t.everyMonths ? `cada ${t.everyMonths} mes${t.everyMonths > 1 ? 'es' : ''}` : ''].filter(Boolean).join(' o ')}${t.lastDate ? ` · último ${dLabel(t.lastDate)}${t.lastKm ? ' a ' + fmtKm(t.lastKm) : ''}` : ''}</small></button>`).join('')}</div>`
-      : `<p class="note">Sin plan todavía.</p>${PLAN_TPL[v.type] ? `<button class="btn" data-act="vehTpl" data-v="${v.id}">Cargar plan sugerido para ${esc(v.type.toLowerCase())}</button>` : ''}`}
+      ${T.length ? planBody(v, T) : `<p class="note">Sin plan todavía.</p>${PLAN_TPL[v.type] ? `<button class="btn" data-act="vehTpl" data-v="${v.id}">Cargar plan sugerido para ${esc(v.type.toLowerCase())}</button>` : ''}`}
+      ${T.length && tplMissing(v).length ? `<button class="btn sm" data-act="vehTplMore" data-v="${v.id}">Completar plan sugerido (${tplMissing(v).length} tareas nuevas)</button>` : ''}
       ${T.some(x => x.s.never) ? '<p class="note">Las tareas “Sin registro” empiezan a contar cuando las marques en un mantenimiento. Si ya las hiciste hace poco, toca la tarea y pon cuándo.</p>' : ''}
     </section>
     <div class="veh-col">
+      ${T.length ? upcomingCard(v, goal, gs) : ''}${weekCard(v)}
       <section class="card side-card"><header style="margin:0"><h2>Presupuesto y fondo</h2><button type="button" class="linkbtn" data-act="vehEdit" data-v="${v.id}">Ajustar</button></header>
         ${bud('Mantenimiento del mes', m.mant, v.budMant)}${bud('Gasolina del mes', m.fuel, v.budFuel)}
         ${goal ? `<div class="row2"><span>Fondo · ${esc(goal.name)}</span><span class="num">${money(gs)}${goal.target ? ' / ' + money(goal.target) : ''}</span></div>${goal.target ? `<div class="bar ${gs >= goal.target ? 'good' : ''}"><i style="width:${Math.min(100, Math.max(0, gs / goal.target * 100))}%"></i></div>` : ''}<div class="btns"><button class="btn sm" data-act="goalIn" data-n="${esc(goal.name)}">Aportar al fondo</button></div>` : ''}
@@ -2641,6 +2718,7 @@ function editVeh(v) {
     <div class="two"><label class="field"><span>Placa</span><input id="vPlate" value="${esc(v.plate)}"></label><label class="field"><span>Kilometraje actual</span><input id="vKm" type="number" inputmode="numeric" value="${esc(v.km)}" placeholder="18420"></label></div>
     <div class="two"><label class="field"><span>Uso (ámbito de los gastos)</span>${sel('vScope', S.data.lists.scopes, v.scope)}</label><label class="field"><span>Cuenta con que pagas normalmente</span>${sel('vAcc', S.data.accounts.map(a => a.name), v.acc, 'Elegir cada vez')}</label></div>
     <div class="two"><label class="field"><span>Presupuesto mensual de mantenimiento</span><input id="vBudM" class="calc" type="text" inputmode="decimal" value="${v.budMant || ''}" placeholder="0"></label><label class="field"><span>Presupuesto mensual de gasolina</span><input id="vBudF" class="calc" type="text" inputmode="decimal" value="${v.budFuel || ''}" placeholder="0"></label></div>
+    <label class="ag-pin"><input type="checkbox" id="vInt" ${v.intense ? 'checked' : ''}> Uso intenso (trabajo diario, Uber, tráfico o lluvia): intervalos al 75%</label>
     <label class="field"><span>Fondo de ahorro (meta)</span>${sel('vFund', S.data.goals.map(g => g.name), v.fund, 'Sin fondo')}</label>
     <div class="two"><label class="field"><span>Subcategoría para mantenimiento</span>${sel('vSubM', subs, v.subMant)}</label><label class="field"><span>Subcategoría para gasolina</span>${sel('vSubF', subs, v.subFuel)}</label></div>
     ${isNew ? `<label class="ag-pin"><input type="checkbox" id="vTpl" checked> Cargar el plan de mantenimiento sugerido</label>` : ''}
@@ -2648,7 +2726,7 @@ function editVeh(v) {
     <div id="vDelC" hidden class="alert bad"><span></span><div><b>¿Eliminar ${esc(v.name)}?</b><p>Se borran su plan, mantenimientos, gasolina, documentos y fotos. Los gastos que ya registraste en tus finanzas se quedan.</p></div><div class="acts"><button type="button" class="btn sm danger" id="vDelY">Eliminar</button></div></div>`, () => {
     const name = $('#vName').value.trim(); if (!name) return 'Ponle un nombre.';
     const km = Number($('#vKm').value) || 0;
-    const rec = Object.assign({}, v, { name, type: $('#vType').value, brand: $('#vBrand').value.trim(), year: $('#vYear').value, plate: $('#vPlate').value.trim().toUpperCase(), scope: $('#vScope').value, acc: $('#vAcc').value, budMant: calcVal('#vBudM'), budFuel: calcVal('#vBudF'), fund: $('#vFund').value, subMant: $('#vSubM').value, subFuel: $('#vSubF').value });
+    const rec = Object.assign({}, v, { name, type: $('#vType').value, brand: $('#vBrand').value.trim(), year: $('#vYear').value, plate: $('#vPlate').value.trim().toUpperCase(), scope: $('#vScope').value, acc: $('#vAcc').value, budMant: calcVal('#vBudM'), budFuel: calcVal('#vBudF'), fund: $('#vFund').value, intense: $('#vInt').checked, subMant: $('#vSubM').value, subFuel: $('#vSubF').value });
     if (km && km !== Number(v.km)) { rec.km = km; rec.kmDate = today(); vPut('vkm', 'k' + uid(), { veh: v.id, date: today(), km }); }
     vSave(rec);
     if (isNew && $('#vTpl') && $('#vTpl').checked) loadTpl(rec);
@@ -2660,10 +2738,10 @@ function editVeh(v) {
   });
 }
 function delVeh(id) {
-  ['vtask', 'vlog', 'fuel', 'vdoc', 'vkm'].forEach(c => vList(c, id).forEach(x => { (x.imgs || []).forEach(im => { blobDel('img', im.id, im.n); IDB.del(im.id); IMG.delete(im.id); }); opq('rec.delete', { coll: c, id: x.id }); }));
+  ['vtask', 'vlog', 'fuel', 'vdoc', 'vkm', 'vweek'].forEach(c => vList(c, id).forEach(x => { (x.imgs || []).forEach(im => { blobDel('img', im.id, im.n); IDB.del(im.id); IMG.delete(im.id); }); opq('rec.delete', { coll: c, id: x.id }); }));
   op('rec.delete', { coll: 'veh', id }); S.ui.veh = '';
 }
-function loadTpl(v) { (PLAN_TPL[v.type] || []).forEach(([name, everyKm, everyMonths, action], i) => opq('rec.upsert', { coll: 'vtask', id: 't' + uid(), data: { veh: v.id, name, everyKm, everyMonths, action, order: i } })); save(); render(); scheduleSync(); }
+function loadTpl(v) { (PLAN_TPL[v.type] || []).forEach(([name, everyKm, everyMonths, action, sys], i) => opq('rec.upsert', { coll: 'vtask', id: 't' + uid(), data: { veh: v.id, name, everyKm, everyMonths, action, sys: sys || '', order: i } })); save(); render(); scheduleSync(); }
 function editTask(t, vid) {
   const v = vGet(vid), isNew = !t;
   t = Object.assign({ id: 't' + uid(), veh: vid, name: '', everyKm: '', everyMonths: '', action: 'Cambiado', lastKm: '', lastDate: '', cost: '' }, t || {});
@@ -2672,12 +2750,13 @@ function editTask(t, vid) {
     <div class="two"><label class="field"><span>Cada cuántos km</span><input id="tKm" type="number" inputmode="numeric" value="${esc(t.everyKm || '')}" placeholder="3000"></label><label class="field"><span>o cada cuántos meses</span><input id="tMo" type="number" inputmode="numeric" value="${esc(t.everyMonths || '')}" placeholder="4"></label></div>
     <p class="note" style="margin:0">Lo que llegue primero. Deja vacío lo que no aplique.</p>
     <div class="two"><label class="field"><span>Qué se hace normalmente</span>${sel('tAct', ACTIONS, t.action)}</label><label class="field"><span>Costo aproximado</span><input id="tCost" class="calc" type="text" inputmode="decimal" value="${t.cost || ''}"></label></div>
+    <label class="field"><span>Sistema</span>${sel('tSys', SYS, taskSys(t))}</label>
     <div class="two"><label class="field"><span>Última vez (km)</span><input id="tLastKm" type="number" inputmode="numeric" value="${esc(t.lastKm ?? '')}" placeholder="${esc(v.km || '')}"></label><label class="field"><span>Última vez (fecha)</span><input id="tLastD" type="date" value="${esc(t.lastDate || '')}"></label></div>
     <div class="btns"><button class="btn pri">Guardar</button>${isNew ? '' : '<button type="button" class="btn" id="tNow">Hecho hoy</button><button type="button" class="btn danger" id="tDel">Quitar del plan</button>'}</div>`, () => {
     const name = $('#tName').value.trim(); if (!name) return 'Escribe la tarea.';
     const everyKm = Number($('#tKm').value) || 0, everyMonths = Number($('#tMo').value) || 0;
     if (!everyKm && !everyMonths) return 'Pon cada cuántos km o cada cuántos meses.';
-    const d = Object.assign({}, t, { name, everyKm, everyMonths, action: $('#tAct').value, cost: calcVal('#tCost'), lastKm: $('#tLastKm').value === '' ? '' : Number($('#tLastKm').value), lastDate: $('#tLastD').value }); delete d.id;
+    const d = Object.assign({}, t, { name, everyKm, everyMonths, action: $('#tAct').value, sys: $('#tSys').value, cost: calcVal('#tCost'), lastKm: $('#tLastKm').value === '' ? '' : Number($('#tLastKm').value), lastDate: $('#tLastD').value }); delete d.id;
     vPut('vtask', t.id, d);
   }, f => {
     const n = f.querySelector('#tNow'); if (n) n.onclick = () => { $('#tLastKm').value = v.km || ''; $('#tLastD').value = today(); };
@@ -2893,7 +2972,10 @@ Object.assign(ACT, {
   vehTask: el => { const v = curVeh(); editTask(el.dataset.v ? Object.assign({ id: el.dataset.v }, store('vtask')[el.dataset.v]) : null, v.id); },
   vehDoc: el => { const v = curVeh(); editDoc(v.id, el.dataset.v ? Object.assign({ id: el.dataset.v }, store('vdoc')[el.dataset.v]) : null); },
   vehLog: el => showLog(el.dataset.v), vehHist: el => { S.ui.vHist = el.dataset.v; render(); },
-  vehTpl: el => loadTpl(vGet(el.dataset.v)), vehFund: el => vehFund(el.dataset.v)
+  vehTpl: el => loadTpl(vGet(el.dataset.v)), vehTplMore: el => completeTpl(vGet(el.dataset.v)),
+  vehIntense: el => { const v = vGet(el.dataset.v); vSave(Object.assign({}, v, { intense: !v.intense })); toast(v.intense ? 'Intervalos normales' : 'Uso intenso: intervalos al 75%'); },
+  wkTog: el => { const w = (S.ui.wk = S.ui.wk || {})[el.dataset.v] = S.ui.wk[el.dataset.v] || {}, k = el.dataset.k; w[k] = w[k] === 'ok' ? 'bad' : w[k] === 'bad' ? '' : 'ok'; if (!w[k]) delete w[k]; const b = el.querySelector('.wk-b'); b.className = 'wk-b ' + (w[k] || ''); b.textContent = w[k] === 'ok' ? '✓' : w[k] === 'bad' ? '✕' : ''; },
+  wkSave: el => wkSave(el.dataset.v), vehFund: el => vehFund(el.dataset.v)
 });
 
 /* ---- talleres y tiendas ---- */

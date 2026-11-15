@@ -1249,3 +1249,30 @@ body[data-design="c"] .next-step b { color: var(--cta-bg); }
 .sr-lab { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; cursor: pointer; }
 .sr-lab.sr-cb { flex: none; }
 .sr-lab input[type=checkbox] { width: 20px !important; height: 20px; accent-color: var(--accent); flex: none; margin: 0; min-height: 0; padding: 0; }
+
+/* ---------- Mantenimiento: salud, sistemas, lo que viene, revisión semanal (v3.3.0) ---------- */
+.pill.good { color: var(--pos); background: color-mix(in srgb, var(--pos) 13%, transparent); }
+.chip.on { border-style: solid; border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.vhealth { display: flex; align-items: center; gap: 12px; margin: 4px 0 6px; }
+.vhealth > b { font-size: 1.7rem; line-height: 1; }
+.vhealth > div { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.vhealth .bar { height: 6px; }
+.vsys { border-top: 1px solid var(--line); }
+.vsys > summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 2px; cursor: pointer; font-weight: 600; list-style: none; }
+.vsys > summary::-webkit-details-marker { display: none; }
+.vsys > summary::after { content: '›'; color: var(--muted); transition: transform .15s; margin-left: 4px; }
+.vsys[open] > summary::after { transform: rotate(90deg); }
+.vsys > summary > span:first-child { flex: 1; }
+.vsys .vtasks { padding-bottom: 8px; }
+.vup { display: grid; gap: 2px; margin: 6px 0; }
+.vup-r { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; border: 0; background: none; color: var(--fg); text-align: left; padding: 7px 4px; border-top: 1px solid var(--line); cursor: pointer; font-size: .88rem; }
+.vup-r:hover { background: var(--surface-2); }
+.vup-r > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wk { display: grid; gap: 2px; margin: 6px 0; }
+.wk-r { display: flex; align-items: center; gap: 10px; border: 0; background: none; color: var(--fg); text-align: left; padding: 8px 4px; border-top: 1px solid var(--line); cursor: pointer; font-size: .9rem; }
+.wk-r > span:nth-child(2) { flex: 1; }
+.wk-r input { width: 110px; padding: 6px 8px; font-size: .85rem; }
+.wk-b { width: 20px; height: 20px; flex: none; border-radius: 6px; border: 1.5px solid var(--line); display: inline-flex; align-items: center; justify-content: center; font-size: .75rem; font-weight: 700; }
+.wk-b.ok { background: var(--pos); border-color: var(--pos); color: #fff; }
+.wk-b.bad { background: var(--neg); border-color: var(--neg); color: #fff; }
+label.wk-r .wk-b { visibility: hidden; }
