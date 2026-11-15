@@ -15,6 +15,10 @@
  * Versión 5: avisos programados por correo (tu Gmail) y como notificación de la propia
  * app Mis Finanzas en tu teléfono (sin instalar nada más).
  *
+ * Versión 9: sincronización rápida. Cada cambio sube un contador (REV); si un equipo ya tiene
+ * la última versión, la respuesta es inmediata y no se vuelve a leer toda la hoja. Las fotos que
+ * el equipo ya tiene guardadas no se vuelven a enviar.
+ *
  * Versión 7: este archivo es el NÚCLEO. No se pega en Apps Script: el cargador (Code.gs)
  * lo descarga de GitHub y lo ejecuta, así cada mejora llega sola a tu hoja.
  * Después de pegar este código: elige la función "activarAvisos" arriba, toca Ejecutar
@@ -31,7 +35,7 @@ const PAG = { sheet: 'Pagos fijos', first: 6, last: 30 };                       
 const PRE = { sheet: 'Presupuesto', first: 6, last: 45 };                           // A categoría (fórmula), B monto
 const CAT = { sheet: 'Categorias', first: 5, last: 400 };                           // A sub, B categoría, C tipo; E gasto, G ingreso, K métodos, M ámbitos, O tipos de cuenta
 const NOT = { sheet: 'Notas', first: 6, last: 1005, idCol: 7, extra: 4 };          // A..F, G = ID de la app, H tipo, I hora, J color, K fijada
-const API_VERSION = 8;
+const API_VERSION = 9;
 const APP = { sheet: 'AppData' };                                                  // almacén genérico: Colección | ID | Datos (JSON) | Actualizado
 
 const TZ = 'America/El_Salvador';
@@ -48,17 +52,25 @@ function doPost(e) {
   if (!token || body.token !== token) return json_({ ok: false, error: 'Código de acceso incorrecto' });
   if (body.pull) return json_({ ok: true, items: pushPull_(String(body.pull)) });   // lo pide la app en el teléfono al recibir un aviso
 
+  const props = PropertiesService.getScriptProperties(), ops = body.ops || [], has = body.rev != null && body.rev !== '';
+  // Camino rápido: nada que enviar y el equipo ya tiene la última versión.
+  if (!ops.length && !body.full && has && String(body.rev) === String(props.getProperty('REV') || '0')) return json_({ ok: true, v: API_VERSION, same: true, rev: props.getProperty('REV') || '0', serverTime: Date.now() });
+
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) return json_({ ok: false, error: 'La hoja está ocupada, intenta en unos segundos' });
   try {
     const ss = SpreadsheetApp.getActive();
-    const results = [];
-    (body.ops || []).forEach(op => {
+    const before = props.getProperty('REV') || '0', results = [];
+    ops.forEach(op => {
       try { applyOp_(ss, op); results.push({ opId: op.opId, ok: true }); }
       catch (err) { results.push({ opId: op.opId, ok: false, error: String(err.message || err) }); }
     });
+    let rev = before;
+    if (ops.length) { rev = String(Number(before) + 1); props.setProperty('REV', rev); }
     SpreadsheetApp.flush();
-    return json_({ ok: true, v: API_VERSION, results: results, serverTime: Date.now(), data: snapshot_(ss) });
+    // Solo cambios de este equipo y nadie más escribió: no hace falta devolver la hoja completa.
+    if (ops.length && !body.full && has && String(body.rev) === before && results.every(r => r.ok)) return json_({ ok: true, v: API_VERSION, results: results, rev: rev, serverTime: Date.now() });
+    return json_({ ok: true, v: API_VERSION, results: results, rev: rev, serverTime: Date.now(), data: snapshot_(ss, body.imgHave) });
   } finally {
     lock.releaseLock();
   }
@@ -218,9 +230,8 @@ function renameValues_(sh, col, from, to) {
 }
 
 // ---------- Leer la hoja completa ----------
-function snapshot_(ss) {
-  assignIds_(ss);
-  const read = (T, cols) => ss.getSheetByName(T.sheet).getRange(T.first, 1, T.last - T.first + 1, cols).getValues();
+function snapshot_(ss, imgHave) {
+  const read = (T, cols) => withIds_(ss, T, ss.getSheetByName(T.sheet).getRange(T.first, 1, T.last - T.first + 1, cols).getValues());
 
   const movs = [];
   read(MOV, MOV.idCol).forEach((r, i) => {
@@ -243,11 +254,15 @@ function snapshot_(ss) {
   const list = col => catRows.map(r => r[col]).filter(v => v !== '' && !String(v).startsWith('No editar'));
   const notes = read(NOT, NOT.idCol + NOT.extra).filter(r => r[2] !== '').map(r => ({ id: r[6], date: fmt_(r[0]), tag: r[1], text: r[2], action: r[3], due: fmt_(r[4]), status: r[5], kind: r[7] || '', time: r[8] instanceof Date ? Utilities.formatDate(r[8], TZ, 'HH:mm') : String(r[8] || ''), color: r[9] || '', pinned: r[10] === 'Sí' || r[10] === true }));
 
-  const store = {};
+  const store = {}, have = new Set(Array.isArray(imgHave) ? imgHave.map(String) : []);
   const ash = ss.getSheetByName(APP.sheet);
   if (ash && ash.getLastRow() > 1) {
     ash.getRange(2, 1, ash.getLastRow() - 1, 3).getValues().forEach(r => {
       if (r[0] === '' || r[1] === '') return;
+      if (r[0] === 'img' && have.size) {   // fotos que el equipo ya tiene: solo se avisa cuántas partes tienen
+        const k = String(r[1]), i = k.lastIndexOf(':'), id = k.slice(0, i);
+        if (have.has(id)) { if (k.slice(i + 1) === '0') { let n = 1; try { n = JSON.parse(r[2]).n || 1; } catch (e) { } (store.img = store.img || {})[k] = { n: n }; } return; }
+      }
       let v = null; try { v = JSON.parse(r[2]); } catch (e) { v = r[2]; }
       (store[r[0]] = store[r[0]] || {})[String(r[1])] = v;
     });
@@ -260,6 +275,15 @@ function snapshot_(ss) {
 }
 
 // ---------- Utilidades ----------
+/* Pone ID a las filas escritas a mano (Movimientos y Notas) usando lo que ya se leyó: una sola lectura. */
+function withIds_(ss, T, data) {
+  const keys = T === MOV ? [1, 7] : T === NOT ? [3] : null;
+  if (!keys || data[0].length < T.idCol) return data;
+  let changed = false; const ids = data.map(r => [r[T.idCol - 1]]);
+  data.forEach((r, i) => { if (!ids[i][0] && keys.some(c => r[c - 1] !== '')) { ids[i][0] = Utilities.getUuid().slice(0, 12); r[T.idCol - 1] = ids[i][0]; changed = true; } });
+  if (changed) ss.getSheetByName(T.sheet).getRange(T.first, T.idCol, data.length, 1).setValues(ids);
+  return data;
+}
 function assignIds_(ss) {
   [[MOV, [1, 7]], [NOT, [3]]].forEach(([T, keyCols]) => {
     const sh = ss.getSheetByName(T.sheet);
@@ -642,9 +666,11 @@ function b64uDecode_(s) { s = String(s).replace(/-/g, '+').replace(/_/g, '/'); w
 const CAL_ID = 'primary';
 function calAvail_() { return typeof Calendar !== 'undefined' && Calendar.Events; }
 function calLocal_(o) { if (!o) return ''; if (o.date) return o.date; return Utilities.formatDate(new Date(o.dateTime), TZ, "yyyy-MM-dd'T'HH:mm"); }
+function calCacheGet_(cache) { const n = Number(cache.get('MF_CAL_N') || 0); if (!n) return ''; const keys = []; for (let i = 0; i < n; i++) keys.push('MF_CAL_' + i); const got = cache.getAll(keys); let s = ''; for (const k of keys) { if (got[k] == null) return ''; s += got[k]; } return s; }
+function calCachePut_(cache, j) { const o = {}, size = 90000, n = Math.ceil(j.length / size); if (n > 20) return; for (let i = 0; i < n; i++) o['MF_CAL_' + i] = j.slice(i * size, (i + 1) * size); o.MF_CAL_N = String(n); cache.putAll(o, 300); }
 function calSnapshot_() {
   if (!calAvail_()) return { ok: false, error: 'sin-permiso' };
-  const cache = CacheService.getScriptCache(), hit = cache.get('MF_CAL');
+  const cache = CacheService.getScriptCache(), hit = calCacheGet_(cache);
   if (hit) { try { return JSON.parse(hit); } catch (e) { } }
   try {
     const now = new Date(), from = new Date(now.getTime() - 62 * 864e5), to = new Date(now.getTime() + 190 * 864e5);
@@ -663,7 +689,7 @@ function calSnapshot_() {
       mf: (e.extendedProperties && e.extendedProperties.private && e.extendedProperties.private.mf) || '', link: e.htmlLink || '', owner: !!(e.organizer && e.organizer.self)
     }));
     const out = { ok: true, from: Utilities.formatDate(from, TZ, 'yyyy-MM-dd'), to: Utilities.formatDate(to, TZ, 'yyyy-MM-dd'), events: events };
-    try { const j = JSON.stringify(out); if (j.length < 95000) cache.put('MF_CAL', j, 90); } catch (e) { }
+    try { calCachePut_(cache, JSON.stringify(out)); } catch (e) { }
     return out;
   } catch (e) { return { ok: false, error: String(e.message || e).slice(0, 200) }; }
 }
@@ -677,7 +703,7 @@ function calRes_(d, withRecur) {
 }
 function calUpsert_(d) {
   if (!calAvail_()) throw new Error('Falta el permiso de Google Calendar: pega el appsscript.json nuevo y ejecuta activarTodo.');
-  CacheService.getScriptCache().remove('MF_CAL');
+  CacheService.getScriptCache().remove('MF_CAL_N');
   if (!d.id || /^tmp:/.test(d.id)) {
     const prev = d.mf ? (Calendar.Events.list(CAL_ID, { privateExtendedProperty: 'mf=' + d.mf, maxResults: 1 }).items || [])[0] : null;
     const res = calRes_(d, true); res.extendedProperties = { private: { mf: d.mf || '' } };
@@ -696,7 +722,7 @@ function calUpsert_(d) {
 }
 function calDelete_(d) {
   if (!calAvail_()) throw new Error('Falta el permiso de Google Calendar.');
-  CacheService.getScriptCache().remove('MF_CAL');
+  CacheService.getScriptCache().remove('MF_CAL_N');
   if (/^tmp:/.test(d.id || '')) { const prev = d.mf ? (Calendar.Events.list(CAL_ID, { privateExtendedProperty: 'mf=' + d.mf, maxResults: 1 }).items || [])[0] : null; if (prev) Calendar.Events.remove(CAL_ID, prev.id); return 'ok'; }
   try { Calendar.Events.remove(CAL_ID, d.scope === 'all' && d.sid ? d.sid : d.id); } catch (e) { if (!/410|404|deleted/i.test(String(e))) throw e; }
   return 'ok';

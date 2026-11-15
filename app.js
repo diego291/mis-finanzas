@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '3.3.0';
+const VERSION = '3.4.0';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -224,24 +224,33 @@ function pullSettings() {
 }
 /* ---------------- Sincronización con la hoja ---------------- */
 let syncTimer = null, again = false;
-function scheduleSync(ms = 1500) { if (!S.cfg.url) return updatePill(); clearTimeout(syncTimer); syncTimer = setTimeout(sync, ms); updatePill(); }
+function scheduleSync(ms = 600) { if (!S.cfg.url) return updatePill(); clearTimeout(syncTimer); syncTimer = setTimeout(sync, ms); updatePill(); }
 async function sync(manual) {
   if (!S.cfg.url || !S.cfg.token) { if (manual === true) go('ajustes'); updatePill(); return; }
   if (S.syncing) { again = true; return; }
   if (!navigator.onLine) { S.syncErr = ''; updatePill(); return; }
   S.syncing = true; updatePill();
   const sent = S.outbox.slice();
+  /* Sincronización rápida (conector v9): si nada cambió, la hoja responde al instante sin enviar todo.
+     Cada 5 minutos (o al tocar el indicador) se pide la hoja completa para traer lo editado a mano en Sheets. */
+  const full = manual === true || S.needFull || !S.cfg.rev || Date.now() - (S.cfg.lastFull || 0) > 5 * 60000;
   try {
     const ctrl = new AbortController(), tm = setTimeout(() => ctrl.abort(), 45000);
     let j;
     try {
-      const res = await fetch(S.cfg.url, { method: 'POST', signal: ctrl.signal, headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ token: S.cfg.token, ops: sent.map(({ opId, type, data }) => ({ opId, type, data })) }) });
+      const res = await fetch(S.cfg.url, { method: 'POST', signal: ctrl.signal, headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ token: S.cfg.token, ops: sent.map(({ opId, type, data }) => ({ opId, type, data })), rev: S.cfg.rev || '', full, imgHave: imgHave() }) });
       const txt = await res.text();
       try { j = JSON.parse(txt); } catch (e) { throw new Error('La hoja respondió algo que no es la app (¿la URL termina en /exec?)'); }
     } catch (e) { if (e.name === 'AbortError') throw new Error('La hoja tardó demasiado en responder'); throw e; }
     finally { clearTimeout(tm); }
     if (!j.ok) throw new Error(j.error || 'La hoja no respondió');
+    if (j.v >= 9 && !j.data && (j.same || (j.results || []).length === sent.length)) {
+      S.outbox = S.outbox.slice(sent.length); S.cfg.rev = j.rev; S.cfg.serverV = j.v; S.cfg.lastSync = Date.now(); S.syncErr = '';
+      if (manual === true) toast('Hoja sincronizada');
+      save(); if (!j.same) render(); return;
+    }
     if (!j.data || !Array.isArray(j.data.movs)) throw new Error('La hoja respondió sin datos');
+    S.cfg.rev = j.rev || ''; S.cfg.lastFull = Date.now(); S.needFull = false;
     S.outbox = S.outbox.slice(sent.length);
     S.agendaV1 = !(j.v >= 2) && S.data.notes.some(n => n.kind && n.kind !== 'nota');
     S.cfg.serverV = j.v || 1;
@@ -260,7 +269,7 @@ async function sync(manual) {
     if (manual === true) toast(S.syncErr);
   } finally {
     S.syncing = false; updatePill();
-    if (again) { again = false; scheduleSync(300); }
+    if (again) { again = false; scheduleSync(200); }
   }
 }
 function updatePill() {
@@ -1203,7 +1212,7 @@ const IDB = (() => {
 async function imgSrc(id) {
   if (IMG.has(id)) return IMG.get(id);
   let v = await IDB.get(id);
-  if (!v) { v = blobGet('img', id); if (v) IDB.put(id, v); }
+  if (!v) { v = blobGet('img', id); if (v) IDB.put(id, v); else if (imgHave().includes(id)) imgHaveDrop(id); }
   if (v) IMG.set(id, v);
   return v || '';
 }
@@ -1211,8 +1220,13 @@ function hydrateImgs(root) { (root || document).querySelectorAll('img[data-img]'
 /* al llegar datos de la hoja: pasa las imágenes a la caché y no las guarda en localStorage */
 function absorbImages() {
   const s = (S.data.store || {}).img; if (!s) return;
-  Object.keys(s).filter(k => k.endsWith(':0')).forEach(k => { const id = k.slice(0, -2); if (!IMG.has(id)) { const v = blobGet('img', id); if (v) { IMG.set(id, v); IDB.put(id, v); } } });
+  Object.keys(s).filter(k => k.endsWith(':0')).forEach(k => { const id = k.slice(0, -2); const v = blobGet('img', id); if (v) { IMG.set(id, v); IDB.put(id, v).then(() => imgHaveAdd(id)); } });
 }
+/* Fotos guardadas en este equipo: la hoja no las vuelve a enviar en cada sincronización. */
+const IMG_HAVE = 'mf.imgHave';
+function imgHave() { try { return JSON.parse(localStorage.getItem(IMG_HAVE) || '[]'); } catch (e) { return []; } }
+function imgHaveAdd(id) { try { const L = imgHave(); if (!L.includes(id)) { L.push(id); localStorage.setItem(IMG_HAVE, JSON.stringify(L)); } } catch (e) { } }
+function imgHaveDrop(id) { try { localStorage.setItem(IMG_HAVE, JSON.stringify(imgHave().filter(x => x !== id))); } catch (e) { } S.needFull = true; scheduleSync(); }
 function compressImage(file, max = 1100, q = 0.66) {
   /* Las fotos del teléfono pesan 12–50 MP: se decodifican ya reducidas para no agotar la memoria del navegador. */
   const draw = (src, w, h) => { const k = Math.min(1, max / Math.max(w, h)); const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k)); const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(src, 0, 0, c.width, c.height); const out = c.toDataURL('image/jpeg', q); c.width = c.height = 0; return out; };
@@ -1229,7 +1243,7 @@ function compressImage(file, max = 1100, q = 0.66) {
   })();
 }
 function storeImage(dataUrl) {
-  const id = 'i' + uid(); IMG.set(id, dataUrl); IDB.put(id, dataUrl);
+  const id = 'i' + uid(); IMG.set(id, dataUrl); IDB.put(id, dataUrl).then(() => imgHaveAdd(id));
   const n = blobPut('img', id, dataUrl);
   return { id, n };
 }
@@ -2287,7 +2301,7 @@ window.addEventListener('hashchange', route);
 window.addEventListener('online', () => { updatePill(); sync(); });
 window.addEventListener('offline', updatePill);
 document.addEventListener('visibilitychange', () => { if (document.hidden) { awaySince = Date.now(); return; } followMonth(awaySince && Date.now() - awaySince > 30 * 60000); awaySince = 0; sync(); });
-setInterval(() => { if (!document.hidden) { sync(); } }, 120000);
+setInterval(() => { if (!document.hidden) { sync(); } }, 25000);
 setInterval(updatePill, 30000);
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); S.installEvt = e; render(); });
 
