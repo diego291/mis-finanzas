@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '3.4.0';
+const VERSION = '3.5.0';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -672,6 +672,11 @@ function accGroups() {
   const liab = sum(all.filter(x => x.v < 0), x => -x.v) + W.debts;
   return { W, groups, keys, assets, liab, total: assets - liab };
 }
+/* Grupos de cuentas en Inicio: Personal, Compartido y Ahorro (se elige en cada cuenta; si no, se deduce del nombre). */
+const ACC_GRPS = ['Personal', 'Compartido', 'Ahorro'];
+function accGrp(name) { const g = (((S.data || {}).store || {}).accgrp || {})[name]; if (g && ACC_GRPS.includes(g.g)) return g.g; return /\bcon\b|compartid|pareja|familia/i.test(name) ? 'Compartido' : /ahorro|inversi|fondo/i.test(name) ? 'Ahorro' : 'Personal'; }
+function grpLabel(g, L) { if (g !== 'Compartido') return g; const w = [...new Set(L.map(x => (x.a.name.match(/\bcon\s+(.+)$/i) || [])[1]).filter(Boolean))]; return w.length === 1 ? 'Compartido con ' + w[0] : g; }
+const GRP_COLOR = { Personal: '#378ADD', Compartido: '#D4537E', Ahorro: '#7F77DD' };
 function walletCard(sp, isNow) {
   const G = accGroups();
   const accs = Object.values(G.groups).flat().filter(x => Math.abs(x.v) >= .005).sort((a, b) => b.v - a.v);
@@ -682,7 +687,8 @@ function walletCard(sp, isNow) {
     <div class="w-top"><span>Tienes en tus cuentas</span><a href="#cuentas">Ver cuentas</a></div>
     <div class="w-big ${G.W.inAcc < 0 ? 'neg' : ''}">${money(G.W.inAcc)}</div>
     <div class="w-sub">${G.W.inGoals ? `En metas ${money(G.W.inGoals)} · ` : ''}Deudas ${money(G.liab)} · Patrimonio ${money(G.total)}</div>
-    <div class="w-accs">${accs.map(x => `<button type="button" class="w-acc ${x.v < 0 ? 'neg' : ''}" data-act="accGo" data-n="${esc(x.a.name)}" style="--ac:${accStyle(x.a.name).color}">${accBadge(x.a.name, 'sm')}<span>${esc(x.a.name)}</span><b>${money(x.v)}</b></button>`).join('')}${zero ? `<a class="w-acc dim" href="#cuentas"><span>${zero} en cero</span></a>` : ''}</div>
+    <div class="w-grps">${ACC_GRPS.map(g => [g, accs.filter(x => accGrp(x.a.name) === g)]).filter(([, L]) => L.length).map(([g, L]) => `<div class="w-grp" style="--gc:${GRP_COLOR[g]}"><span class="w-grp-h">${esc(grpLabel(g, L))}</span><b class="w-grp-t ${sum(L, x => x.v) < 0 ? 'neg' : ''}">${money(sum(L, x => x.v))}</b>${L.map(x => `<button type="button" class="w-grp-r ${x.v < 0 ? 'neg' : ''}" data-act="accGo" data-n="${esc(x.a.name)}">${accBadge(x.a.name, 'sm')}<span>${esc(x.a.name)}</span><b>${money(x.v)}</b></button>`).join('')}</div>`).join('')}</div>
+    ${zero ? `<a class="w-zero" href="#cuentas">${zero} cuenta${zero > 1 ? 's' : ''} en cero</a>` : ''}
     ${spend}
   </section>`;
 }
@@ -2053,7 +2059,7 @@ function editAcc(a) {
   const cur = isNew ? { icon: (ACC_DEF['Banco'])[0], color: ACC_COLORS[1], auto: true } : Object.assign({ auto: !(((S.data.store || {}).accstyle || {})[a.name]) }, accStyle(a.name));
   const canStyle = !(S.cfg.url && S.cfg.serverV && S.cfg.serverV < 3);
   openSheet(isNew ? 'Nueva cuenta' : 'Editar cuenta', `<div class="acc-prev" id="aPrev"></div>
-  <label class="field"><span>Nombre</span><input id="aName" value="${esc(a.name)}" required ${isNew ? 'autofocus' : ''}></label><div class="two"><label class="field"><span>Tipo</span>${sel('aType', S.data.lists.accTypes, a.type)}</label><label class="field"><span>Saldo inicial</span><input id="aIni" class="calc" type="text" inputmode="decimal" autocomplete="off" value="${a.initial}"></label></div>
+  <label class="field"><span>Nombre</span><input id="aName" value="${esc(a.name)}" required ${isNew ? 'autofocus' : ''}></label><div class="two"><label class="field"><span>Tipo</span>${sel('aType', S.data.lists.accTypes, a.type)}</label><label class="field"><span>Grupo en Inicio</span>${sel('aGrp', ACC_GRPS, a.name ? accGrp(a.name) : 'Personal')}</label><label class="field"><span>Saldo inicial</span><input id="aIni" class="calc" type="text" inputmode="decimal" autocomplete="off" value="${a.initial}"></label></div>
   ${canStyle ? `<div class="field"><span>Ícono</span><div class="acc-icons" id="aIcons">${Object.entries(ACC_ICONS).map(([k, [lab]]) => `<button type="button" data-k="${k}" title="${lab}" aria-label="${lab}" class="${k === cur.icon ? 'on' : ''}">${accIco(k, 'currentColor')}</button>`).join('')}</div></div>
   <div class="field"><span>Color</span><div class="acc-colors" id="aColors">${ACC_COLORS.map(c => `<button type="button" data-c="${c}" style="background:${c}" class="${c === cur.color ? 'on' : ''}" aria-label="Color ${c}"></button>`).join('')}<label class="acc-custom" title="Otro color"><input type="color" id="aColor" value="${cur.color}"><span>Otro</span></label></div></div>` : '<p class="note" style="margin:0">Actualiza el conector de tu hoja (Ajustes) para poner íconos y colores a las cuentas.</p>'}
   ${isNew ? '' : '<p class="muted" style="margin:0;font-size:.82rem">Si cambias el nombre, también se actualiza en todos tus movimientos de la hoja.</p>'}
@@ -2061,6 +2067,7 @@ function editAcc(a) {
     const name = $('#aName').value.trim(); if (!name) return 'Escribe el nombre.';
     if (name !== a.name && S.data.accounts.some(x => x.name === name)) return 'Ya existe una cuenta con ese nombre.';
     op('acc.upsert', { oldName: isNew ? '' : a.name, name, type: $('#aType').value, initial: calcVal('#aIni') });
+    if (canStyle) { const g = $('#aGrp').value, had = ((S.data.store || {}).accgrp || {})[a.name]; if (had || g !== accGrp(name)) recPut('accgrp', name, { g }); if (had && !isNew && name !== a.name) opq('rec.delete', { coll: 'accgrp', id: a.name }); }
     if (canStyle && !cur.auto) { recPut('accstyle', name, { icon: cur.icon, color: cur.color }); if (!isNew && name !== a.name && ((S.data.store || {}).accstyle || {})[a.name]) opq('rec.delete', { coll: 'accstyle', id: a.name }); render(); }
   }, f => {
     const prev = () => { const n = $('#aName').value.trim() || 'Nueva cuenta'; $('#aPrev').innerHTML = `${accIco(cur.icon, cur.color, 'lg')}<div><b>${esc(n)}</b><small>${esc($('#aType').value)}</small></div>`; };
