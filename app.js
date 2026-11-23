@@ -4,7 +4,7 @@
  * que se envían solos cuando vuelve la conexión.
  */
 'use strict';
-const VERSION = '3.5.0';
+const VERSION = '3.5.1';
 const LS = 'misfinanzas.v1';
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MSHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -687,7 +687,7 @@ function walletCard(sp, isNow) {
     <div class="w-top"><span>Tienes en tus cuentas</span><a href="#cuentas">Ver cuentas</a></div>
     <div class="w-big ${G.W.inAcc < 0 ? 'neg' : ''}">${money(G.W.inAcc)}</div>
     <div class="w-sub">${G.W.inGoals ? `En metas ${money(G.W.inGoals)} · ` : ''}Deudas ${money(G.liab)} · Patrimonio ${money(G.total)}</div>
-    <div class="w-grps">${ACC_GRPS.map(g => [g, accs.filter(x => accGrp(x.a.name) === g)]).filter(([, L]) => L.length).map(([g, L]) => `<div class="w-grp" style="--gc:${GRP_COLOR[g]}"><span class="w-grp-h">${esc(grpLabel(g, L))}</span><b class="w-grp-t ${sum(L, x => x.v) < 0 ? 'neg' : ''}">${money(sum(L, x => x.v))}</b>${L.map(x => `<button type="button" class="w-grp-r ${x.v < 0 ? 'neg' : ''}" data-act="accGo" data-n="${esc(x.a.name)}">${accBadge(x.a.name, 'sm')}<span>${esc(x.a.name)}</span><b>${money(x.v)}</b></button>`).join('')}</div>`).join('')}</div>
+    <div class="w-wrap-grps"><div class="w-grps">${ACC_GRPS.map(g => [g, accs.filter(x => accGrp(x.a.name) === g)]).filter(([, L]) => L.length).map(([g, L]) => `<div class="w-grp" style="--gc:${GRP_COLOR[g]}"><span class="w-grp-h">${esc(grpLabel(g, L))}</span><b class="w-grp-t ${sum(L, x => x.v) < 0 ? 'neg' : ''}">${money(sum(L, x => x.v))}</b>${L.map(x => `<button type="button" class="w-grp-r ${x.v < 0 ? 'neg' : ''}" data-act="accGo" data-n="${esc(x.a.name)}">${accBadge(x.a.name, 'sm')}<span>${esc(x.a.name)}</span><b>${money(x.v)}</b></button>`).join('')}</div>`).join('')}</div></div>
     ${zero ? `<a class="w-zero" href="#cuentas">${zero} cuenta${zero > 1 ? 's' : ''} en cero</a>` : ''}
     ${spend}
   </section>`;

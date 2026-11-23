@@ -1278,11 +1278,13 @@ body[data-design="c"] .next-step b { color: var(--cta-bg); }
 label.wk-r .wk-b { visibility: hidden; }
 
 /* ---------- Inicio: cuentas por grupo en tarjetas (v3.5.0) ---------- */
-.w-grps { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
-.w-grp { background: var(--hero-track); border-radius: 12px; padding: 10px 12px 6px; box-shadow: inset 0 3px 0 var(--gc); display: grid; align-content: start; }
+.w-wrap-grps { container-type: inline-size; }
+.w-grps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; }
+@container (min-width: 520px) { .w-grps { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.w-grp { background: var(--hero-track); border-radius: 12px; padding: 10px 12px 6px; border-top: 3px solid var(--gc); display: grid; align-content: start; min-width: 0; overflow: hidden; }
 .w-grp-h { font-size: .74rem; color: var(--hero-muted); }
 .w-grp-t { font-family: var(--f-num); font-weight: 500; font-size: 1.2rem; color: var(--hero-fg); margin: 1px 0 6px; } .w-grp-t.neg { color: #ffb4a8; }
-.w-grp-r { display: flex; align-items: center; gap: 8px; border: 0; border-top: 1px solid color-mix(in srgb, var(--hero-fg) 10%, transparent); background: none; color: var(--hero-fg); font-size: .8rem; padding: 6px 0; text-align: left; cursor: pointer; }
+.w-grp-r { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; border: 0; border-top: 1px solid color-mix(in srgb, var(--hero-fg) 10%, transparent); background: none; color: var(--hero-fg); font-size: .8rem; padding: 6px 0; text-align: left; cursor: pointer; }
 .w-grp-r > span:not(.acc-ic) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.w-grp-r b { font-family: var(--f-num); font-weight: 500; } .w-grp-r.neg b { color: #ffb4a8; }
+.w-grp-r b { font-family: var(--f-num); font-weight: 500; flex: none; white-space: nowrap; font-size: .78rem; } .w-grp-r .acc-ic { flex: none; } .w-grp-r.neg b { color: #ffb4a8; }
 .w-zero { display: inline-block; margin-top: 8px; font-size: .78rem; color: var(--hero-muted); text-decoration: none; }
